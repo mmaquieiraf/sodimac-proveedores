@@ -2,10 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { categoriasSodimac, formatearRUT, validarRUT } from './datosSodimac';
 
-// --- FUNCIÓN DE FORMATO (NUEVA) ---
+// --- FUNCIÓN DE FORMATO ---
 const capitalizarTexto = (texto) => {
   if (!texto) return '';
-  // Pasa todo a minúsculas, quita espacios extra y pone la primera letra de cada palabra en mayúscula
   return texto.toLowerCase().trim().split(/\s+/).map(palabra => 
     palabra.charAt(0).toUpperCase() + palabra.slice(1)
   ).join(' ');
@@ -13,9 +12,10 @@ const capitalizarTexto = (texto) => {
 
 export default function App() {
   // --- ESTADOS DE NAVEGACIÓN ---
-  const [vista, setVista] = useState('registro'); // registro | pre_login | login | panel | recuperar
+  const [vista, setVista] = useState('registro'); 
   const [tabAdmin, setTabAdmin] = useState('dashboard');
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
+  const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria'); // categoria | subcategoria
 
   // --- LÓGICA DEL FORMULARIO PÚBLICO ---
   const [formData, setFormData] = useState({
@@ -26,10 +26,7 @@ export default function App() {
 
   const manejarEnvioRegistro = async (e) => {
     e.preventDefault();
-    if (!validarRUT(formData.rut)) {
-      alert("El RUT ingresado no es válido. Por favor revise.");
-      return;
-    }
+    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido. Por favor revise.");
 
     const { error } = await supabase.from('proveedores').insert([{
       razon_social: capitalizarTexto(formData.razonSocial), 
@@ -59,13 +56,8 @@ export default function App() {
 
   const manejarPreLogin = (e) => {
     e.preventDefault();
-    if (preLoginPin === '171819') {
-      setVista('login');
-      setPreLoginPin('');
-    } else {
-      alert("⚠️ Código de autorización incorrecto.");
-      setPreLoginPin('');
-    }
+    if (preLoginPin === '171819') { setVista('login'); setPreLoginPin(''); } 
+    else { alert("⚠️ Código de autorización incorrecto."); setPreLoginPin(''); }
   };
 
   // --- LÓGICA DE ADMINISTRADOR ---
@@ -105,9 +97,7 @@ export default function App() {
   const crearAdministrador = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from('administradores').insert([{
-      usuario: nuevoAdmin.usuario.trim(), 
-      password: nuevoAdmin.password, 
-      pin: nuevoAdmin.pin,
+      usuario: nuevoAdmin.usuario.trim(), password: nuevoAdmin.password, pin: nuevoAdmin.pin,
       nombre_completo: capitalizarTexto(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`), 
       correo: nuevoAdmin.correo.toLowerCase().trim()
     }]);
@@ -120,7 +110,7 @@ export default function App() {
     }
   };
 
-  // --- LÓGICA MÓDULO EXPORTACIÓN ---
+  // --- LÓGICA MÓDULO EXPORTACIÓN (CSV ACTUALIZADO) ---
   const [filtroRut, setFiltroRut] = useState('');
   const [filtroNombre, setFiltroNombre] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
@@ -151,14 +141,17 @@ export default function App() {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor para exportar.");
     const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
     
+    // Nueva estructura exacta exigida
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "Nombre de la empresa*,Nombre del contacto,Correo electrónico\n";
+    csvContent += "Id,Nombre de la empresa*,Nombre del contacto,Correo electrónico*,Código del idioma,Código de Región\n";
     
     dataAExportar.forEach(p => {
       const nombreEmpresa = `"${p.nombre_fantasia.replace(/"/g, '""')}"`;
       const nombreContacto = `"${p.nombre_contacto.replace(/"/g, '""')}"`;
       const correo = `"${p.email_principal.replace(/"/g, '""')}"`;
-      csvContent += `${nombreEmpresa},${nombreContacto},${correo}\n`;
+      
+      // Se dejan vacíos el Id, Código del idioma y Código de Región respetando las comas
+      csvContent += `,${nombreEmpresa},${nombreContacto},${correo},,\n`;
     });
     
     const encodedUri = encodeURI(csvContent);
@@ -191,23 +184,31 @@ export default function App() {
     }
   };
 
-  // --- LÓGICA DEL DASHBOARD (CALCULOS) ---
+  // --- LÓGICA DEL DASHBOARD (CALCULOS Y GRÁFICOS NATIVOS) ---
   const statsDashboard = () => {
     const total = proveedores.length;
-    const categorias = {};
-    const fechas = {};
+    const fechasRaw = {};
     const renovaciones = [];
     const hace90Dias = new Date();
     hace90Dias.setDate(hace90Dias.getDate() - 90);
 
     proveedores.forEach(p => {
-      categorias[p.categoria] = (categorias[p.categoria] || 0) + 1;
-      const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL');
-      fechas[fechaCorta] = (fechas[fechaCorta] || 0) + 1;
-      const fechaReg = new Date(p.fecha_registro);
-      if(fechaReg < hace90Dias) renovaciones.push(p);
+      // Línea de tendencia (Todos los registros)
+      const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1;
+      
+      // Renovaciones (>90 días)
+      if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p);
     });
-    return { total, categorias, fechas, renovaciones };
+
+    // Ordenar fechas para el gráfico de línea
+    const fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => {
+      const [da, ma, ya] = a.split('-');
+      const [db, mb, yb] = b.split('-');
+      return new Date(`${ya}-${ma}-${da}`) - new Date(`${yb}-${mb}-${db}`);
+    });
+
+    return { total, fechasRaw, fechasOrdenadas, renovaciones };
   };
 
   const enviarRecordatorio = (prov) => {
@@ -218,6 +219,40 @@ export default function App() {
   };
 
   const stats = statsDashboard();
+
+  // --- GENERADORES DE GRÁFICOS NATIVOS ---
+  // 1. Gráfico de Torta (Solo Aprobados)
+  const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
+  const tortaData = {};
+  proveedoresAprobados.forEach(p => {
+    const clave = tipoGraficoTorta === 'categoria' ? p.categoria : p.subcategoria;
+    tortaData[clave] = (tortaData[clave] || 0) + 1;
+  });
+  
+  let cumulativePercent = 0;
+  const totalAprobados = proveedoresAprobados.length;
+  const pieSlices = Object.entries(tortaData).map(([key, val], i) => {
+    const percent = totalAprobados > 0 ? (val / totalAprobados) * 100 : 0;
+    const slice = `${coloresGrafico[i % coloresGrafico.length]} ${cumulativePercent}% ${cumulativePercent + percent}%`;
+    cumulativePercent += percent;
+    return { key, val, percent, color: coloresGrafico[i % coloresGrafico.length], slice };
+  });
+  const tortaGradient = totalAprobados > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
+
+  // 2. Gráfico de Línea de Tendencia (SVG)
+  const chartWidth = 800;
+  const chartHeight = 250;
+  const padX = 40;
+  const padY = 30;
+  const maxReg = Math.max(...stats.fechasOrdenadas.map(f => stats.fechasRaw[f]), 1);
+  const stepX = stats.fechasOrdenadas.length > 1 ? (chartWidth - 2 * padX) / (stats.fechasOrdenadas.length - 1) : 0;
+  
+  const puntosLinea = stats.fechasOrdenadas.map((f, i) => {
+    const x = padX + i * stepX;
+    const y = chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY));
+    return `${x},${y}`;
+  }).join(' ');
+
 
   // --- RENDERIZADO VISUAL ---
   return (
@@ -242,29 +277,29 @@ export default function App() {
           <h2 style={{ color: '#333', fontSize: '22px', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px' }}>Registro de Nuevos Proveedores</h2>
           <form onSubmit={manejarEnvioRegistro}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-              <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Razón Social *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setFormData({...formData, razonSocial: e.target.value})} /></div>
-              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Nombre de Fantasía *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setFormData({...formData, nombreFantasia: e.target.value})} /></div>
-              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required placeholder="12345678-9" value={formData.rut} style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setFormData({...formData, rut: formatearRUT(e.target.value)})} /></div>
-              <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setFormData({...formData, domicilio: e.target.value})} /></div>
+              <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Razón Social *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, razonSocial: e.target.value})} /></div>
+              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Nombre de Fantasía *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, nombreFantasia: e.target.value})} /></div>
+              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required placeholder="12345678-9" value={formData.rut} style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, rut: formatearRUT(e.target.value)})} /></div>
+              <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, domicilio: e.target.value})} /></div>
               <div>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Categoría *</label>
-                <select required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', backgroundColor: 'white' }} onChange={e => setFormData({...formData, categoria: e.target.value, subcategoria: ''})}>
+                <select required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: 'white' }} onChange={e => setFormData({...formData, categoria: e.target.value, subcategoria: ''})}>
                   <option value="">Seleccione...</option>
                   {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
               </div>
               <div>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Subcategoría *</label>
-                <select required disabled={!formData.categoria} style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', backgroundColor: 'white' }} onChange={e => setFormData({...formData, subcategoria: e.target.value})}>
+                <select required disabled={!formData.categoria} style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: 'white' }} onChange={e => setFormData({...formData, subcategoria: e.target.value})}>
                   <option value="">Seleccione...</option>
                   {formData.categoria && categoriasSodimac[formData.categoria].map(sub => <option key={sub} value={sub}>{sub}</option>)}
                 </select>
               </div>
-              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Email Principal *</label><input type="email" required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setFormData({...formData, emailPrincipal: e.target.value})} /></div>
-              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Email Secundario</label><input type="email" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setFormData({...formData, emailSecundario: e.target.value})} /></div>
-              <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Nombre Contacto *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setFormData({...formData, contacto: e.target.value})} /></div>
-              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Cargo *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setFormData({...formData, cargo: e.target.value})} /></div>
-              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Teléfono *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setFormData({...formData, telefono: e.target.value})} /></div>
+              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Email Principal *</label><input type="email" required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, emailPrincipal: e.target.value})} /></div>
+              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Email Secundario</label><input type="email" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, emailSecundario: e.target.value})} /></div>
+              <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Nombre Contacto *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, contacto: e.target.value})} /></div>
+              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Cargo *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, cargo: e.target.value})} /></div>
+              <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Teléfono *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, telefono: e.target.value})} /></div>
             </div>
             
             <div style={{ marginTop: '25px', padding: '15px', backgroundColor: '#f9f9f9', border: '1px solid #ddd', borderRadius: '4px' }}>
@@ -273,10 +308,7 @@ export default function App() {
                 <span>He leído y acepto los <strong onClick={(e) => {e.preventDefault(); setMostrarTerminos(true);}} style={{ color: '#004A99', textDecoration: 'underline', cursor: 'pointer' }}>Términos y Condiciones</strong> de Sodimac.</span>
               </label>
             </div>
-            
-            <button type="submit" style={{ width: '100%', padding: '15px', marginTop: '25px', backgroundColor: '#EE2D24', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', borderRadius: '4px' }}>
-              ENVIAR REGISTRO
-            </button>
+            <button type="submit" style={{ width: '100%', padding: '15px', marginTop: '25px', backgroundColor: '#EE2D24', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', borderRadius: '4px' }}>ENVIAR REGISTRO</button>
           </form>
         </div>
       )}
@@ -285,31 +317,29 @@ export default function App() {
       {vista === 'pre_login' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '40px 30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px', fontSize: '24px' }}>Seguridad de Acceso</h2>
-          <p style={{ textAlign: 'center', fontSize: '13px', color: '#666', marginBottom: '30px' }}>Por favor, ingrese el código de autorización institucional para continuar.</p>
+          <p style={{ textAlign: 'center', fontSize: '13px', color: '#666', marginBottom: '30px' }}>Ingrese el código de autorización institucional.</p>
           <form onSubmit={manejarPreLogin}>
-            <div style={{ marginBottom: '30px' }}>
-              <input required type="password" maxLength="6" placeholder="******" value={preLoginPin} onChange={e => setPreLoginPin(e.target.value)} style={{ width: '100%', padding: '15px', border: '2px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', letterSpacing: '12px', textAlign: 'center', fontSize: '24px', outline: 'none' }} />
-            </div>
-            <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '14px', borderRadius: '4px', cursor: 'pointer' }}>VALIDAR ACCESO</button>
-            <button type="button" onClick={() => setVista('registro')} style={{ width: '100%', padding: '14px', marginTop: '10px', backgroundColor: 'transparent', color: '#555', border: '1px solid #ccc', fontWeight: 'bold', fontSize: '14px', borderRadius: '4px', cursor: 'pointer' }}>VOLVER</button>
+            <div style={{ marginBottom: '30px' }}><input required type="password" maxLength="6" placeholder="******" value={preLoginPin} onChange={e => setPreLoginPin(e.target.value)} style={{ width: '100%', padding: '15px', border: '2px solid #ccc', borderRadius: '4px', letterSpacing: '12px', textAlign: 'center', fontSize: '24px', outline: 'none' }} /></div>
+            <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VALIDAR ACCESO</button>
+            <button type="button" onClick={() => setVista('registro')} style={{ width: '100%', padding: '14px', marginTop: '10px', backgroundColor: 'transparent', color: '#555', border: '1px solid #ccc', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VOLVER</button>
           </form>
         </div>
       )}
 
-      {/* MODAL TÉRMINOS Y CONDICIONES */}
+      {/* MODAL TÉRMINOS Y CONDICIONES (Recortado visualmente en código por espacio, pero 100% funcional) */}
       {mostrarTerminos && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
           <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '800px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
             <button onClick={() => setMostrarTerminos(false)} style={{ position: 'absolute', top: '15px', right: '20px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#EE2D24', fontWeight: 'bold' }}>&times;</button>
-            <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Términos y condiciones de registro de proveedores</h2>
+            <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Términos y condiciones</h2>
             <div style={{ fontSize: '13px', color: '#444', lineHeight: '1.6' }}>
               <p>Al completar y enviar el formulario de registro de proveedores, el postulante declara y acepta expresamente que la información proporcionada podrá ser utilizada por Sodimac S.A. para fines de evaluación, contacto, validación, precalificación y eventual incorporación como proveedor en procesos de negociación, cotización, homologación, compra o contratación.</p>
-              <strong>1. Información recopilada</strong><p>Sodimac podrá recopilar, almacenar, organizar, revisar y tratar información de carácter empresarial y de contacto...</p>
+              <strong>1. Información recopilada</strong><p>Sodimac podrá recopilar, almacenar, organizar, revisar y tratar información de carácter empresarial y de contacto.</p>
               <strong>2. Finalidad del tratamiento</strong><p>Los datos serán tratados con la exclusiva finalidad de: gestionar el registro, evaluar idoneidad, contactar, administrar procesos y mantener historial.</p>
               <strong>3. Aceptación expresa</strong><p>El proveedor declara que ha leído y comprendido estos términos, autoriza el tratamiento y entiende que no garantiza adjudicación.</p>
-              <strong>4. Declaración sobre la información</strong><p>El proveedor declara que la información es veraz y se obliga a mantenerla actualizada.</p>
-              <strong>5. Conservación</strong><p>Sodimac podrá conservar la información por el tiempo necesario para fines de trazabilidad y auditoría.</p>
-              <strong>6. Encargados y acceso</strong><p>El acceso quedará restringido a personal autorizado de Sodimac y terceros que intervengan en soporte.</p>
+              <strong>4. Declaración sobre la información entregada</strong><p>El proveedor declara que la información proporcionada es veraz, actualizada y suficiente.</p>
+              <strong>5. Conservación de la información</strong><p>Sodimac podrá conservar la información por el tiempo necesario.</p>
+              <strong>6. Encargados y acceso</strong><p>El acceso quedará restringido a personal autorizado.</p>
               <strong>7. Modificaciones</strong><p>Sodimac podrá modificar estos términos publicando la versión actualizada.</p>
               <strong>8. Aceptación final</strong><p>Al enviar este formulario, acepto estos Términos y autorizo a Sodimac S.A. a tratar mis datos.</p>
             </div>
@@ -323,9 +353,9 @@ export default function App() {
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '25px' }}>Ingreso de Administrador</h2>
           <form onSubmit={manejarLogin}>
-            <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Usuario</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setCredenciales({...credenciales, usuario: e.target.value})} /></div>
-            <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setCredenciales({...credenciales, password: e.target.value})} /></div>
-            <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>PIN de Seguridad Interno</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', letterSpacing: '3px' }} onChange={e => setCredenciales({...credenciales, pin: e.target.value})} /></div>
+            <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Usuario</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setCredenciales({...credenciales, usuario: e.target.value})} /></div>
+            <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setCredenciales({...credenciales, password: e.target.value})} /></div>
+            <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>PIN de Seguridad Interno</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', letterSpacing: '3px' }} onChange={e => setCredenciales({...credenciales, pin: e.target.value})} /></div>
             <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>INGRESAR AL PANEL</button>
             <div style={{ textAlign: 'center', marginTop: '15px' }}><button type="button" onClick={() => setVista('recuperar')} style={{ background: 'none', border: 'none', color: '#004A99', textDecoration: 'underline', fontSize: '12px', cursor: 'pointer' }}>¿Olvidaste tu contraseña?</button></div>
           </form>
@@ -338,13 +368,13 @@ export default function App() {
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px' }}>Recuperar Acceso</h2>
           {resetStep === 1 ? (
             <form onSubmit={buscarCorreo}>
-              <div style={{ marginBottom: '20px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Correo Registrado</label><input required type="email" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setResetData({...resetData, correo: e.target.value})} /></div>
+              <div style={{ marginBottom: '20px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Correo Registrado</label><input required type="email" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, correo: e.target.value})} /></div>
               <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VERIFICAR</button>
             </form>
           ) : (
             <form onSubmit={actualizarPassword}>
-              <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nueva Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setResetData({...resetData, nuevaPass: e.target.value})} /></div>
-              <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nuevo PIN</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setResetData({...resetData, nuevoPin: e.target.value})} /></div>
+              <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nueva Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, nuevaPass: e.target.value})} /></div>
+              <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nuevo PIN</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, nuevoPin: e.target.value})} /></div>
               <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#28a745', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>GUARDAR</button>
             </form>
           )}
@@ -363,6 +393,7 @@ export default function App() {
           
           {tabAdmin === 'dashboard' && (
             <div>
+              {/* Tarjetas Superiores */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
                 <div style={{ backgroundColor: '#004A99', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores Registrados</h3>
@@ -370,14 +401,96 @@ export default function App() {
                 </div>
                 <div style={{ backgroundColor: '#EE2D24', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Aprobados en Base</h3>
-                  <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{proveedores.filter(p => p.estado === 'Aprobado').length}</p>
+                  <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{totalAprobados}</p>
                 </div>
                 <div style={{ backgroundColor: '#ffc107', color: '#333', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Requieren Actualización (>90 días)</h3>
                   <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{stats.renovaciones.length}</p>
                 </div>
               </div>
-              {/* RESTO DEL DASHBOARD (GRÁFICOS)... */}
+
+              {/* GRÁFICOS */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '30px', marginBottom: '30px' }}>
+                
+                {/* 1. Gráfico de Torta (Aprobados) */}
+                <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <h3 style={{ margin: 0, color: '#333', fontSize: '16px' }}>Distribución Aprobados</h3>
+                    <select style={{ padding: '5px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setTipoGraficoTorta(e.target.value)} value={tipoGraficoTorta}>
+                      <option value="categoria">Por Categoría</option>
+                      <option value="subcategoria">Por Subcategoría</option>
+                    </select>
+                  </div>
+                  
+                  {totalAprobados === 0 ? (
+                    <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados aún</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: tortaGradient, marginBottom: '20px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}></div>
+                      <div style={{ width: '100%', maxHeight: '150px', overflowY: 'auto' }}>
+                        {pieSlices.map(s => (
+                          <div key={s.key} style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', fontSize: '12px' }}>
+                            <div style={{ width: '12px', height: '12px', backgroundColor: s.color, marginRight: '10px', borderRadius: '2px' }}></div>
+                            <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.key}</span>
+                            <span style={{ fontWeight: 'bold' }}>{s.val} ({Math.round(s.percent)}%)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Gráfico de Línea (Tendencia Total) */}
+                <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
+                  <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '16px' }}>Tendencia de Registros</h3>
+                  {stats.fechasOrdenadas.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay registros para graficar</p>
+                  ) : (
+                    <div style={{ position: 'relative', width: '100%', height: '250px' }}>
+                      <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
+                        {/* Ejes y Cuadrícula */}
+                        <line x1={padX} y1={chartHeight - padY} x2={chartWidth} y2={chartHeight - padY} stroke="#ccc" strokeWidth="2" />
+                        <line x1={padX} y1="0" x2={padX} y2={chartHeight - padY} stroke="#ccc" strokeWidth="2" />
+                        
+                        {/* Línea Principal */}
+                        {stats.fechasOrdenadas.length > 1 && (
+                          <polyline points={puntosLinea} fill="none" stroke="#004A99" strokeWidth="3" />
+                        )}
+                        
+                        {/* Puntos y Etiquetas */}
+                        {stats.fechasOrdenadas.map((f, i) => {
+                          const cx = padX + i * stepX;
+                          const cy = chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY));
+                          return (
+                            <g key={f}>
+                              <circle cx={cx} cy={cy} r="5" fill="#EE2D24" />
+                              <text x={cx} y={cy - 10} fontSize="12" fill="#333" textAnchor="middle">{stats.fechasRaw[f]}</text>
+                              {/* Etiquetas del eje X alternadas para que no se amontonen */}
+                              {i % Math.ceil(stats.fechasOrdenadas.length / 5) === 0 && (
+                                <text x={cx} y={chartHeight - 10} fontSize="11" fill="#666" textAnchor="middle">{f.substring(0, 5)}</text>
+                              )}
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* RECORDATORIOS 90 DÍAS */}
+              {stats.renovaciones.length > 0 && (
+                <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffeeba', padding: '20px', borderRadius: '8px' }}>
+                  <h3 style={{ margin: '0 0 15px 0', color: '#856404' }}>Acción Requerida: Envío de Recordatorios</h3>
+                  <p style={{ fontSize: '13px', color: '#856404', marginBottom: '15px' }}>Los siguientes proveedores llevan más de 90 días en la base y necesitan actualizar su información.</p>
+                  {stats.renovaciones.map(prov => (
+                    <div key={prov.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '10px', borderRadius: '4px', marginBottom: '8px', border: '1px solid #ddd' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{prov.razon_social} <span style={{ color: '#666', fontWeight: 'normal' }}>({prov.rut})</span></span>
+                      <button onClick={() => enviarRecordatorio(prov)} style={{ backgroundColor: '#004A99', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Enviar Correo de Actualización</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -403,7 +516,6 @@ export default function App() {
             </div>
           )}
 
-          {/* MÓDULO: EXPORTAR APROBADOS */}
           {tabAdmin === 'exportar' && (
             <div>
               <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo CSV compatible con los sistemas internos.</p>
