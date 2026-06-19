@@ -58,13 +58,15 @@ export default function App() {
       .eq('pin', credenciales.pin)
       .single();
 
-    if (error || !data) {
-      alert("Credenciales incorrectas. Verifique Usuario, Contraseña y PIN.");
-    } else {
-      setVista('panel');
-      cargarProveedores();
-    }
-  };
+   if (error) {
+  alert("⚠️ Error de conexión: " + error.message);
+  console.log(error);
+} else if (!data) {
+  alert("🔍 El usuario existe en Supabase pero los datos no coinciden.");
+} else {
+  setVista('panel');
+  cargarProveedores();
+}
 
   const cargarProveedores = async () => {
     const { data, error } = await supabase.from('proveedores').select('*').order('fecha_registro', { ascending: false });
