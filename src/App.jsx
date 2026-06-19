@@ -488,26 +488,93 @@ export default function App() {
           )}
 
           {tabAdmin === 'proveedores' && (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                <thead><tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}><th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Razón Social / RUT</th><th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th><th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto</th><th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Estado</th><th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Acciones</th></tr></thead>
-                <tbody>
-                  {proveedores.map(prov => (
-                    <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: '12px' }}><strong>{prov.razon_social}</strong><br/><span style={{ color: '#666' }}>{prov.rut}</span></td>
-                      <td style={{ padding: '12px' }}>{prov.categoria}<br/><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
-                      <td style={{ padding: '12px' }}>{prov.nombre_contacto}<br/><a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a></td>
-                      <td style={{ padding: '12px' }}><span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', backgroundColor: prov.estado === 'Aprobado' ? '#d4edda' : '#fff3cd', color: prov.estado === 'Aprobado' ? '#155724' : '#856404' }}>{prov.estado}</span></td>
-                      <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
-                        {prov.estado === 'Pendiente' && <button onClick={() => aprobarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>}
-                        <button onClick={() => rechazarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Eliminar</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+  <div style={{ overflowX: 'auto' }}>
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+      <thead>
+        <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
+          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Razón Social / RUT</th>
+          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th>
+          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto</th>
+          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Teléfono</th>
+          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Estado</th>
+          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {proveedores.map(prov => (
+          <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
+            <td style={{ padding: '12px' }}>
+              <strong>{prov.razon_social}</strong><br />
+              <span style={{ color: '#666' }}>{prov.rut}</span>
+            </td>
+            <td style={{ padding: '12px' }}>
+              {prov.categoria}<br />
+              <span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span>
+            </td>
+            <td style={{ padding: '12px' }}>
+              {prov.nombre_contacto}<br />
+              <a
+                href={`mailto:${prov.email_principal}`}
+                style={{ color: '#004A99', textDecoration: 'none' }}
+              >
+                {prov.email_principal}
+              </a>
+            </td>
+            <td style={{ padding: '12px' }}>
+              {prov.telefono || 'No registrado'}
+            </td>
+            <td style={{ padding: '12px' }}>
+              <span
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  backgroundColor: prov.estado === 'Aprobado' ? '#d4edda' : '#fff3cd',
+                  color: prov.estado === 'Aprobado' ? '#155724' : '#856404'
+                }}
+              >
+                {prov.estado}
+              </span>
+            </td>
+            <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
+              {prov.estado === 'Pendiente' && (
+                <button
+                  onClick={() => aprobarProveedor(prov.id)}
+                  style={{
+                    padding: '6px 10px',
+                    backgroundColor: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  Aprobar
+                </button>
+              )}
+              <button
+                onClick={() => rechazarProveedor(prov.id)}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px'
+                }}
+              >
+                Eliminar
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}
 
           {tabAdmin === 'exportar' && (
             <div>
