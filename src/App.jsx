@@ -253,16 +253,16 @@ export default function App() {
       {/* NAVBAR */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#004A99', padding: '15px 20px', borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
         
-        {/* SECCIÓN DEL LOGO OFICIAL */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <img src="/logo.png" alt="Sodimac" style={{ height: '40px', backgroundColor: 'white', padding: '5px 15px', borderRadius: '4px', objectFit: 'contain' }} />
-          <span style={{ fontSize: '18px', fontWeight: '600' }}>Portal de Proveedores</span>
+        {/* SECCIÓN DEL LOGO OPTIMIZADA */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <img src="/logo.png" alt="Sodimac" style={{ height: '65px', objectFit: 'contain' }} />
+          <span style={{ fontSize: '20px', fontWeight: '600', letterSpacing: '0.5px' }}>Portal de Proveedores</span>
         </div>
 
         <div>
-          {['login', 'recuperar', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro Público</button>}
-          {vista === 'registro' && <button onClick={() => setVista('pre_login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Acceso Interno</button>}
-          {vista === 'panel' && <button onClick={() => {setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Cerrar Sesión</button>}
+          {['login', 'recuperar', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s' }}>Ir a Registro Público</button>}
+          {vista === 'registro' && <button onClick={() => setVista('pre_login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s' }}>Acceso Interno</button>}
+          {vista === 'panel' && <button onClick={() => {setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Cerrar Sesión</button>}
         </div>
       </div>
 
