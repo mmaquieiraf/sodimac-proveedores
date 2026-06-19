@@ -2,6 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { categoriasSodimac, formatearRUT, validarRUT } from './datosSodimac';
 
+// --- FUNCIÓN DE FORMATO (NUEVA) ---
+const capitalizarTexto = (texto) => {
+  if (!texto) return '';
+  // Pasa todo a minúsculas, quita espacios extra y pone la primera letra de cada palabra en mayúscula
+  return texto.toLowerCase().trim().split(/\s+/).map(palabra => 
+    palabra.charAt(0).toUpperCase() + palabra.slice(1)
+  ).join(' ');
+};
+
 export default function App() {
   // --- ESTADOS DE NAVEGACIÓN ---
   const [vista, setVista] = useState('registro'); // registro | pre_login | login | panel | recuperar
@@ -23,12 +32,18 @@ export default function App() {
     }
 
     const { error } = await supabase.from('proveedores').insert([{
-      razon_social: formData.razonSocial, nombre_fantasia: formData.nombreFantasia,
-      rut: formData.rut, domicilio_comercial: formData.domicilio,
-      categoria: formData.categoria, subcategoria: formData.subcategoria,
-      email_principal: formData.emailPrincipal, email_secundario: formData.emailSecundario,
-      nombre_contacto: formData.contacto, cargo: formData.cargo,
-      telefono: formData.telefono, terminos_aceptados: formData.terminos,
+      razon_social: capitalizarTexto(formData.razonSocial), 
+      nombre_fantasia: capitalizarTexto(formData.nombreFantasia),
+      rut: formData.rut, 
+      domicilio_comercial: capitalizarTexto(formData.domicilio),
+      categoria: formData.categoria, 
+      subcategoria: formData.subcategoria,
+      email_principal: formData.emailPrincipal.toLowerCase().trim(), 
+      email_secundario: formData.emailSecundario ? formData.emailSecundario.toLowerCase().trim() : '',
+      nombre_contacto: capitalizarTexto(formData.contacto), 
+      cargo: capitalizarTexto(formData.cargo),
+      telefono: formData.telefono.trim(), 
+      terminos_aceptados: formData.terminos,
       estado: 'Pendiente'
     }]);
 
@@ -46,7 +61,7 @@ export default function App() {
     e.preventDefault();
     if (preLoginPin === '171819') {
       setVista('login');
-      setPreLoginPin(''); // Limpiamos el input por seguridad
+      setPreLoginPin('');
     } else {
       alert("⚠️ Código de autorización incorrecto.");
       setPreLoginPin('');
@@ -61,7 +76,7 @@ export default function App() {
   const manejarLogin = async (e) => {
     e.preventDefault();
     const { data, error } = await supabase.from('administradores').select('*')
-      .eq('usuario', credenciales.usuario).eq('password', credenciales.password).eq('pin', credenciales.pin).maybeSingle();
+      .eq('usuario', credenciales.usuario.trim()).eq('password', credenciales.password).eq('pin', credenciales.pin).maybeSingle();
 
     if (error) return alert("⚠️ Error de conexión con Supabase.");
     if (!data) return alert("🔍 Credenciales incorrectas.");
@@ -90,8 +105,11 @@ export default function App() {
   const crearAdministrador = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from('administradores').insert([{
-      usuario: nuevoAdmin.usuario, password: nuevoAdmin.password, pin: nuevoAdmin.pin,
-      nombre_completo: `${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`, correo: nuevoAdmin.correo
+      usuario: nuevoAdmin.usuario.trim(), 
+      password: nuevoAdmin.password, 
+      pin: nuevoAdmin.pin,
+      nombre_completo: capitalizarTexto(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`), 
+      correo: nuevoAdmin.correo.toLowerCase().trim()
     }]);
 
     if (error) alert("Error al crear usuario.");
@@ -158,7 +176,7 @@ export default function App() {
 
   const buscarCorreo = async (e) => {
     e.preventDefault();
-    const { data, error } = await supabase.from('administradores').select('id').eq('correo', resetData.correo).maybeSingle();
+    const { data, error } = await supabase.from('administradores').select('id').eq('correo', resetData.correo.toLowerCase().trim()).maybeSingle();
     if (error || !data) alert("No se encontró ningún administrador asociado a este correo.");
     else { setResetData({ ...resetData, idUsuario: data.id }); setResetStep(2); }
   };
