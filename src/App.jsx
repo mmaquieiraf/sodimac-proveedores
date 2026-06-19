@@ -4,8 +4,8 @@ import { categoriasSodimac, formatearRUT, validarRUT } from './datosSodimac';
 
 export default function App() {
   // --- ESTADOS DE NAVEGACIÓN ---
-  const [vista, setVista] = useState('registro'); 
-  const [tabAdmin, setTabAdmin] = useState('dashboard'); // dashboard | proveedores | crear_admin | exportar
+  const [vista, setVista] = useState('registro'); // registro | pre_login | login | panel | recuperar
+  const [tabAdmin, setTabAdmin] = useState('dashboard');
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
 
   // --- LÓGICA DEL FORMULARIO PÚBLICO ---
@@ -36,6 +36,20 @@ export default function App() {
     else {
       alert("✅ Registro enviado con éxito. Estado: Pendiente de revisión.");
       window.location.reload();
+    }
+  };
+
+  // --- LÓGICA DE PRE-LOGIN (BARRERA DE SEGURIDAD) ---
+  const [preLoginPin, setPreLoginPin] = useState('');
+
+  const manejarPreLogin = (e) => {
+    e.preventDefault();
+    if (preLoginPin === '171819') {
+      setVista('login');
+      setPreLoginPin(''); // Limpiamos el input por seguridad
+    } else {
+      alert("⚠️ Código de autorización incorrecto.");
+      setPreLoginPin('');
     }
   };
 
@@ -116,19 +130,13 @@ export default function App() {
   };
 
   const exportarCSV = () => {
-    if (seleccionados.length === 0) {
-      alert("⚠️ Seleccione al menos un proveedor para exportar.");
-      return;
-    }
-
+    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor para exportar.");
     const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
     
-    // Generar contenido CSV. \uFEFF asegura que Excel lea bien los tildes y eñes (UTF-8 BOM)
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
     csvContent += "Nombre de la empresa*,Nombre del contacto,Correo electrónico\n";
     
     dataAExportar.forEach(p => {
-      // Limpiamos comillas dobles por si el usuario las ingresó en el formulario
       const nombreEmpresa = `"${p.nombre_fantasia.replace(/"/g, '""')}"`;
       const nombreContacto = `"${p.nombre_contacto.replace(/"/g, '""')}"`;
       const correo = `"${p.email_principal.replace(/"/g, '""')}"`;
@@ -171,7 +179,6 @@ export default function App() {
     const categorias = {};
     const fechas = {};
     const renovaciones = [];
-    
     const hace90Dias = new Date();
     hace90Dias.setDate(hace90Dias.getDate() - 90);
 
@@ -182,7 +189,6 @@ export default function App() {
       const fechaReg = new Date(p.fecha_registro);
       if(fechaReg < hace90Dias) renovaciones.push(p);
     });
-
     return { total, categorias, fechas, renovaciones };
   };
 
@@ -206,13 +212,13 @@ export default function App() {
           <span style={{ fontSize: '18px', fontWeight: '600' }}>Portal de Proveedores</span>
         </div>
         <div>
-          {(vista === 'login' || vista === 'recuperar') && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro</button>}
-          {vista === 'registro' && <button onClick={() => setVista('login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Acceso Interno</button>}
-          {vista === 'panel' && <button onClick={() => {setVista('login'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Cerrar Sesión</button>}
+          {['login', 'recuperar', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro Público</button>}
+          {vista === 'registro' && <button onClick={() => setVista('pre_login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Acceso Interno</button>}
+          {vista === 'panel' && <button onClick={() => {setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Cerrar Sesión</button>}
         </div>
       </div>
 
-      {/* PANTALLA: REGISTRO PÚBLICO */}
+      {/* PANTALLA 1: REGISTRO PÚBLICO */}
       {vista === 'registro' && (
         <div style={{ maxWidth: '800px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ color: '#333', fontSize: '22px', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px' }}>Registro de Nuevos Proveedores</h2>
@@ -257,6 +263,21 @@ export default function App() {
         </div>
       )}
 
+      {/* PANTALLA 1.5: BARRERA DE SEGURIDAD (PRE-LOGIN) */}
+      {vista === 'pre_login' && (
+        <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '40px 30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px', fontSize: '24px' }}>Seguridad de Acceso</h2>
+          <p style={{ textAlign: 'center', fontSize: '13px', color: '#666', marginBottom: '30px' }}>Por favor, ingrese el código de autorización institucional para continuar.</p>
+          <form onSubmit={manejarPreLogin}>
+            <div style={{ marginBottom: '30px' }}>
+              <input required type="password" maxLength="6" placeholder="******" value={preLoginPin} onChange={e => setPreLoginPin(e.target.value)} style={{ width: '100%', padding: '15px', border: '2px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', letterSpacing: '12px', textAlign: 'center', fontSize: '24px', outline: 'none' }} />
+            </div>
+            <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '14px', borderRadius: '4px', cursor: 'pointer' }}>VALIDAR ACCESO</button>
+            <button type="button" onClick={() => setVista('registro')} style={{ width: '100%', padding: '14px', marginTop: '10px', backgroundColor: 'transparent', color: '#555', border: '1px solid #ccc', fontWeight: 'bold', fontSize: '14px', borderRadius: '4px', cursor: 'pointer' }}>VOLVER</button>
+          </form>
+        </div>
+      )}
+
       {/* MODAL TÉRMINOS Y CONDICIONES */}
       {mostrarTerminos && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
@@ -279,21 +300,21 @@ export default function App() {
         </div>
       )}
 
-      {/* PANTALLA: LOGIN */}
+      {/* PANTALLA 2: LOGIN */}
       {vista === 'login' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-          <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '25px' }}>Acceso Administrativo</h2>
+          <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '25px' }}>Ingreso de Administrador</h2>
           <form onSubmit={manejarLogin}>
             <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Usuario</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setCredenciales({...credenciales, usuario: e.target.value})} /></div>
             <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box' }} onChange={e => setCredenciales({...credenciales, password: e.target.value})} /></div>
-            <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>PIN de Seguridad</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', letterSpacing: '3px' }} onChange={e => setCredenciales({...credenciales, pin: e.target.value})} /></div>
+            <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>PIN de Seguridad Interno</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', letterSpacing: '3px' }} onChange={e => setCredenciales({...credenciales, pin: e.target.value})} /></div>
             <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>INGRESAR AL PANEL</button>
             <div style={{ textAlign: 'center', marginTop: '15px' }}><button type="button" onClick={() => setVista('recuperar')} style={{ background: 'none', border: 'none', color: '#004A99', textDecoration: 'underline', fontSize: '12px', cursor: 'pointer' }}>¿Olvidaste tu contraseña?</button></div>
           </form>
         </div>
       )}
 
-      {/* PANTALLA: RECUPERAR CONTRASEÑA */}
+      {/* PANTALLA 3: RECUPERAR CONTRASEÑA */}
       {vista === 'recuperar' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px' }}>Recuperar Acceso</h2>
@@ -312,7 +333,7 @@ export default function App() {
         </div>
       )}
 
-      {/* PANTALLA: PANEL ADMINISTRATIVO Y DASHBOARD */}
+      {/* PANTALLA 4: PANEL ADMINISTRATIVO Y DASHBOARD */}
       {vista === 'panel' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <div style={{ display: 'flex', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px', gap: '20px', overflowX: 'auto' }}>
@@ -364,7 +385,7 @@ export default function App() {
             </div>
           )}
 
-          {/* NUEVO MÓDULO: EXPORTAR APROBADOS */}
+          {/* MÓDULO: EXPORTAR APROBADOS */}
           {tabAdmin === 'exportar' && (
             <div>
               <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo CSV compatible con los sistemas internos.</p>
