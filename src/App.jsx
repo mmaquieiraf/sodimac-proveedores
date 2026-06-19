@@ -39,7 +39,7 @@ export default function App() {
     if (error) {
       alert("Error al guardar: " + error.message);
     } else {
-      alert("Registro enviado con éxito. Estado: Pendiente de revisión.");
+      alert("✅ Registro enviado con éxito. Estado: Pendiente de revisión.");
       window.location.reload();
     }
   };
@@ -50,26 +50,40 @@ export default function App() {
 
   const manejarLogin = async (e) => {
     e.preventDefault();
+    
+    // Diagnóstico inicial en consola
+    console.log("Intentando conectar con las credenciales ingresadas...", credenciales);
+
     const { data, error } = await supabase
       .from('administradores')
       .select('*')
       .eq('usuario', credenciales.usuario)
       .eq('password', credenciales.password)
       .eq('pin', credenciales.pin)
-      .single();
+      .maybeSingle(); // Cambiado a maybeSingle para evitar excepciones estrictas si devuelve vacío
 
-   if (error) {
-  alert("⚠️ Error de conexión: " + error.message);
-  console.log(error);
-} else if (!data) {
-  alert("🔍 El usuario existe en Supabase pero los datos no coinciden.");
-} else {
-  setVista('panel');
-  cargarProveedores();
-}
+    if (error) {
+      alert("⚠️ Error de conexión con Supabase:\n" + error.message + "\n\nVerifica si las variables de entorno en Vercel están bien guardadas.");
+      console.error("Detalle del error:", error);
+      return;
+    }
+
+    if (!data) {
+      alert("🔍 Conexión exitosa, pero las credenciales (Usuario, Contraseña o PIN) no coinciden con ningún registro de la tabla.");
+      return;
+    }
+
+    // Si pasa las validaciones, entra al panel
+    setVista('panel');
+    cargarProveedores();
+  };
 
   const cargarProveedores = async () => {
-    const { data, error } = await supabase.from('proveedores').select('*').order('fecha_registro', { ascending: false });
+    const { data, error } = await supabase
+      .from('proveedores')
+      .select('*')
+      .order('fecha_registro', { ascending: false });
+      
     if (!error && data) {
       setProveedores(data);
     }
@@ -182,7 +196,7 @@ export default function App() {
 
             <button type="submit" style={{ width: '100%', padding: '15px', marginTop: '25px', backgroundColor: '#EE2D24', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', borderRadius: '4px' }}>
               ENVIAR REGISTRO
-            </button>
+          </button>
           </form>
         </div>
       )}
