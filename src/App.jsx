@@ -251,18 +251,18 @@ export default function App() {
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
       
       {/* NAVBAR */}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#004A99', padding: '15px 20px', borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#004A99', padding: '15px 20px', borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
         
-        {/* SECCIÓN DEL LOGO OPTIMIZADA */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <img src="/logo.png" alt="Sodimac" style={{ height: '65px', objectFit: 'contain' }} />
-          <span style={{ fontSize: '20px', fontWeight: '600', letterSpacing: '0.5px' }}>Portal de Proveedores</span>
+        {/* SECCIÓN DEL LOGO CON ZOOM PARA ELIMINAR EL MARGEN TRANSPARENTE */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
+          <img src="/logo.png" alt="Sodimac" style={{ height: '50px', objectFit: 'contain', transform: 'scale(2.8)', transformOrigin: 'left center', marginLeft: '5px' }} />
+          <span style={{ fontSize: '22px', fontWeight: '600', letterSpacing: '0.5px', zIndex: 10 }}>Portal de Proveedores</span>
         </div>
 
-        <div>
-          {['login', 'recuperar', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s' }}>Ir a Registro Público</button>}
-          {vista === 'registro' && <button onClick={() => setVista('pre_login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s' }}>Acceso Interno</button>}
-          {vista === 'panel' && <button onClick={() => {setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Cerrar Sesión</button>}
+        <div style={{ zIndex: 10 }}>
+          {['login', 'recuperar', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro Público</button>}
+          {vista === 'registro' && <button onClick={() => setVista('pre_login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Acceso Interno</button>}
+          {vista === 'panel' && <button onClick={() => {setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Cerrar Sesión</button>}
         </div>
       </div>
 
@@ -388,7 +388,6 @@ export default function App() {
           
           {tabAdmin === 'dashboard' && (
             <div>
-              {/* Tarjetas Superiores */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
                 <div style={{ backgroundColor: '#004A99', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores Registrados</h3>
@@ -404,10 +403,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* GRÁFICOS */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '30px', marginBottom: '30px' }}>
-                
-                {/* 1. Gráfico de Torta (Aprobados) */}
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <h3 style={{ margin: 0, color: '#333', fontSize: '16px' }}>Distribución Aprobados</h3>
@@ -416,10 +412,7 @@ export default function App() {
                       <option value="subcategoria">Por Subcategoría</option>
                     </select>
                   </div>
-                  
-                  {totalAprobados === 0 ? (
-                    <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados aún</p>
-                  ) : (
+                  {totalAprobados === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados aún</p> : (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: tortaGradient, marginBottom: '20px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}></div>
                       <div style={{ width: '100%', maxHeight: '150px', overflowY: 'auto' }}>
@@ -435,21 +428,14 @@ export default function App() {
                   )}
                 </div>
 
-                {/* 2. Gráfico de Línea (Tendencia Total) */}
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
                   <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '16px' }}>Tendencia de Registros</h3>
-                  {stats.fechasOrdenadas.length === 0 ? (
-                    <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay registros para graficar</p>
-                  ) : (
+                  {stats.fechasOrdenadas.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay registros para graficar</p> : (
                     <div style={{ position: 'relative', width: '100%', height: '250px' }}>
                       <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
                         <line x1={padX} y1={chartHeight - padY} x2={chartWidth} y2={chartHeight - padY} stroke="#ccc" strokeWidth="2" />
                         <line x1={padX} y1="0" x2={padX} y2={chartHeight - padY} stroke="#ccc" strokeWidth="2" />
-                        
-                        {stats.fechasOrdenadas.length > 1 && (
-                          <polyline points={puntosLinea} fill="none" stroke="#004A99" strokeWidth="3" />
-                        )}
-                        
+                        {stats.fechasOrdenadas.length > 1 && <polyline points={puntosLinea} fill="none" stroke="#004A99" strokeWidth="3" />}
                         {stats.fechasOrdenadas.map((f, i) => {
                           const cx = padX + i * stepX;
                           const cy = chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY));
@@ -457,9 +443,7 @@ export default function App() {
                             <g key={f}>
                               <circle cx={cx} cy={cy} r="5" fill="#EE2D24" />
                               <text x={cx} y={cy - 10} fontSize="12" fill="#333" textAnchor="middle">{stats.fechasRaw[f]}</text>
-                              {i % Math.ceil(stats.fechasOrdenadas.length / 5) === 0 && (
-                                <text x={cx} y={chartHeight - 10} fontSize="11" fill="#666" textAnchor="middle">{f.substring(0, 5)}</text>
-                              )}
+                              {i % Math.ceil(stats.fechasOrdenadas.length / 5) === 0 && <text x={cx} y={chartHeight - 10} fontSize="11" fill="#666" textAnchor="middle">{f.substring(0, 5)}</text>}
                             </g>
                           );
                         })}
@@ -469,7 +453,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* RECORDATORIOS 90 DÍAS */}
               {stats.renovaciones.length > 0 && (
                 <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffeeba', padding: '20px', borderRadius: '8px' }}>
                   <h3 style={{ margin: '0 0 15px 0', color: '#856404' }}>Acción Requerida: Envío de Recordatorios</h3>
