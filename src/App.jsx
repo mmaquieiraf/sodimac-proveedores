@@ -254,10 +254,29 @@ export default function App() {
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#004A99', padding: '15px 20px', borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
         
         {/* SECCIÓN DEL LOGO CON ZOOM PARA ELIMINAR EL MARGEN TRANSPARENTE */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
-          <img src="/logo.png" alt="Sodimac" style={{ height: '50px', objectFit: 'contain', transform: 'scale(2.8)', transformOrigin: 'left center', marginLeft: '5px' }} />
-          <span style={{ fontSize: '22px', fontWeight: '600', letterSpacing: '0.5px', zIndex: 10 }}>Portal de Proveedores</span>
-        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4cm' }}>
+  <img
+    src="/logo.png"
+    alt="Sodimac"
+    style={{
+      height: '50px',
+      objectFit: 'contain',
+      transform: 'scale(2.8)',
+      transformOrigin: 'left center',
+      marginLeft: '5px'
+    }}
+  />
+  <span
+    style={{
+      fontSize: '22px',
+      fontWeight: '600',
+      letterSpacing: '0.5px',
+      zIndex: 10
+    }}
+  >
+    Portal de Proveedores
+  </span>
+</div>
 
         <div style={{ zIndex: 10 }}>
           {['login', 'recuperar', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro Público</button>}
