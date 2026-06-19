@@ -15,7 +15,7 @@ export default function App() {
   const [vista, setVista] = useState('registro'); 
   const [tabAdmin, setTabAdmin] = useState('dashboard');
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
-  const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria'); // categoria | subcategoria
+  const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
 
   // --- LÓGICA DEL FORMULARIO PÚBLICO ---
   const [formData, setFormData] = useState({
@@ -51,7 +51,7 @@ export default function App() {
     }
   };
 
-  // --- LÓGICA DE PRE-LOGIN (BARRERA DE SEGURIDAD) ---
+  // --- LÓGICA DE PRE-LOGIN ---
   const [preLoginPin, setPreLoginPin] = useState('');
 
   const manejarPreLogin = (e) => {
@@ -110,7 +110,7 @@ export default function App() {
     }
   };
 
-  // --- LÓGICA MÓDULO EXPORTACIÓN (CSV ACTUALIZADO) ---
+  // --- LÓGICA MÓDULO EXPORTACIÓN (CSV LIMPIO SIN COMILLAS) ---
   const [filtroRut, setFiltroRut] = useState('');
   const [filtroNombre, setFiltroNombre] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
@@ -141,16 +141,15 @@ export default function App() {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor para exportar.");
     const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
     
-    // Nueva estructura exacta exigida
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
     csvContent += "Id,Nombre de la empresa*,Nombre del contacto,Correo electrónico*,Código del idioma,Código de Región\n";
     
     dataAExportar.forEach(p => {
-      const nombreEmpresa = `"${p.nombre_fantasia.replace(/"/g, '""')}"`;
-      const nombreContacto = `"${p.nombre_contacto.replace(/"/g, '""')}"`;
-      const correo = `"${p.email_principal.replace(/"/g, '""')}"`;
+      // Se eliminan comillas y también comas internas para que no rompan las columnas del CSV
+      const nombreEmpresa = p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ');
+      const nombreContacto = p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ');
+      const correo = p.email_principal.replace(/"/g, '').replace(/,/g, ' ');
       
-      // Se dejan vacíos el Id, Código del idioma y Código de Región respetando las comas
       csvContent += `,${nombreEmpresa},${nombreContacto},${correo},,\n`;
     });
     
@@ -184,7 +183,7 @@ export default function App() {
     }
   };
 
-  // --- LÓGICA DEL DASHBOARD (CALCULOS Y GRÁFICOS NATIVOS) ---
+  // --- LÓGICA DEL DASHBOARD ---
   const statsDashboard = () => {
     const total = proveedores.length;
     const fechasRaw = {};
@@ -193,15 +192,11 @@ export default function App() {
     hace90Dias.setDate(hace90Dias.getDate() - 90);
 
     proveedores.forEach(p => {
-      // Línea de tendencia (Todos los registros)
       const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
       fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1;
-      
-      // Renovaciones (>90 días)
       if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p);
     });
 
-    // Ordenar fechas para el gráfico de línea
     const fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => {
       const [da, ma, ya] = a.split('-');
       const [db, mb, yb] = b.split('-');
@@ -221,7 +216,6 @@ export default function App() {
   const stats = statsDashboard();
 
   // --- GENERADORES DE GRÁFICOS NATIVOS ---
-  // 1. Gráfico de Torta (Solo Aprobados)
   const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
   const tortaData = {};
   proveedoresAprobados.forEach(p => {
@@ -239,7 +233,6 @@ export default function App() {
   });
   const tortaGradient = totalAprobados > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
-  // 2. Gráfico de Línea de Tendencia (SVG)
   const chartWidth = 800;
   const chartHeight = 250;
   const padX = 40;
@@ -320,13 +313,13 @@ export default function App() {
           <p style={{ textAlign: 'center', fontSize: '13px', color: '#666', marginBottom: '30px' }}>Ingrese el código de autorización institucional.</p>
           <form onSubmit={manejarPreLogin}>
             <div style={{ marginBottom: '30px' }}><input required type="password" maxLength="6" placeholder="******" value={preLoginPin} onChange={e => setPreLoginPin(e.target.value)} style={{ width: '100%', padding: '15px', border: '2px solid #ccc', borderRadius: '4px', letterSpacing: '12px', textAlign: 'center', fontSize: '24px', outline: 'none' }} /></div>
-            <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VALIDAR ACCESO</button>
+            <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '14px', borderRadius: '4px', cursor: 'pointer' }}>VALIDAR ACCESO</button>
             <button type="button" onClick={() => setVista('registro')} style={{ width: '100%', padding: '14px', marginTop: '10px', backgroundColor: 'transparent', color: '#555', border: '1px solid #ccc', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VOLVER</button>
           </form>
         </div>
       )}
 
-      {/* MODAL TÉRMINOS Y CONDICIONES (Recortado visualmente en código por espacio, pero 100% funcional) */}
+      {/* MODAL TÉRMINOS Y CONDICIONES */}
       {mostrarTerminos && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
           <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '800px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
@@ -448,16 +441,13 @@ export default function App() {
                   ) : (
                     <div style={{ position: 'relative', width: '100%', height: '250px' }}>
                       <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
-                        {/* Ejes y Cuadrícula */}
                         <line x1={padX} y1={chartHeight - padY} x2={chartWidth} y2={chartHeight - padY} stroke="#ccc" strokeWidth="2" />
                         <line x1={padX} y1="0" x2={padX} y2={chartHeight - padY} stroke="#ccc" strokeWidth="2" />
                         
-                        {/* Línea Principal */}
                         {stats.fechasOrdenadas.length > 1 && (
                           <polyline points={puntosLinea} fill="none" stroke="#004A99" strokeWidth="3" />
                         )}
                         
-                        {/* Puntos y Etiquetas */}
                         {stats.fechasOrdenadas.map((f, i) => {
                           const cx = padX + i * stepX;
                           const cy = chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY));
@@ -465,7 +455,6 @@ export default function App() {
                             <g key={f}>
                               <circle cx={cx} cy={cy} r="5" fill="#EE2D24" />
                               <text x={cx} y={cy - 10} fontSize="12" fill="#333" textAnchor="middle">{stats.fechasRaw[f]}</text>
-                              {/* Etiquetas del eje X alternadas para que no se amontonen */}
                               {i % Math.ceil(stats.fechasOrdenadas.length / 5) === 0 && (
                                 <text x={cx} y={chartHeight - 10} fontSize="11" fill="#666" textAnchor="middle">{f.substring(0, 5)}</text>
                               )}
