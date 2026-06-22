@@ -32,26 +32,48 @@ export default function App() {
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState(null);
 
-  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA (3 INTENTOS = 30 MIN) ---
+  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA CON MEMORIA (24 HORAS) ---
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
+
+  // Verificar si ya estaba bloqueado al cargar la página
+  useEffect(() => {
+    const tiempoBloqueo = localStorage.getItem('sodimac_bloqueo_seguridad');
+    if (tiempoBloqueo) {
+      const tiempoRestante = parseInt(tiempoBloqueo) - Date.now();
+      if (tiempoRestante > 0) {
+        setBloqueoSeguridad(true);
+        setTimeout(() => {
+          setBloqueoSeguridad(false);
+          localStorage.removeItem('sodimac_bloqueo_seguridad');
+          setIntentosFallidos(0);
+        }, tiempoRestante);
+      } else {
+        localStorage.removeItem('sodimac_bloqueo_seguridad');
+      }
+    }
+  }, []);
 
   const registrarIntentoFallido = () => {
     const nuevosIntentos = intentosFallidos + 1;
     setIntentosFallidos(nuevosIntentos);
     if (nuevosIntentos >= 3) {
       setBloqueoSeguridad(true);
-      alert("⚠️ ALERTA DE SEGURIDAD: 3 intentos fallidos. Sistema bloqueado por 30 minutos.");
+      const veinticuatroHorasMs = 86400000; // 24 * 60 * 60 * 1000
+      localStorage.setItem('sodimac_bloqueo_seguridad', Date.now() + veinticuatroHorasMs);
+      alert("⚠️ ALERTA DE SEGURIDAD EXTREMA: 3 intentos fallidos. Sistema bloqueado automáticamente por 24 HORAS.");
+      
       setTimeout(() => {
         setBloqueoSeguridad(false);
+        localStorage.removeItem('sodimac_bloqueo_seguridad');
         setIntentosFallidos(0);
-      }, 1800000); // 30 minutos en milisegundos
+      }, veinticuatroHorasMs);
       return true; 
     }
     return false; 
   };
 
-  // --- REGISTRO DE AUDITORÍA (NUEVO) ---
+  // --- REGISTRO DE AUDITORÍA SILENCIOSO ---
   const registrarAuditoria = async (usuario, estado, tipo) => {
     await supabase.from('auditoria_logins').insert([{
       usuario_intentado: usuario,
@@ -138,7 +160,7 @@ export default function App() {
   const [preLoginPin, setPreLoginPin] = useState('');
   const manejarPreLogin = (e) => {
     e.preventDefault();
-    if (bloqueoSeguridad) return alert("Sistema bloqueado. Faltan minutos para la reactivación.");
+    if (bloqueoSeguridad) return alert("❌ Sistema de acceso bloqueado por 24 horas por seguridad.");
     
     if (preLoginPin === '171819') { 
       registrarAuditoria('Anónimo', 'Éxito', 'Acceso a PIN Público');
@@ -148,7 +170,7 @@ export default function App() {
     } else { 
       registrarAuditoria('Anónimo', 'Fallido', 'Acceso a PIN Público');
       const fueBloqueado = registrarIntentoFallido();
-      if (!fueBloqueado) alert("⚠️ Código de autorización incorrecto."); 
+      if (!fueBloqueado) alert(`⚠️ Código incorrecto. Intentos restantes: ${3 - (intentosFallidos + 1)}`); 
       setPreLoginPin(''); 
     }
   };
@@ -162,7 +184,7 @@ export default function App() {
 
   const manejarLogin = async (e) => {
     e.preventDefault();
-    if (bloqueoSeguridad) return alert("Sistema bloqueado. Faltan minutos para la reactivación.");
+    if (bloqueoSeguridad) return alert("❌ Sistema bloqueado temporalmente por 24 horas.");
 
     const intentoUsuario = credenciales.usuario.replace(/[<>]/g, '').trim();
     const { data, error } = await supabase.from('administradores').select('*')
@@ -172,9 +194,9 @@ export default function App() {
     if (error) return alert("⚠️ Error de conexión seguro.");
     
     if (!data) {
-      registrarAuditoria(intentoUsuario || 'Anónimo', 'Fallido', 'Login Panel Admin');
+      registrarAuditoria(intentoUsuario || 'Desconocido', 'Fallido', 'Login Panel Admin');
       const fueBloqueado = registrarIntentoFallido();
-      if (!fueBloqueado) alert("🔍 Credenciales incorrectas.");
+      if (!fueBloqueado) alert(`🔍 Credenciales incorrectas. Intentos restantes: ${3 - (intentosFallidos + 1)}`);
       return;
     }
 
@@ -197,14 +219,9 @@ export default function App() {
   };
 
   const cargarLogsAuditoria = async () => {
-    const { data, error } = await supabase.from('auditoria_logins').select('*').order('created_at', { ascending: false }).limit(200);
+    const { data, error } = await supabase.from('auditoria_logins').select('*').order('created_at', { ascending: false }).limit(300);
     if (!error && data) setLogsAuditoria(data);
   };
-
-  // Hook para cargar la auditoría si está en esa pestaña
-  useEffect(() => {
-    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira') cargarLogsAuditoria();
-  }, [tabAdmin, usuarioActual]);
 
   // --- GESTIÓN DE PROVEEDORES ---
   const aprobarProveedor = async (id) => {
@@ -367,6 +384,23 @@ export default function App() {
 
   const [filtroMapaCat, setFiltroMapaCat] = useState(''); const [filtroMapaSub, setFiltroMapaSub] = useState(''); const [filtroMapaZona, setFiltroMapaZona] = useState('');
   const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
+  
+  // Gráfico de torta variables
+  const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
+  const tortaData = {};
+  proveedoresAprobados.forEach(p => {
+    const clave = tipoGraficoTorta === 'categoria' ? p.categoria : p.subcategoria;
+    tortaData[clave] = (tortaData[clave] || 0) + 1;
+  });
+  let cumulativePercent = 0;
+  const pieSlices = Object.entries(tortaData).map(([key, val], i) => {
+    const percent = proveedoresAprobados.length > 0 ? (val / proveedoresAprobados.length) * 100 : 0;
+    const slice = `${coloresGrafico[i % coloresGrafico.length]} ${cumulativePercent}% ${cumulativePercent + percent}%`;
+    cumulativePercent += percent;
+    return { key, val, percent, color: coloresGrafico[i % coloresGrafico.length], slice };
+  });
+  const tortaGradient = proveedoresAprobados.length > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
+
   const statsMapa = () => {
     const conteo = {}; zonasOpciones.filter(z => z !== "Todo el País").forEach(z => conteo[z] = 0);
     const filtradosMapa = proveedoresAprobados.filter(p => {
@@ -398,6 +432,24 @@ export default function App() {
     const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
+  // --- RECUPERAR PASS ---
+  const [resetStep, setResetStep] = useState(1); const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
+  const buscarCorreo = async (e) => {
+    e.preventDefault();
+    if (bloqueoSeguridad) return alert("Sistema bloqueado por seguridad.");
+    const { data, error } = await supabase.from('administradores').select('id').eq('correo', resetData.correo.replace(/[<>]/g, '').toLowerCase().trim()).maybeSingle();
+    if (error || !data) {
+      registrarAuditoria(resetData.correo, 'Fallido', 'Recuperación de Password');
+      const fueBloqueado = registrarIntentoFallido();
+      if (!fueBloqueado) alert("No se encontró administrador con este correo.");
+    } else { setResetData({ ...resetData, idUsuario: data.id }); setResetStep(2); setIntentosFallidos(0); }
+  };
+  const actualizarPassword = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from('administradores').update({ password: resetData.nuevaPass.replace(/[<>]/g, ''), pin: resetData.nuevoPin.replace(/[<>]/g, '') }).eq('id', resetData.idUsuario);
+    if (error) alert("⚠️ Error."); else { alert("✅ Credenciales actualizadas."); setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null }); }
+  };
+
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
       {/* NAVBAR */}
@@ -408,7 +460,7 @@ export default function App() {
         </div>
         <div style={{ zIndex: 10, display: 'flex', alignItems: 'center', gap: '15px' }}>
           {usuarioActual && <span style={{ fontSize: '14px', color: '#cce5ff', borderRight: '1px solid rgba(255,255,255,0.3)', paddingRight: '15px' }}>👤 {usuarioActual.usuario}</span>}
-          {['login', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro</button>}
+          {['login', 'pre_login', 'recuperar'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro</button>}
           {vista === 'registro' && <button onClick={() => setVista('pre_login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Acceso Interno</button>}
           {vista === 'panel' && <button onClick={() => {setUsuarioActual(null); setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Cerrar Sesión</button>}
         </div>
@@ -481,7 +533,7 @@ export default function App() {
         </div>
       )}
 
-      {/* LOGIN PIN Y MODAL T&C (SIMPLIFICADO VISUALMENTE AQUÍ) */}
+      {/* LOGIN PIN Y MODAL T&C */}
       {vista === 'pre_login' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '40px 30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px', fontSize: '24px' }}>Seguridad de Acceso</h2>
@@ -489,8 +541,8 @@ export default function App() {
             <div style={{ marginBottom: '30px', display: 'flex', justifyContent: 'center' }}>
               <input required type="password" maxLength="6" placeholder="******" value={preLoginPin} onChange={e => setPreLoginPin(e.target.value)} style={{ width: '100%', maxWidth: '250px', padding: '15px', border: '2px solid #ccc', borderRadius: '8px', letterSpacing: '15px', textAlign: 'center', fontSize: '28px', outline: 'none', fontWeight: 'bold', color: '#004A99' }} />
             </div>
-            <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '14px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px' }}>VALIDAR ACCESO</button>
-            <button type="button" onClick={() => setVista('registro')} style={{ width: '100%', padding: '14px', marginTop: '10px', backgroundColor: 'transparent', border: '1px solid #ccc', fontWeight: 'bold', borderRadius: '4px' }}>VOLVER</button>
+            <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '14px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>VALIDAR ACCESO</button>
+            <button type="button" onClick={() => setVista('registro')} style={{ width: '100%', padding: '14px', marginTop: '10px', backgroundColor: 'transparent', border: '1px solid #ccc', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VOLVER</button>
           </form>
         </div>
       )}
@@ -502,23 +554,45 @@ export default function App() {
             <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Usuario</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setCredenciales({...credenciales, usuario: e.target.value})} /></div>
             <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setCredenciales({...credenciales, password: e.target.value})} /></div>
             <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>PIN Interno</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', letterSpacing: '3px' }} onChange={e => setCredenciales({...credenciales, pin: e.target.value})} /></div>
-            <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px' }}>INGRESAR AL PANEL</button>
+            <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>INGRESAR AL PANEL</button>
+            <div style={{ textAlign: 'center', marginTop: '15px' }}><button type="button" onClick={() => setVista('recuperar')} style={{ background: 'none', border: 'none', color: '#004A99', textDecoration: 'underline', fontSize: '12px', cursor: 'pointer' }}>¿Olvidaste tu contraseña?</button></div>
           </form>
+        </div>
+      )}
+
+      {vista === 'recuperar' && (
+        <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px' }}>Recuperar Acceso</h2>
+          {resetStep === 1 ? (
+            <form onSubmit={buscarCorreo}>
+              <div style={{ marginBottom: '20px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Correo Registrado</label><input required type="email" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, correo: e.target.value})} /></div>
+              <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>VERIFICAR</button>
+            </form>
+          ) : (
+            <form onSubmit={actualizarPassword}>
+              <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nueva Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, nuevaPass: e.target.value})} /></div>
+              <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nuevo PIN</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, nuevoPin: e.target.value})} /></div>
+              <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#28a745', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>GUARDAR</button>
+            </form>
+          )}
         </div>
       )}
 
       {/* PANEL ADMINISTRATIVO PRINCIPAL */}
       {vista === 'panel' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+          
+          {/* BARRA DE NAVEGACIÓN DEL PANEL (TABS) */}
           <div style={{ display: 'flex', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px', gap: '20px', overflowX: 'auto' }}>
             <h2 onClick={() => setTabAdmin('dashboard')} style={{ color: tabAdmin === 'dashboard' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Dashboard</h2>
             <h2 onClick={() => setTabAdmin('proveedores')} style={{ color: tabAdmin === 'proveedores' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Pendientes / Gestión</h2>
             <h2 onClick={() => setTabAdmin('carga_masiva')} style={{ color: tabAdmin === 'carga_masiva' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Carga Masiva</h2>
             <h2 onClick={() => {setTabAdmin('exportar'); setSeleccionados([]);}} style={{ color: tabAdmin === 'exportar' ? '#28a745' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Exportar Aprobados</h2>
             <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Admin / Roles</h2>
-            {/* PESTAÑA EXCLUSIVA PARA MMAQUIEIRA */}
+            
+            {/* 🛡️ PESTAÑA DE AUDITORÍA EXCLUSIVA PARA MMAQUIEIRA */}
             {usuarioActual?.usuario === 'mmaquieira' && (
-              <h2 onClick={() => setTabAdmin('auditoria')} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>🛡️ Auditoría</h2>
+              <h2 onClick={() => { setTabAdmin('auditoria'); cargarLogsAuditoria(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>🛡️ Auditoría</h2>
             )}
           </div>
           
@@ -543,11 +617,25 @@ export default function App() {
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <h3 style={{ margin: 0, color: '#333', fontSize: '16px' }}>Distribución Aprobados</h3>
+                    <select style={{ padding: '5px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setTipoGraficoTorta(e.target.value)} value={tipoGraficoTorta}>
+                      <option value="categoria">Por Categoría</option>
+                      <option value="subcategoria">Por Subcategoría</option>
+                    </select>
                   </div>
-                  {/* Gráfico omitido aquí por espacio visual, pero es 100% igual al código anterior */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: tortaGradient, marginBottom: '20px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}></div>
-                  </div>
+                  {proveedoresAprobados.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados aún</p> : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: tortaGradient, marginBottom: '20px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}></div>
+                      <div style={{ width: '100%', maxHeight: '150px', overflowY: 'auto' }}>
+                        {pieSlices.map(s => (
+                          <div key={s.key} style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', fontSize: '12px' }}>
+                            <div style={{ width: '12px', height: '12px', backgroundColor: s.color, marginRight: '10px', borderRadius: '2px' }}></div>
+                            <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.key}</span>
+                            <span style={{ fontWeight: 'bold' }}>{s.val} ({Math.round(s.percent)}%)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
@@ -668,6 +756,67 @@ export default function App() {
             </div>
           )}
 
+          {tabAdmin === 'exportar' && (
+            <div>
+              <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo CSV compatible con los sistemas internos.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', marginBottom: '20px', backgroundColor: '#f9f9f9', padding: '15px', borderRadius: '8px', border: '1px solid #ddd' }}>
+                <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Buscar por RUT</label><input placeholder="Ej: 12345678-9" style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroRut(e.target.value)} /></div>
+                <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Nombre de Fantasía</label><input placeholder="Buscar empresa..." style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroNombre(e.target.value)} /></div>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Categoría</label>
+                  <select style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => {setFiltroCategoria(e.target.value); setFiltroSubcategoria('');}}>
+                    <option value="">Todas</option>
+                    {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Subcategoría</label>
+                  <select disabled={!filtroCategoria} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroSubcategoria(e.target.value)}>
+                    <option value="">Todas</option>
+                    {filtroCategoria && categoriasSodimac[filtroCategoria].map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#004A99' }}>Seleccionados: {seleccionados.length} de {proveedoresFiltrados.length}</span>
+                <button onClick={exportarCSV} style={{ padding: '10px 20px', backgroundColor: '#28a745', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>Descargar CSV Exportable</button>
+              </div>
+
+              <div style={{ overflowX: 'auto', border: '1px solid #ccc', borderRadius: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', width: '40px', textAlign: 'center' }}>
+                        <input type="checkbox" onChange={toggleSeleccionarTodo} checked={seleccionados.length === proveedoresFiltrados.length && proveedoresFiltrados.length > 0} />
+                      </th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>RUT</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Nombre Fantasía (Empresa)</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría / Sub</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Nombre Contacto</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Correo Electrónico</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {proveedoresFiltrados.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay resultados con estos filtros.</td></tr> : 
+                    proveedoresFiltrados.map(prov => (
+                      <tr key={prov.id} style={{ borderBottom: '1px solid #eee', backgroundColor: seleccionados.includes(prov.id) ? '#f0f8ff' : 'white' }}>
+                        <td style={{ padding: '12px', textAlign: 'center' }}>
+                          <input type="checkbox" checked={seleccionados.includes(prov.id)} onChange={() => toggleSeleccion(prov.id)} />
+                        </td>
+                        <td style={{ padding: '12px' }}>{prov.rut}</td>
+                        <td style={{ padding: '12px' }}><strong>{prov.nombre_fantasia}</strong></td>
+                        <td style={{ padding: '12px' }}>{prov.categoria} <br/><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
+                        <td style={{ padding: '12px' }}>{prov.nombre_contacto}</td>
+                        <td style={{ padding: '12px' }}>{prov.email_principal}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {tabAdmin === 'crear_admin' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '40px' }}>
               <div>
@@ -682,7 +831,7 @@ export default function App() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #004A99', paddingBottom: '10px', marginBottom: '20px' }}>
                   <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Gestión de Usuarios</h3>
-                  {usuarioActual?.usuario === 'mmaquieira' && <span style={{ fontSize: '11px', backgroundColor: '#EE2D24', color: 'white', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold' }}>👑 Modo SuperAdmin Activo</span>}
+                  {usuarioActual?.usuario === 'mmaquieira' && <span style={{ fontSize: '11px', backgroundColor: '#EE2D24', color: 'white', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold' }}>👑 Modo SuperAdmin</span>}
                 </div>
                 <div style={{ overflowX: 'auto', border: '1px solid #eee', borderRadius: '8px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -711,12 +860,12 @@ export default function App() {
             </div>
           )}
 
-          {/* NUEVO: PESTAÑA DE AUDITORÍA SOLO PARA MMAQUIEIRA */}
+          {/* 🛡️ PESTAÑA DE AUDITORÍA SOLO PARA MMAQUIEIRA */}
           {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>
                 <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Registro de Auditoría de Accesos</h3>
-                <button onClick={cargarLogsAuditoria} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Actualizar Registros</button>
+                <button onClick={cargarLogsAuditoria} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Actualizar Registros</button>
               </div>
               <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>Historial de intentos de conexión a la plataforma administrativa. Muestra accesos exitosos y bloqueos de seguridad de cualquier usuario.</p>
               
