@@ -35,19 +35,52 @@ export default function App() {
 
   // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA ---
   const [intentosFallidos, setIntentosFallidos] = useState(0);
-  const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
+  const [bloqueoHasta, setBloqueoHasta] = useState(() => {
+    if (typeof window === 'undefined') return 0;
+    const valorGuardado = Number(window.localStorage.getItem('portal_proveedores_bloqueo_hasta') || 0);
+    return Number.isFinite(valorGuardado) ? valorGuardado : 0;
+  });
+  const bloqueoSeguridad = bloqueoHasta > Date.now();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!bloqueoHasta) {
+      window.localStorage.removeItem('portal_proveedores_bloqueo_hasta');
+      return;
+    }
+
+    window.localStorage.setItem('portal_proveedores_bloqueo_hasta', String(bloqueoHasta));
+    const restante = bloqueoHasta - Date.now();
+
+    if (restante <= 0) {
+      setBloqueoHasta(0);
+      window.localStorage.removeItem('portal_proveedores_bloqueo_hasta');
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setBloqueoHasta(0);
+      window.localStorage.removeItem('portal_proveedores_bloqueo_hasta');
+    }, restante);
+
+    return () => window.clearTimeout(timer);
+  }, [bloqueoHasta]);
+
+  const activarBloqueo24Horas = () => {
+    const hasta = Date.now() + (24 * 60 * 60 * 1000);
+    setBloqueoHasta(hasta);
+    setIntentosFallidos(0);
+    alert("⚠️ ALERTA DE SEGURIDAD: Múltiples intentos fallidos. Sistema bloqueado por 24 horas.");
+  };
 
   const registrarIntentoFallido = () => {
     const nuevosIntentos = intentosFallidos + 1;
-    setIntentosFallidos(nuevosIntentos);
-    if (nuevosIntentos >= 5) {
-      setBloqueoSeguridad(true);
-      alert("⚠️ ALERTA DE SEGURIDAD: Múltiples intentos fallidos. Sistema bloqueado por 30 segundos.");
-      setTimeout(() => {
-        setBloqueoSeguridad(false);
-        setIntentosFallidos(0);
-      }, 30000); // Bloqueo de 30 segundos
+    if (nuevosIntentos >= 3) {
+      activarBloqueo24Horas();
+      return true;
     }
+    setIntentosFallidos(nuevosIntentos);
+    return false;
   };
 
   // --- LÓGICA DEL FORMULARIO PÚBLICO ---
@@ -137,14 +170,14 @@ export default function App() {
   const manejarPreLogin = (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("Sistema bloqueado temporalmente por seguridad.");
-    
+
     if (preLoginPin === '171819') { 
       setVista('login'); 
       setPreLoginPin(''); 
       setIntentosFallidos(0); // Resetea si tiene éxito
     } else { 
-      registrarIntentoFallido();
-      if(intentosFallidos < 4) alert("⚠️ Código de autorización incorrecto."); 
+      const bloqueoActivado = registrarIntentoFallido();
+      if (!bloqueoActivado) alert("⚠️ Código de autorización incorrecto."); 
       setPreLoginPin(''); 
     }
   };
@@ -153,26 +186,50 @@ export default function App() {
   const [credenciales, setCredenciales] = useState({ usuario: '', password: '', pin: '' });
   const [proveedores, setProveedores] = useState([]);
   const [administradoresDb, setAdministradoresDb] = useState([]);
+  const [auditoriaAccesos, setAuditoriaAccesos] = useState([]);
   const [nuevoAdmin, setNuevoAdmin] = useState({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' });
 
   const manejarLogin = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("Sistema bloqueado temporalmente por seguridad.");
 
+    const usuarioIngresado = credenciales.usuario.replace(/[<>]/g, '').trim();
+    const passwordIngresada = credenciales.password.replace(/[<>]/g, '');
+    const pinIngresado = credenciales.pin.replace(/[<>]/g, '');
+
+    const { data: adminRegistrado, error: errorUsuario } = await supabase
+      .from('administradores')
+      .select('id, usuario, nombre_completo')
+      .eq('usuario', usuarioIngresado)
+      .maybeSingle();
+
+    if (errorUsuario) {
+      console.error(errorUsuario);
+      return alert("⚠️ Error de conexión seguro.");
+    }
+
     const { data, error } = await supabase.from('administradores').select('*')
-      .eq('usuario', credenciales.usuario.replace(/[<>]/g, '').trim())
-      .eq('password', credenciales.password.replace(/[<>]/g, ''))
-      .eq('pin', credenciales.pin.replace(/[<>]/g, ''))
+      .eq('usuario', usuarioIngresado)
+      .eq('password', passwordIngresada)
+      .eq('pin', pinIngresado)
       .maybeSingle();
 
     if (error) {
       console.error(error);
       return alert("⚠️ Error de conexión seguro.");
     }
-    
+
     if (!data) {
-      registrarIntentoFallido();
-      return alert("🔍 Credenciales incorrectas.");
+      const bloqueoActivado = registrarIntentoFallido();
+      registrarAuditoriaAcceso({
+        evento: 'INTENTO_LOGIN_ADMIN',
+        usuarioIngresado,
+        usuarioRegistrado: !!adminRegistrado,
+        resultado: 'FALLIDO',
+        detalle: adminRegistrado ? 'Credenciales inválidas' : 'Usuario no registrado'
+      });
+      if (!bloqueoActivado) alert("🔍 Credenciales incorrectas.");
+      return;
     }
 
     setIntentosFallidos(0);
@@ -180,6 +237,15 @@ export default function App() {
     setVista('panel');
     cargarProveedores();
     cargarAdministradores();
+    if (data.usuario === 'mmaquieira') cargarAuditoriaAccesos();
+
+    registrarAuditoriaAcceso({
+      evento: 'LOGIN_ADMIN',
+      usuarioIngresado: data.usuario,
+      usuarioRegistrado: true,
+      resultado: 'EXITOSO',
+      detalle: 'Ingreso correcto a la plataforma'
+    });
   };
 
   const cargarProveedores = async () => {
@@ -190,6 +256,28 @@ export default function App() {
   const cargarAdministradores = async () => {
     const { data, error } = await supabase.from('administradores').select('*').order('id', { ascending: true });
     if (!error && data) setAdministradoresDb(data);
+  };
+
+  const cargarAuditoriaAccesos = async () => {
+    const { data, error } = await supabase
+      .from('auditoria_accesos')
+      .select('*')
+      .order('fecha_evento', { ascending: false })
+      .limit(200);
+
+    if (!error && data) setAuditoriaAccesos(data);
+  };
+
+  const registrarAuditoriaAcceso = async ({ evento, usuarioIngresado, usuarioRegistrado, resultado, detalle }) => {
+    const { error } = await supabase.from('auditoria_accesos').insert([{
+      evento,
+      usuario_ingresado: usuarioIngresado,
+      usuario_registrado: usuarioRegistrado,
+      resultado,
+      detalle
+    }]);
+
+    if (error) console.error(error);
   };
 
   // --- GESTIÓN DE PROVEEDORES ---
@@ -813,6 +901,12 @@ export default function App() {
           </div>
           
           {tabAdmin === 'dashboard' && (
+            {usuarioActual?.usuario === 'mmaquieira' && (
+              <h2 onClick={() => { setTabAdmin('auditoria'); cargarAuditoriaAccesos(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Auditoría</h2>
+            )}
+          </div>
+
+          {tabAdmin === 'dashboard' && (
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
                 <div style={{ backgroundColor: '#004A99', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
@@ -1092,6 +1186,47 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+
+          {/* PESTAÑA: AUDITORÍA (SOLO MMAQUIEIRA) */}
+          {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #004A99', paddingBottom: '10px', marginBottom: '20px' }}>
+                <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Auditoría de Accesos</h3>
+                <button onClick={cargarAuditoriaAccesos} style={{ padding: '8px 12px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Actualizar</button>
+              </div>
+
+              <div style={{ overflowX: 'auto', border: '1px solid #eee', borderRadius: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Fecha</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Evento</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Usuario ingresado</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Registrado</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Resultado</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Detalle</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditoriaAccesos.map((item, index) => (
+                      <tr key={item.id || index} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{item.fecha_evento ? new Date(item.fecha_evento).toLocaleString('es-CL') : ''}</td>
+                        <td style={{ padding: '12px' }}>{item.evento}</td>
+                        <td style={{ padding: '12px' }}>{item.usuario_ingresado || '-'}</td>
+                        <td style={{ padding: '12px' }}>{item.usuario_registrado ? 'Sí' : 'No'}</td>
+                        <td style={{ padding: '12px' }}>{item.resultado}</td>
+                        <td style={{ padding: '12px' }}>{item.detalle || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {auditoriaAccesos.length === 0 && (
+                <p style={{ fontSize: '12px', color: '#888', marginTop: '15px', textAlign: 'center' }}>No hay registros de auditoría disponibles.</p>
+              )}
             </div>
           )}
 
