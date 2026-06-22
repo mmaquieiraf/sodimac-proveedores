@@ -17,7 +17,7 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
-// Convierte mAtIaS a Matias siempre.
+// --- FUNCIÓN DE FORMATO ---
 const capitalizarTexto = (texto) => {
   if (!texto) return '';
   return texto.toLowerCase().trim().split(/\s+/).map(palabra => 
@@ -34,7 +34,7 @@ export default function App() {
   // --- LÓGICA DEL FORMULARIO PÚBLICO ---
   const [formData, setFormData] = useState({
     razonSocial: '', nombreFantasia: '', rut: '', domicilio: '',
-    categoria: '', subcategoria: '', emailPrincipal: '', emailSecundario: '',
+    categoria: [], subcategoria: [], emailPrincipal: '', emailSecundario: '', // Ahora son Arrays
     contacto: '', cargo: '', telefono: '', zonasCobertura: [], terminos: false
   });
 
@@ -52,33 +52,65 @@ export default function App() {
     }
   };
 
+  const manejarCambioCategoria = (cat, checked) => {
+    let nuevasCat = [...formData.categoria];
+    let nuevasSub = [...formData.subcategoria];
+    if (checked) {
+      nuevasCat.push(cat);
+    } else {
+      nuevasCat = nuevasCat.filter(c => c !== cat);
+      // Al desmarcar una categoría, eliminamos sus subcategorías de la selección
+      const subsParaRemover = categoriasSodimac[cat] || [];
+      nuevasSub = nuevasSub.filter(s => !subsParaRemover.includes(s));
+    }
+    setFormData({ ...formData, categoria: nuevasCat, subcategoria: nuevasSub });
+  };
+
+  const manejarCambioSubcategoria = (sub, checked) => {
+    let nuevasSub = [...formData.subcategoria];
+    if (checked) nuevasSub.push(sub);
+    else nuevasSub = nuevasSub.filter(s => s !== sub);
+    setFormData({ ...formData, subcategoria: nuevasSub });
+  };
+
   const manejarEnvioRegistro = async (e) => {
     e.preventDefault();
     if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido. Por favor revise.");
+    if (formData.categoria.length === 0) return alert("Debe seleccionar al menos una Categoría.");
+    if (formData.subcategoria.length === 0) return alert("Debe seleccionar al menos una Subcategoría.");
     if (formData.zonasCobertura.length === 0) return alert("Debe seleccionar al menos una Zona de Cobertura.");
 
     let zonasFinales = formData.zonasCobertura;
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
 
-    const { error } = await supabase.from('proveedores').insert([{
-      razon_social: capitalizarTexto(formData.razonSocial), 
-      nombre_fantasia: capitalizarTexto(formData.nombreFantasia),
-      rut: formData.rut, 
-      domicilio_comercial: capitalizarTexto(formData.domicilio),
-      categoria: formData.categoria, 
-      subcategoria: formData.subcategoria,
-      email_principal: formData.emailPrincipal.toLowerCase().trim(), 
-      email_secundario: formData.emailSecundario ? formData.emailSecundario.toLowerCase().trim() : '',
-      nombre_contacto: capitalizarTexto(formData.contacto), 
-      cargo: capitalizarTexto(formData.cargo),
-      telefono: formData.telefono.trim(), 
-      zonas_cobertura: zonasFinales.join(', '), 
-      terminos_aceptados: formData.terminos,
-      estado: 'Pendiente'
-    }]);
+    // CREACIÓN MÚLTIPLE DE REGISTROS (1 Por cada Subcategoría seleccionada)
+    const registrosAInsertar = formData.subcategoria.map(sub => {
+      // Búsqueda inversa: Encontramos a qué categoría pertenece esta subcategoría específica
+      const catAsociada = Object.keys(categoriasSodimac).find(key => categoriasSodimac[key].includes(sub));
+      
+      return {
+        razon_social: capitalizarTexto(formData.razonSocial), 
+        nombre_fantasia: capitalizarTexto(formData.nombreFantasia),
+        rut: formData.rut, 
+        domicilio_comercial: capitalizarTexto(formData.domicilio),
+        categoria: catAsociada, // Asignación de categoría específica
+        subcategoria: sub,      // Asignación de subcategoría específica
+        email_principal: formData.emailPrincipal.toLowerCase().trim(), 
+        email_secundario: formData.emailSecundario ? formData.emailSecundario.toLowerCase().trim() : '',
+        nombre_contacto: capitalizarTexto(formData.contacto), 
+        cargo: capitalizarTexto(formData.cargo),
+        telefono: formData.telefono.trim(), 
+        zonas_cobertura: zonasFinales.join(', '), 
+        terminos_aceptados: formData.terminos,
+        estado: 'Pendiente'
+      };
+    });
+
+    // Inyectamos el array completo a Supabase
+    const { error } = await supabase.from('proveedores').insert(registrosAInsertar);
 
     if (error) alert("Error al guardar: " + error.message);
-    else { alert("✅ Registro enviado con éxito. Estado: Pendiente de revisión."); window.location.reload(); }
+    else { alert(`✅ Registro enviado con éxito. Se generaron ${registrosAInsertar.length} postulaciones individuales.`); window.location.reload(); }
   };
 
   const [preLoginPin, setPreLoginPin] = useState('');
@@ -199,14 +231,12 @@ export default function App() {
 
       const proveedoresNuevos = [];
       for (let i = 1; i < lines.length; i++) {
-        // Regex para leer CSV respetando comillas
         const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
         if (currentLine.length < 12) continue;
 
         const rutLimpio = formatearRUT(currentLine[2]);
         if (!rutLimpio || rutLimpio === '') continue;
 
-        // Limpieza y filtro de Zonas
         let zonasArr = currentLine[6].split('-').map(z => capitalizarTexto(z.trim())).filter(z => z !== '');
         if (zonasArr.includes("Todo El Pais") || zonasArr.includes("Todo el País")) zonasArr = ["Todo el País"];
 
@@ -241,7 +271,7 @@ export default function App() {
       }
     };
     reader.readAsText(file, 'UTF-8');
-    e.target.value = null; // Reiniciar input
+    e.target.value = null; 
   };
 
   // --- GESTIÓN DE ADMINISTRADORES ---
@@ -355,7 +385,7 @@ export default function App() {
     }
   };
 
-  // --- DASHBOARD (GRÁFICOS, FILTROS Y MÉTRICAS) ---
+  // --- DASHBOARD (GRÁFICOS Y MÉTRICAS) ---
   const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
   const [filtroTendenciaCat, setFiltroTendenciaCat] = useState('');
   const [filtroTendenciaSub, setFiltroTendenciaSub] = useState('');
@@ -481,7 +511,7 @@ export default function App() {
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
       
-      {/* NAVBAR CON SEPARACIÓN DE 4 CM */}
+      {/* NAVBAR */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#004A99', padding: '15px 20px', borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <img src="/logo.png" alt="Sodimac" style={{ height: '50px', objectFit: 'contain', transform: 'scale(2.8)', transformOrigin: 'left center', marginLeft: '5px' }} />
@@ -572,19 +602,39 @@ export default function App() {
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required placeholder="12345678-9" value={formData.rut} style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, rut: formatearRUT(e.target.value)})} /></div>
               <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, domicilio: e.target.value})} /></div>
               
-              <div>
-                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Categoría *</label>
-                <select required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: 'white' }} onChange={e => setFormData({...formData, categoria: e.target.value, subcategoria: ''})}>
-                  <option value="">Seleccione...</option>
-                  {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
+              {/* CATEGORÍA MULTI-SELECT */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Categoría(s) *</label>
+                <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '160px', overflowY: 'auto', backgroundColor: '#fafafa', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {Object.keys(categoriasSodimac).map(cat => (
+                    <label key={cat} style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={formData.categoria.includes(cat)} onChange={(e) => manejarCambioCategoria(cat, e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} /> {cat}
+                    </label>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Subcategoría *</label>
-                <select required disabled={!formData.categoria} style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: 'white' }} onChange={e => setFormData({...formData, subcategoria: e.target.value})}>
-                  <option value="">Seleccione...</option>
-                  {formData.categoria && categoriasSodimac[formData.categoria].map(sub => <option key={sub} value={sub}>{sub}</option>)}
-                </select>
+
+              {/* SUBCATEGORÍA MULTI-SELECT (DINÁMICO) */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Subcategoría(s) *</label>
+                <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto', backgroundColor: '#fafafa' }}>
+                  {formData.categoria.length === 0 ? (
+                    <span style={{ fontSize: '13px', color: '#999' }}>Seleccione una categoría para ver las opciones...</span>
+                  ) : (
+                    formData.categoria.map(cat => (
+                      <div key={cat} style={{ marginBottom: '15px' }}>
+                        <strong style={{ fontSize: '13px', color: '#004A99', display: 'block', marginBottom: '8px', borderBottom: '1px solid #ddd', paddingBottom: '4px' }}>{cat}</strong>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                          {categoriasSodimac[cat]?.map(sub => (
+                            <label key={sub} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={formData.subcategoria.includes(sub)} onChange={(e) => manejarCambioSubcategoria(sub, e.target.checked)} style={{ width: '14px', height: '14px', cursor: 'pointer' }} /> {sub}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
               <div style={{ gridColumn: '1 / -1' }}>
