@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { categoriasSodimac, formatearRUT, validarRUT } from './datosSodimac';
 
+// --- LISTA DE ZONAS ---
+const zonasOpciones = [
+  "Todo el País", "Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", 
+  "Coquimbo", "Valparaíso", "Metropolitana de Santiago", "O'Higgins", "Maule", 
+  "Ñuble", "Biobío", "La Araucanía", "Los Ríos", "Los Lagos", "Aysén", 
+  "Magallanes y de la Antártica Chilena"
+];
+
 // --- FUNCIÓN DE FORMATO ---
 const capitalizarTexto = (texto) => {
   if (!texto) return '';
@@ -21,12 +29,26 @@ export default function App() {
   const [formData, setFormData] = useState({
     razonSocial: '', nombreFantasia: '', rut: '', domicilio: '',
     categoria: '', subcategoria: '', emailPrincipal: '', emailSecundario: '',
-    contacto: '', cargo: '', telefono: '', terminos: false
+    contacto: '', cargo: '', telefono: '', zonasCobertura: [], terminos: false
   });
+
+  const manejarCambioZona = (zona, checked) => {
+    let nuevasZonas = [...formData.zonasCobertura];
+    if (checked) nuevasZonas.push(zona);
+    else nuevasZonas = nuevasZonas.filter(z => z !== zona);
+    setFormData({ ...formData, zonasCobertura: nuevasZonas });
+  };
 
   const manejarEnvioRegistro = async (e) => {
     e.preventDefault();
     if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido. Por favor revise.");
+    if (formData.zonasCobertura.length === 0) return alert("Debe seleccionar al menos una Zona de Cobertura.");
+
+    // Regla de Negocio: Si está "Todo el País", anula las demás.
+    let zonasFinales = formData.zonasCobertura;
+    if (zonasFinales.includes("Todo el País")) {
+      zonasFinales = ["Todo el País"];
+    }
 
     const { error } = await supabase.from('proveedores').insert([{
       razon_social: capitalizarTexto(formData.razonSocial), 
@@ -40,6 +62,7 @@ export default function App() {
       nombre_contacto: capitalizarTexto(formData.contacto), 
       cargo: capitalizarTexto(formData.cargo),
       telefono: formData.telefono.trim(), 
+      zonas_cobertura: zonasFinales.join(', '), // Se guarda como texto separado por comas
       terminos_aceptados: formData.terminos,
       estado: 'Pendiente'
     }]);
@@ -253,30 +276,10 @@ export default function App() {
       {/* NAVBAR */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#004A99', padding: '15px 20px', borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
         
-        {/* SECCIÓN DEL LOGO CON ZOOM PARA ELIMINAR EL MARGEN TRANSPARENTE */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4cm' }}>
-  <img
-    src="/logo.png"
-    alt="Sodimac"
-    style={{
-      height: '50px',
-      objectFit: 'contain',
-      transform: 'scale(2.8)',
-      transformOrigin: 'left center',
-      marginLeft: '5px'
-    }}
-  />
-  <span
-    style={{
-      fontSize: '22px',
-      fontWeight: '600',
-      letterSpacing: '0.5px',
-      zIndex: 10
-    }}
-  >
-    Portal de Proveedores
-  </span>
-</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
+          <img src="/logo.png" alt="Sodimac" style={{ height: '50px', objectFit: 'contain', transform: 'scale(2.8)', transformOrigin: 'left center', marginLeft: '5px' }} />
+          <span style={{ fontSize: '22px', fontWeight: '600', letterSpacing: '0.5px', zIndex: 10 }}>Portal de Proveedores</span>
+        </div>
 
         <div style={{ zIndex: 10 }}>
           {['login', 'recuperar', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro Público</button>}
@@ -295,6 +298,7 @@ export default function App() {
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Nombre de Fantasía *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, nombreFantasia: e.target.value})} /></div>
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required placeholder="12345678-9" value={formData.rut} style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, rut: formatearRUT(e.target.value)})} /></div>
               <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, domicilio: e.target.value})} /></div>
+              
               <div>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Categoría *</label>
                 <select required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: 'white' }} onChange={e => setFormData({...formData, categoria: e.target.value, subcategoria: ''})}>
@@ -309,6 +313,25 @@ export default function App() {
                   {formData.categoria && categoriasSodimac[formData.categoria].map(sub => <option key={sub} value={sub}>{sub}</option>)}
                 </select>
               </div>
+
+              {/* NUEVO CAMPO: ZONA DE COBERTURA MULTI-SELECT */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Zona(s) de Cobertura *</label>
+                <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '160px', overflowY: 'auto', backgroundColor: '#fafafa', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {zonasOpciones.map(zona => (
+                    <label key={zona} style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={formData.zonasCobertura.includes(zona)} 
+                        onChange={(e) => manejarCambioZona(zona, e.target.checked)} 
+                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                      />
+                      {zona}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Email Principal *</label><input type="email" required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, emailPrincipal: e.target.value})} /></div>
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Email Secundario</label><input type="email" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, emailSecundario: e.target.value})} /></div>
               <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Nombre Contacto *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, contacto: e.target.value})} /></div>
@@ -488,93 +511,58 @@ export default function App() {
           )}
 
           {tabAdmin === 'proveedores' && (
-  <div style={{ overflowX: 'auto' }}>
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-      <thead>
-        <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Razón Social / RUT</th>
-          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th>
-          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto</th>
-          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Teléfono</th>
-          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Estado</th>
-          <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {proveedores.map(prov => (
-          <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
-            <td style={{ padding: '12px' }}>
-              <strong>{prov.razon_social}</strong><br />
-              <span style={{ color: '#666' }}>{prov.rut}</span>
-            </td>
-            <td style={{ padding: '12px' }}>
-              {prov.categoria}<br />
-              <span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span>
-            </td>
-            <td style={{ padding: '12px' }}>
-              {prov.nombre_contacto}<br />
-              <a
-                href={`mailto:${prov.email_principal}`}
-                style={{ color: '#004A99', textDecoration: 'none' }}
-              >
-                {prov.email_principal}
-              </a>
-            </td>
-            <td style={{ padding: '12px' }}>
-              {prov.telefono || 'No registrado'}
-            </td>
-            <td style={{ padding: '12px' }}>
-              <span
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  fontSize: '11px',
-                  fontWeight: 'bold',
-                  backgroundColor: prov.estado === 'Aprobado' ? '#d4edda' : '#fff3cd',
-                  color: prov.estado === 'Aprobado' ? '#155724' : '#856404'
-                }}
-              >
-                {prov.estado}
-              </span>
-            </td>
-            <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
-              {prov.estado === 'Pendiente' && (
-                <button
-                  onClick={() => aprobarProveedor(prov.id)}
-                  style={{
-                    padding: '6px 10px',
-                    backgroundColor: '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '12px'
-                  }}
-                >
-                  Aprobar
-                </button>
-              )}
-              <button
-                onClick={() => rechazarProveedor(prov.id)}
-                style={{
-                  padding: '6px 10px',
-                  backgroundColor: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '12px'
-                }}
-              >
-                Eliminar
-              </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-)}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
+                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Razón Social / RUT</th>
+                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th>
+                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Cobertura</th>
+                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto</th>
+                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Estado</th>
+                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {proveedores.map(prov => (
+                    <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '12px' }}>
+                        <strong>{prov.razon_social}</strong><br />
+                        <span style={{ color: '#666' }}>{prov.rut}</span>
+                      </td>
+                      <td style={{ padding: '12px' }}>
+                        {prov.categoria}<br />
+                        <span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span>
+                      </td>
+                      <td style={{ padding: '12px', maxWidth: '150px' }}>
+                        <span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>
+                          {prov.zonas_cobertura || 'No especificada'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px' }}>
+                        {prov.nombre_contacto}<br />
+                        <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>
+                          {prov.email_principal}
+                        </a><br />
+                        <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span>
+                      </td>
+                      <td style={{ padding: '12px' }}>
+                        <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', backgroundColor: prov.estado === 'Aprobado' ? '#d4edda' : '#fff3cd', color: prov.estado === 'Aprobado' ? '#155724' : '#856404' }}>
+                          {prov.estado}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
+                        {prov.estado === 'Pendiente' && (
+                          <button onClick={() => aprobarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>
+                        )}
+                        <button onClick={() => rechazarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Eliminar</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {tabAdmin === 'exportar' && (
             <div>
