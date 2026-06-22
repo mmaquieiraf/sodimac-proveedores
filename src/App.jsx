@@ -120,12 +120,12 @@ export default function App() {
     if (!error && data) setAdministradoresDb(data);
   };
 
-  // --- GESTIÓN DE PROVEEDORES ---
+  // --- GESTIÓN DE PROVEEDORES (APROBAR / ELIMINAR / EDITAR) ---
   const aprobarProveedor = async (id) => {
     if(!window.confirm("¿Aprobar este proveedor?")) return;
     const { error } = await supabase.from('proveedores').update({ 
       estado: 'Aprobado',
-      aprobado_por: usuarioActual.usuario // AQUÍ REGISTRAMOS LA AUDITORÍA
+      aprobado_por: usuarioActual.usuario 
     }).eq('id', id);
     if (!error) cargarProveedores();
   };
@@ -174,7 +174,7 @@ export default function App() {
     }
   };
 
-  // --- GESTIÓN DE ADMINISTRADORES ---
+  // --- GESTIÓN DE ADMINISTRADORES (CREAR / EDITAR / ELIMINAR) ---
   const crearAdministrador = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from('administradores').insert([{
@@ -285,65 +285,25 @@ export default function App() {
     }
   };
 
-  // --- DASHBOARD (GRÁFICOS Y MÉTRICAS) ---
-  const [filtroTendenciaCat, setFiltroTendenciaCat] = useState('');
-  const [filtroTendenciaSub, setFiltroTendenciaSub] = useState('');
-  const [filtroTendenciaTiempo, setFiltroTendenciaTiempo] = useState('30'); // '7', '15', '30', 'all'
-
+  // --- DASHBOARD (MÉTRICAS Y GRÁFICOS) ---
   const statsDashboard = () => {
     const total = proveedores.length;
-    let fechasOrdenadas = [];
     const fechasRaw = {};
     const renovaciones = [];
     const hace90Dias = new Date();
     hace90Dias.setDate(hace90Dias.getDate() - 90);
 
-    // 1. Calcular Renovaciones (Independiente de los filtros)
     proveedores.forEach(p => {
+      const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1;
       if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p);
     });
 
-    // 2. Lógica del Gráfico de Tendencia con Filtros
-    let fechaLimite = new Date();
-    if (filtroTendenciaTiempo !== 'all') {
-      const dias = parseInt(filtroTendenciaTiempo);
-      // Pre-llenar los días en cero para que el gráfico sea continuo
-      for (let i = dias - 1; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const ds = d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        fechasOrdenadas.push(ds);
-        fechasRaw[ds] = 0; 
-      }
-      fechaLimite.setDate(fechaLimite.getDate() - dias);
-    }
-
-    // Filtrar los proveedores para la tendencia
-    const proveedoresTendencia = proveedores.filter(p => {
-      const catMatch = filtroTendenciaCat === '' || p.categoria === filtroTendenciaCat;
-      const subMatch = filtroTendenciaSub === '' || p.subcategoria === filtroTendenciaSub;
-      const dateMatch = filtroTendenciaTiempo === 'all' || new Date(p.fecha_registro) >= fechaLimite;
-      return catMatch && subMatch && dateMatch;
+    const fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => {
+      const [da, ma, ya] = a.split('-');
+      const [db, mb, yb] = b.split('-');
+      return new Date(`${ya}-${ma}-${da}`) - new Date(`${yb}-${mb}-${db}`);
     });
-
-    proveedoresTendencia.forEach(p => {
-      const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      if (filtroTendenciaTiempo !== 'all') {
-        if (fechasRaw[fechaCorta] !== undefined) fechasRaw[fechaCorta]++;
-      } else {
-        fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1;
-      }
-    });
-
-    // Si es histórico completo, ordenamos lo que encontramos
-    if (filtroTendenciaTiempo === 'all') {
-      fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => {
-        const [da, ma, ya] = a.split('-');
-        const [db, mb, yb] = b.split('-');
-        return new Date(`${ya}-${ma}-${da}`) - new Date(`${yb}-${mb}-${db}`);
-      });
-    }
-
     return { total, fechasRaw, fechasOrdenadas, renovaciones };
   };
 
@@ -356,7 +316,6 @@ export default function App() {
 
   const stats = statsDashboard();
 
-  // Gráfico de Torta
   const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
   const tortaData = {};
   proveedoresAprobados.forEach(p => {
@@ -372,13 +331,11 @@ export default function App() {
   });
   const tortaGradient = proveedoresAprobados.length > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
-  // Línea Matemática
   const chartWidth = 800; const chartHeight = 250; const padX = 40; const padY = 30;
   const maxReg = Math.max(...stats.fechasOrdenadas.map(f => stats.fechasRaw[f]), 1);
   const stepX = stats.fechasOrdenadas.length > 1 ? (chartWidth - 2 * padX) / (stats.fechasOrdenadas.length - 1) : 0;
   const puntosLinea = stats.fechasOrdenadas.map((f, i) => `${padX + i * stepX},${chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY))}`).join(' ');
 
-  // Mapa Calor
   const [filtroMapaCat, setFiltroMapaCat] = useState('');
   const [filtroMapaSub, setFiltroMapaSub] = useState('');
   const [filtroMapaZona, setFiltroMapaZona] = useState('');
@@ -425,7 +382,7 @@ export default function App() {
           <span style={{ fontSize: '22px', fontWeight: '600', letterSpacing: '0.5px', zIndex: 10 }}>Portal de Proveedores</span>
         </div>
         <div style={{ zIndex: 10, display: 'flex', alignItems: 'center', gap: '15px' }}>
-          {usuarioActual && <span style={{ fontSize: '14px', color: '#cce5ff', borderRight: '1px solid rgba(255,255,255,0.3)', paddingRight: '15px' }}>👤 {usuarioActual.usuario}</span>}
+          {usuarioActual && <span style={{ fontSize: '13px', color: '#cce5ff', borderRight: '1px solid #cce5ff', paddingRight: '15px' }}>👤 {usuarioActual.usuario}</span>}
           {['login', 'recuperar', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro</button>}
           {vista === 'registro' && <button onClick={() => setVista('pre_login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Acceso Interno</button>}
           {vista === 'panel' && <button onClick={() => {setUsuarioActual(null); setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Cerrar Sesión</button>}
@@ -498,7 +455,7 @@ export default function App() {
         </div>
       )}
 
-      {/* PANTALLAS PÚBLICAS */}
+      {/* PANTALLA 1: REGISTRO PÚBLICO */}
       {vista === 'registro' && (
         <div style={{ maxWidth: '800px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ color: '#333', fontSize: '22px', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px' }}>Registro de Nuevos Proveedores</h2>
@@ -508,7 +465,6 @@ export default function App() {
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Nombre de Fantasía *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, nombreFantasia: e.target.value})} /></div>
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required placeholder="12345678-9" value={formData.rut} style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, rut: formatearRUT(e.target.value)})} /></div>
               <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, domicilio: e.target.value})} /></div>
-              
               <div>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Categoría *</label>
                 <select required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: 'white' }} onChange={e => setFormData({...formData, categoria: e.target.value, subcategoria: ''})}>
@@ -523,7 +479,6 @@ export default function App() {
                   {formData.categoria && categoriasSodimac[formData.categoria].map(sub => <option key={sub} value={sub}>{sub}</option>)}
                 </select>
               </div>
-
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Zona(s) de Cobertura *</label>
                 <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '160px', overflowY: 'auto', backgroundColor: '#fafafa', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -534,14 +489,12 @@ export default function App() {
                   ))}
                 </div>
               </div>
-
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Email Principal *</label><input type="email" required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, emailPrincipal: e.target.value})} /></div>
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Email Secundario</label><input type="email" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, emailSecundario: e.target.value})} /></div>
               <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Nombre Contacto *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, contacto: e.target.value})} /></div>
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Cargo *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, cargo: e.target.value})} /></div>
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Teléfono *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, telefono: e.target.value})} /></div>
             </div>
-            
             <div style={{ marginTop: '25px', padding: '15px', backgroundColor: '#f9f9f9', border: '1px solid #ddd', borderRadius: '4px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', cursor: 'pointer' }}>
                 <input type="checkbox" required onChange={e => setFormData({...formData, terminos: e.target.checked})} style={{ width: '18px', height: '18px' }} />
@@ -553,6 +506,7 @@ export default function App() {
         </div>
       )}
 
+      {/* PANTALLA 1.5: BARRERA DE SEGURIDAD */}
       {vista === 'pre_login' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '40px 30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px', fontSize: '24px' }}>Seguridad de Acceso</h2>
@@ -565,27 +519,7 @@ export default function App() {
         </div>
       )}
 
-      {mostrarTerminos && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
-          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '800px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-            <button onClick={() => setMostrarTerminos(false)} style={{ position: 'absolute', top: '15px', right: '20px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#EE2D24', fontWeight: 'bold' }}>&times;</button>
-            <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Términos y condiciones</h2>
-            <div style={{ fontSize: '13px', color: '#444', lineHeight: '1.6' }}>
-              <p>Al completar y enviar el formulario de registro de proveedores, el postulante declara y acepta expresamente que la información proporcionada podrá ser utilizada por Sodimac S.A. para fines de evaluación, contacto, validación, precalificación y eventual incorporación como proveedor en procesos de negociación, cotización, homologación, compra o contratación.</p>
-              <strong>1. Información recopilada</strong><p>Sodimac podrá recopilar, almacenar, organizar, revisar y tratar información de carácter empresarial y de contacto.</p>
-              <strong>2. Finalidad del tratamiento</strong><p>Los datos serán tratados con la exclusiva finalidad de: gestionar el registro, evaluar idoneidad, contactar, administrar procesos y mantener historial.</p>
-              <strong>3. Aceptación expresa</strong><p>El proveedor declara que ha leído y comprendido estos términos, autoriza el tratamiento y entiende que no garantiza adjudicación.</p>
-              <strong>4. Declaración sobre la información entregada</strong><p>El proveedor declara que la información proporcionada es veraz, actualizada y suficiente.</p>
-              <strong>5. Conservación de la información</strong><p>Sodimac podrá conservar la información por el tiempo necesario.</p>
-              <strong>6. Encargados y acceso</strong><p>El acceso quedará restringido a personal autorizado.</p>
-              <strong>7. Modificaciones</strong><p>Sodimac podrá modificar estos términos publicando la versión actualizada.</p>
-              <strong>8. Aceptación final</strong><p>Al enviar este formulario, acepto estos Términos y autorizo a Sodimac S.A. a tratar mis datos.</p>
-            </div>
-            <button onClick={() => setMostrarTerminos(false)} style={{ width: '100%', padding: '12px', marginTop: '15px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>CERRAR</button>
-          </div>
-        </div>
-      )}
-
+      {/* PANTALLA 2: LOGIN */}
       {vista === 'login' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '25px' }}>Ingreso de Administrador</h2>
@@ -599,25 +533,7 @@ export default function App() {
         </div>
       )}
 
-      {vista === 'recuperar' && (
-        <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-          <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px' }}>Recuperar Acceso</h2>
-          {resetStep === 1 ? (
-            <form onSubmit={buscarCorreo}>
-              <div style={{ marginBottom: '20px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Correo Registrado</label><input required type="email" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, correo: e.target.value})} /></div>
-              <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VERIFICAR</button>
-            </form>
-          ) : (
-            <form onSubmit={actualizarPassword}>
-              <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nueva Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, nuevaPass: e.target.value})} /></div>
-              <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nuevo PIN</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, nuevoPin: e.target.value})} /></div>
-              <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#28a745', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>GUARDAR</button>
-            </form>
-          )}
-        </div>
-      )}
-
-      {/* PANEL ADMINISTRATIVO */}
+      {/* PANTALLA 4: PANEL ADMINISTRATIVO Y DASHBOARD */}
       {vista === 'panel' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <div style={{ display: 'flex', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px', gap: '20px', overflowX: 'auto' }}>
@@ -629,10 +545,11 @@ export default function App() {
           
           {tabAdmin === 'dashboard' && (
             <div>
+              {/* Tarjetas Superiores */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
                 <div style={{ backgroundColor: '#004A99', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores</h3>
-                  <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{proveedores.length}</p>
+                  <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{stats.total}</p>
                 </div>
                 <div style={{ backgroundColor: '#EE2D24', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Aprobados en Base</h3>
@@ -644,6 +561,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* GRÁFICOS */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '30px', marginBottom: '30px' }}>
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -670,28 +588,9 @@ export default function App() {
                 </div>
 
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-                    <h3 style={{ margin: '0 0 5px 0', color: '#333', fontSize: '16px' }}>Tendencia de Registros</h3>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <select style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', maxWidth: '120px' }} onChange={e => {setFiltroTendenciaCat(e.target.value); setFiltroTendenciaSub('');}} value={filtroTendenciaCat}>
-                        <option value="">Categoría (Todas)</option>
-                        {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat.substring(0,15)}...</option>)}
-                      </select>
-                      <select disabled={!filtroTendenciaCat} style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', maxWidth: '120px' }} onChange={e => setFiltroTendenciaSub(e.target.value)} value={filtroTendenciaSub}>
-                        <option value="">Subcat (Todas)</option>
-                        {filtroTendenciaCat && categoriasSodimac[filtroTendenciaCat].map(sub => <option key={sub} value={sub}>{sub.substring(0,15)}...</option>)}
-                      </select>
-                      <select style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', fontWeight: 'bold' }} onChange={e => setFiltroTendenciaTiempo(e.target.value)} value={filtroTendenciaTiempo}>
-                        <option value="7">Últimos 7 días</option>
-                        <option value="15">Últimos 15 días</option>
-                        <option value="30">Últimos 30 días</option>
-                        <option value="all">Histórico completo</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {stats.fechasOrdenadas.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay registros en este periodo.</p> : (
-                    <div style={{ position: 'relative', width: '100%', height: '210px' }}>
+                  <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '16px' }}>Tendencia de Registros</h3>
+                  {stats.fechasOrdenadas.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay registros para graficar</p> : (
+                    <div style={{ position: 'relative', width: '100%', height: '250px' }}>
                       <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
                         <line x1={padX} y1={chartHeight - padY} x2={chartWidth} y2={chartHeight - padY} stroke="#ccc" strokeWidth="2" />
                         <line x1={padX} y1="0" x2={padX} y2={chartHeight - padY} stroke="#ccc" strokeWidth="2" />
@@ -702,7 +601,7 @@ export default function App() {
                           return (
                             <g key={f}>
                               <circle cx={cx} cy={cy} r="5" fill="#EE2D24" />
-                              {stats.fechasRaw[f] > 0 && <text x={cx} y={cy - 10} fontSize="12" fill="#333" textAnchor="middle">{stats.fechasRaw[f]}</text>}
+                              <text x={cx} y={cy - 10} fontSize="12" fill="#333" textAnchor="middle">{stats.fechasRaw[f]}</text>
                               {i % Math.ceil(stats.fechasOrdenadas.length / 5) === 0 && <text x={cx} y={chartHeight - 10} fontSize="11" fill="#666" textAnchor="middle">{f.substring(0, 5)}</text>}
                             </g>
                           );
@@ -760,7 +659,6 @@ export default function App() {
             </div>
           )}
 
-          {/* PESTAÑA DE GESTIÓN DE PROVEEDORES */}
           {tabAdmin === 'proveedores' && (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -770,7 +668,7 @@ export default function App() {
                     <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th>
                     <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Cobertura</th>
                     <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto</th>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Estado / Aprobación</th>
+                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Estado</th>
                     <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Acciones</th>
                   </tr>
                 </thead>
@@ -795,19 +693,14 @@ export default function App() {
                         <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a><br />
                         <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span>
                       </td>
-                      
-                      {/* COLUMNA DE ESTADO CON AUDITORÍA VISIBLE */}
                       <td style={{ padding: '12px' }}>
                         <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', backgroundColor: prov.estado === 'Aprobado' ? '#d4edda' : '#fff3cd', color: prov.estado === 'Aprobado' ? '#155724' : '#856404', display: 'inline-block', marginBottom: '5px' }}>
                           {prov.estado}
                         </span>
-                        {prov.estado === 'Aprobado' && prov.aprobado_por && (
-                          <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold', marginTop: '2px' }}>
-                            ✓ Por: {prov.aprobado_por}
-                          </div>
+                        {prov.aprobado_por && (
+                          <div style={{ fontSize: '10px', color: '#888' }}>Por: {prov.aprobado_por}</div>
                         )}
                       </td>
-                      
                       <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                         {prov.estado === 'Pendiente' && <button onClick={() => aprobarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>}
                         <button onClick={() => abrirEditorProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Editar</button>
@@ -882,7 +775,6 @@ export default function App() {
             </div>
           )}
 
-          {/* PESTAÑA: + NUEVO ADMIN Y GESTIÓN DE ROLES */}
           {tabAdmin === 'crear_admin' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '40px' }}>
               <div>
@@ -901,7 +793,7 @@ export default function App() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #004A99', paddingBottom: '10px', marginBottom: '20px' }}>
                   <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Gestión de Usuarios</h3>
-                  {usuarioActual?.usuario === 'mmaquieira' && <span style={{ fontSize: '11px', backgroundColor: '#EE2D24', color: 'white', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold' }}>👑 Modo SuperAdmin Activo</span>}
+                  {usuarioActual?.usuario === 'mmaquieira' && <span style={{ fontSize: '11px', backgroundColor: '#EE2D24', color: 'white', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold' }}>Modo SuperAdmin Activo</span>}
                 </div>
                 
                 <div style={{ overflowX: 'auto', border: '1px solid #eee', borderRadius: '8px' }}>
@@ -923,7 +815,6 @@ export default function App() {
                           <td style={{ padding: '12px' }}>
                             <span style={{ backgroundColor: '#e2e8f0', padding: '3px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>{admin.usuario}</span>
                           </td>
-                          {/* PROTECCIÓN: SOLO mmaquieira VE Y PUEDE USAR ESTOS BOTONES */}
                           {usuarioActual?.usuario === 'mmaquieira' && (
                             <td style={{ padding: '12px', textAlign: 'right' }}>
                               <button onClick={() => setAdminEditando(admin)} style={{ padding: '4px 8px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', marginRight: '5px' }}>Editar</button>
@@ -937,9 +828,6 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
-                {usuarioActual?.usuario !== 'mmaquieira' && (
-                  <p style={{ fontSize: '12px', color: '#888', marginTop: '15px', textAlign: 'center' }}>Solo el usuario principal puede editar o eliminar accesos.</p>
-                )}
               </div>
             </div>
           )}
