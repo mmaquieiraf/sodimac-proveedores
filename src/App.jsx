@@ -17,7 +17,7 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
-// --- FUNCIÓN DE FORMATO ---
+// Convierte mAtIaS a Matias siempre.
 const capitalizarTexto = (texto) => {
   if (!texto) return '';
   return texto.toLowerCase().trim().split(/\s+/).map(palabra => 
@@ -29,8 +29,6 @@ export default function App() {
   const [vista, setVista] = useState('registro'); 
   const [tabAdmin, setTabAdmin] = useState('dashboard');
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
-  
-  // RASTREO DE USUARIO ACTUAL (AUDITORÍA)
   const [usuarioActual, setUsuarioActual] = useState(null);
 
   // --- LÓGICA DEL FORMULARIO PÚBLICO ---
@@ -120,7 +118,7 @@ export default function App() {
     if (!error && data) setAdministradoresDb(data);
   };
 
-  // --- GESTIÓN DE PROVEEDORES (APROBAR / ELIMINAR / EDITAR) ---
+  // --- GESTIÓN DE PROVEEDORES ---
   const aprobarProveedor = async (id) => {
     if(!window.confirm("¿Aprobar este proveedor?")) return;
     const { error } = await supabase.from('proveedores').update({ 
@@ -172,6 +170,78 @@ export default function App() {
       setProveedorEditando(null);
       cargarProveedores();
     }
+  };
+
+  // --- CARGA MASIVA DE PROVEEDORES ---
+  const descargarPlantillaCSV = () => {
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += "Razon Social,Nombre de Fantasia,RUT,Domicilio Comercial,Categoria,Subcategoria,Zonas de Cobertura (Separadas por guion -),Email Principal,Email Secundario,Nombre Contacto,Cargo,Telefono\n";
+    csvContent += "Empresa Ejemplo SpA,Ejemplo,12345678-9,Av. Siempre Viva 123,Seguridad,Barreras De Seguridad,Metropolitana de Santiago - Valparaíso,contacto@ejemplo.cl,,Juan Perez,Gerente General,+56912345678\n";
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "Plantilla_Carga_Masiva_Sodimac.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const manejarCargaMasiva = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target.result;
+      const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+      if (lines.length <= 1) return alert("El archivo está vacío o solo contiene encabezados.");
+
+      const proveedoresNuevos = [];
+      for (let i = 1; i < lines.length; i++) {
+        // Regex para leer CSV respetando comillas
+        const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
+        if (currentLine.length < 12) continue;
+
+        const rutLimpio = formatearRUT(currentLine[2]);
+        if (!rutLimpio || rutLimpio === '') continue;
+
+        // Limpieza y filtro de Zonas
+        let zonasArr = currentLine[6].split('-').map(z => capitalizarTexto(z.trim())).filter(z => z !== '');
+        if (zonasArr.includes("Todo El Pais") || zonasArr.includes("Todo el País")) zonasArr = ["Todo el País"];
+
+        proveedoresNuevos.push({
+          razon_social: capitalizarTexto(currentLine[0]),
+          nombre_fantasia: capitalizarTexto(currentLine[1]),
+          rut: rutLimpio,
+          domicilio_comercial: capitalizarTexto(currentLine[3]),
+          categoria: capitalizarTexto(currentLine[4]),
+          subcategoria: capitalizarTexto(currentLine[5]),
+          zonas_cobertura: zonasArr.join(', '),
+          email_principal: currentLine[7].toLowerCase(),
+          email_secundario: currentLine[8] ? currentLine[8].toLowerCase() : '',
+          nombre_contacto: capitalizarTexto(currentLine[9]),
+          cargo: capitalizarTexto(currentLine[10]),
+          telefono: currentLine[11],
+          estado: 'Pendiente',
+          terminos_aceptados: true
+        });
+      }
+
+      if (proveedoresNuevos.length > 0) {
+        const { error } = await supabase.from('proveedores').insert(proveedoresNuevos);
+        if (error) alert("Error en carga masiva: " + error.message);
+        else {
+          alert(`✅ Carga masiva exitosa: ${proveedoresNuevos.length} proveedores agregados como Pendientes.`);
+          cargarProveedores();
+          setTabAdmin('proveedores');
+        }
+      } else {
+        alert("No se encontraron registros válidos para cargar. Revisa que el RUT esté presente y el formato sea correcto.");
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = null; // Reiniciar input
   };
 
   // --- GESTIÓN DE ADMINISTRADORES ---
@@ -289,35 +359,56 @@ export default function App() {
   const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
   const [filtroTendenciaCat, setFiltroTendenciaCat] = useState('');
   const [filtroTendenciaSub, setFiltroTendenciaSub] = useState('');
+  const [filtroTendenciaTiempo, setFiltroTendenciaTiempo] = useState('30'); 
 
   const statsDashboard = () => {
     const total = proveedores.length;
+    let fechasOrdenadas = [];
     const fechasRaw = {};
     const renovaciones = [];
     const hace90Dias = new Date();
     hace90Dias.setDate(hace90Dias.getDate() - 90);
 
-    // Filtramos proveedores exclusivamente para la TENDENCIA DE REGISTROS
-    const proveedoresTendencia = proveedores.filter(p => {
-      const catMatch = filtroTendenciaCat === '' || p.categoria === filtroTendenciaCat;
-      const subMatch = filtroTendenciaSub === '' || p.subcategoria === filtroTendenciaSub;
-      return catMatch && subMatch;
-    });
-
     proveedores.forEach(p => {
       if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p);
     });
 
-    proveedoresTendencia.forEach(p => {
-      const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1;
+    let fechaLimite = new Date();
+    if (filtroTendenciaTiempo !== 'all') {
+      const dias = parseInt(filtroTendenciaTiempo);
+      for (let i = dias - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const ds = d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        fechasOrdenadas.push(ds);
+        fechasRaw[ds] = 0; 
+      }
+      fechaLimite.setDate(fechaLimite.getDate() - dias);
+    }
+
+    const proveedoresTendencia = proveedores.filter(p => {
+      const catMatch = filtroTendenciaCat === '' || p.categoria === filtroTendenciaCat;
+      const subMatch = filtroTendenciaSub === '' || p.subcategoria === filtroTendenciaSub;
+      const dateMatch = filtroTendenciaTiempo === 'all' || new Date(p.fecha_registro) >= fechaLimite;
+      return catMatch && subMatch && dateMatch;
     });
 
-    const fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => {
-      const [da, ma, ya] = a.split('-');
-      const [db, mb, yb] = b.split('-');
-      return new Date(`${ya}-${ma}-${da}`) - new Date(`${yb}-${mb}-${db}`);
+    proveedoresTendencia.forEach(p => {
+      const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      if (filtroTendenciaTiempo !== 'all') {
+        if (fechasRaw[fechaCorta] !== undefined) fechasRaw[fechaCorta]++;
+      } else {
+        fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1;
+      }
     });
+
+    if (filtroTendenciaTiempo === 'all') {
+      fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => {
+        const [da, ma, ya] = a.split('-');
+        const [db, mb, yb] = b.split('-');
+        return new Date(`${ya}-${ma}-${da}`) - new Date(`${yb}-${mb}-${db}`);
+      });
+    }
 
     return { total, fechasRaw, fechasOrdenadas, renovaciones };
   };
@@ -331,7 +422,6 @@ export default function App() {
 
   const stats = statsDashboard();
 
-  // Gráfico de Torta
   const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
   const tortaData = {};
   proveedoresAprobados.forEach(p => {
@@ -347,13 +437,11 @@ export default function App() {
   });
   const tortaGradient = proveedoresAprobados.length > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
-  // Gráfico de Línea
   const chartWidth = 800; const chartHeight = 250; const padX = 40; const padY = 30;
   const maxReg = Math.max(...stats.fechasOrdenadas.map(f => stats.fechasRaw[f]), 1);
   const stepX = stats.fechasOrdenadas.length > 1 ? (chartWidth - 2 * padX) / (stats.fechasOrdenadas.length - 1) : 0;
   const puntosLinea = stats.fechasOrdenadas.map((f, i) => `${padX + i * stepX},${chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY))}`).join(' ');
 
-  // Mapa de Calor
   const [filtroMapaCat, setFiltroMapaCat] = useState('');
   const [filtroMapaSub, setFiltroMapaSub] = useState('');
   const [filtroMapaZona, setFiltroMapaZona] = useState('');
@@ -393,17 +481,14 @@ export default function App() {
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
       
-      {/* NAVBAR */}
+      {/* NAVBAR CON SEPARACIÓN DE 4 CM */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#004A99', padding: '15px 20px', borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-        
-        {/* FIX DEL LOGO: Aplicamos un margen izquierdo de 4cm al texto para separar del efecto scale() */}
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <img src="/logo.png" alt="Sodimac" style={{ height: '50px', objectFit: 'contain', transform: 'scale(2.8)', transformOrigin: 'left center', marginLeft: '5px' }} />
           <span style={{ fontSize: '22px', fontWeight: '600', letterSpacing: '0.5px', zIndex: 10, marginLeft: '4cm' }}>Portal de Proveedores</span>
         </div>
-
         <div style={{ zIndex: 10, display: 'flex', alignItems: 'center', gap: '15px' }}>
-          {usuarioActual && <span style={{ fontSize: '13px', color: '#cce5ff', borderRight: '1px solid #cce5ff', paddingRight: '15px' }}>👤 {usuarioActual.usuario}</span>}
+          {usuarioActual && <span style={{ fontSize: '14px', color: '#cce5ff', borderRight: '1px solid rgba(255,255,255,0.3)', paddingRight: '15px' }}>👤 {usuarioActual.usuario}</span>}
           {['login', 'recuperar', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro</button>}
           {vista === 'registro' && <button onClick={() => setVista('pre_login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Acceso Interno</button>}
           {vista === 'panel' && <button onClick={() => {setUsuarioActual(null); setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Cerrar Sesión</button>}
@@ -476,7 +561,7 @@ export default function App() {
         </div>
       )}
 
-      {/* PANTALLA 1: REGISTRO PÚBLICO */}
+      {/* PANTALLAS PÚBLICAS */}
       {vista === 'registro' && (
         <div style={{ maxWidth: '800px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ color: '#333', fontSize: '22px', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px' }}>Registro de Nuevos Proveedores</h2>
@@ -531,20 +616,21 @@ export default function App() {
         </div>
       )}
 
-      {/* PANTALLA 1.5: BARRERA DE SEGURIDAD */}
+      {/* PANTALLA 1.5: BARRERA DE SEGURIDAD CENTRADA */}
       {vista === 'pre_login' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '40px 30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px', fontSize: '24px' }}>Seguridad de Acceso</h2>
           <p style={{ textAlign: 'center', fontSize: '13px', color: '#666', marginBottom: '30px' }}>Ingrese el código de autorización institucional.</p>
           <form onSubmit={manejarPreLogin}>
-            <div style={{ marginBottom: '30px' }}><input required type="password" maxLength="6" placeholder="******" value={preLoginPin} onChange={e => setPreLoginPin(e.target.value)} style={{ width: '100%', padding: '15px', border: '2px solid #ccc', borderRadius: '4px', letterSpacing: '12px', textAlign: 'center', fontSize: '24px', outline: 'none' }} /></div>
+            <div style={{ marginBottom: '30px', display: 'flex', justifyContent: 'center' }}>
+              <input required type="password" maxLength="6" placeholder="******" value={preLoginPin} onChange={e => setPreLoginPin(e.target.value)} style={{ width: '100%', maxWidth: '250px', padding: '15px', border: '2px solid #ccc', borderRadius: '8px', letterSpacing: '15px', textAlign: 'center', fontSize: '28px', outline: 'none', fontWeight: 'bold', color: '#004A99' }} />
+            </div>
             <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '14px', borderRadius: '4px', cursor: 'pointer' }}>VALIDAR ACCESO</button>
             <button type="button" onClick={() => setVista('registro')} style={{ width: '100%', padding: '14px', marginTop: '10px', backgroundColor: 'transparent', color: '#555', border: '1px solid #ccc', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VOLVER</button>
           </form>
         </div>
       )}
 
-      {/* MODAL TÉRMINOS Y CONDICIONES */}
       {mostrarTerminos && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
           <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '800px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
@@ -566,7 +652,6 @@ export default function App() {
         </div>
       )}
 
-      {/* PANTALLA 2: LOGIN */}
       {vista === 'login' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '25px' }}>Ingreso de Administrador</h2>
@@ -580,7 +665,6 @@ export default function App() {
         </div>
       )}
 
-      {/* PANTALLA 3: RECUPERAR CONTRASEÑA */}
       {vista === 'recuperar' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px' }}>Recuperar Acceso</h2>
@@ -599,19 +683,19 @@ export default function App() {
         </div>
       )}
 
-      {/* PANTALLA 4: PANEL ADMINISTRATIVO Y DASHBOARD */}
+      {/* PANEL ADMINISTRATIVO */}
       {vista === 'panel' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <div style={{ display: 'flex', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px', gap: '20px', overflowX: 'auto' }}>
             <h2 onClick={() => setTabAdmin('dashboard')} style={{ color: tabAdmin === 'dashboard' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Dashboard</h2>
             <h2 onClick={() => setTabAdmin('proveedores')} style={{ color: tabAdmin === 'proveedores' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Pendientes / Gestión</h2>
+            <h2 onClick={() => setTabAdmin('carga_masiva')} style={{ color: tabAdmin === 'carga_masiva' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Carga Masiva</h2>
             <h2 onClick={() => {setTabAdmin('exportar'); setSeleccionados([]);}} style={{ color: tabAdmin === 'exportar' ? '#28a745' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Exportar Aprobados</h2>
-            <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Nuevo Admin</h2>
+            <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Admin / Roles</h2>
           </div>
           
           {tabAdmin === 'dashboard' && (
             <div>
-              {/* Tarjetas Superiores */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
                 <div style={{ backgroundColor: '#004A99', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores</h3>
@@ -627,10 +711,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* GRÁFICOS */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '30px', marginBottom: '30px' }}>
-                
-                {/* 1. Gráfico de Torta */}
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <h3 style={{ margin: 0, color: '#333', fontSize: '16px' }}>Distribución Aprobados</h3>
@@ -655,12 +736,9 @@ export default function App() {
                   )}
                 </div>
 
-                {/* 2. Gráfico de Línea con Filtros Completos */}
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                     <h3 style={{ margin: '0 0 5px 0', color: '#333', fontSize: '16px' }}>Tendencia de Registros</h3>
-                    
-                    {/* FILTROS DE TENDENCIA */}
                     <div style={{ display: 'flex', gap: '10px' }}>
                       <select style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', maxWidth: '140px' }} onChange={e => {setFiltroTendenciaCat(e.target.value); setFiltroTendenciaSub('');}} value={filtroTendenciaCat}>
                         <option value="">Categoría (Todas)</option>
@@ -672,8 +750,7 @@ export default function App() {
                       </select>
                     </div>
                   </div>
-                  
-                  {stats.fechasOrdenadas.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay registros en este periodo o con estos filtros.</p> : (
+                  {stats.fechasOrdenadas.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay registros para graficar</p> : (
                     <div style={{ position: 'relative', width: '100%', height: '210px' }}>
                       <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
                         <line x1={padX} y1={chartHeight - padY} x2={chartWidth} y2={chartHeight - padY} stroke="#ccc" strokeWidth="2" />
@@ -696,7 +773,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* MAPA DE CALOR GEOGRÁFICO */}
+              {/* MAPA DE CALOR */}
               <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', marginBottom: '30px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                   <div>
@@ -728,7 +805,6 @@ export default function App() {
                         const intensidad = mapStats.maxMapa > 0 ? cantidad / mapStats.maxMapa : 0;
                         const bgColor = cantidad > 0 ? `rgba(238, 45, 36, ${0.15 + (intensidad * 0.85)})` : '#ffffff';
                         const txtColor = cantidad > 0 ? (intensidad > 0.5 ? '#ffffff' : '#333333') : '#999999';
-                        
                         return (
                           <div key={reg} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '12px', padding: '8px 10px', backgroundColor: bgColor, color: txtColor, borderRadius: '4px', border: '1px solid #eee', transition: 'all 0.3s' }}>
                             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }} title={reg}>{reg}</span>
@@ -740,6 +816,19 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              {stats.renovaciones.length > 0 && (
+                <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffeeba', padding: '20px', borderRadius: '8px' }}>
+                  <h3 style={{ margin: '0 0 15px 0', color: '#856404' }}>Acción Requerida: Envío de Recordatorios</h3>
+                  <p style={{ fontSize: '13px', color: '#856404', marginBottom: '15px' }}>Los siguientes proveedores llevan más de 90 días en la base y necesitan actualizar su información.</p>
+                  {stats.renovaciones.map(prov => (
+                    <div key={prov.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '10px', borderRadius: '4px', marginBottom: '8px', border: '1px solid #ddd' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{prov.razon_social} <span style={{ color: '#666', fontWeight: 'normal' }}>({prov.rut})</span></span>
+                      <button onClick={() => enviarRecordatorio(prov)} style={{ backgroundColor: '#004A99', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Enviar Correo de Actualización</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -777,8 +866,6 @@ export default function App() {
                         <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a><br />
                         <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span>
                       </td>
-                      
-                      {/* COLUMNA DE ESTADO CON AUDITORÍA VISIBLE */}
                       <td style={{ padding: '12px' }}>
                         <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', backgroundColor: prov.estado === 'Aprobado' ? '#d4edda' : '#fff3cd', color: prov.estado === 'Aprobado' ? '#155724' : '#856404', display: 'inline-block', marginBottom: '5px' }}>
                           {prov.estado}
@@ -789,7 +876,6 @@ export default function App() {
                           </div>
                         )}
                       </td>
-                      
                       <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                         {prov.estado === 'Pendiente' && <button onClick={() => aprobarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>}
                         <button onClick={() => abrirEditorProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Editar</button>
@@ -802,10 +888,31 @@ export default function App() {
             </div>
           )}
 
+          {/* MÓDULO DE CARGA MASIVA DE PROVEEDORES */}
+          {tabAdmin === 'carga_masiva' && (
+            <div>
+              <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '18px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>Carga Masiva de Proveedores</h3>
+              <p style={{ fontSize: '14px', color: '#555', marginBottom: '20px' }}>Sube múltiples proveedores a la vez mediante un archivo CSV. Los proveedores ingresarán con estado "Pendiente" listos para ser evaluados.</p>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <div style={{ padding: '20px', border: '1px dashed #ccc', borderRadius: '8px', backgroundColor: '#f9f9f9', textAlign: 'center' }}>
+                  <h4 style={{ margin: '0 0 10px 0', color: '#004A99' }}>1. Descarga la Plantilla Excel (CSV)</h4>
+                  <p style={{ fontSize: '12px', color: '#666', marginBottom: '15px' }}>Para que el sistema lea la información sin errores, debes usar este formato. Para las zonas de cobertura, sepáralas usando un guion medio (-).</p>
+                  <button onClick={descargarPlantillaCSV} style={{ padding: '10px 20px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Descargar Plantilla CSV</button>
+                </div>
+
+                <div style={{ padding: '20px', border: '1px dashed #004A99', borderRadius: '8px', backgroundColor: '#f0f8ff', textAlign: 'center' }}>
+                  <h4 style={{ margin: '0 0 10px 0', color: '#004A99' }}>2. Sube el Archivo Completo</h4>
+                  <p style={{ fontSize: '12px', color: '#666', marginBottom: '15px' }}>Selecciona tu archivo .csv listo. El sistema limpiará las mayúsculas, e-mails y zonas de cobertura automáticamente.</p>
+                  <input type="file" accept=".csv" onChange={manejarCargaMasiva} style={{ display: 'block', margin: '0 auto', fontSize: '12px', padding: '10px', backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }} />
+                </div>
+              </div>
+            </div>
+          )}
+
           {tabAdmin === 'exportar' && (
             <div>
               <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo CSV compatible con los sistemas internos.</p>
-              
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', marginBottom: '20px', backgroundColor: '#f9f9f9', padding: '15px', borderRadius: '8px', border: '1px solid #ddd' }}>
                 <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Buscar por RUT</label><input placeholder="Ej: 12345678-9" style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroRut(e.target.value)} /></div>
                 <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Nombre de Fantasía</label><input placeholder="Buscar empresa..." style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroNombre(e.target.value)} /></div>
@@ -864,7 +971,6 @@ export default function App() {
             </div>
           )}
 
-          {/* PESTAÑA: + NUEVO ADMIN Y GESTIÓN DE ROLES */}
           {tabAdmin === 'crear_admin' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '40px' }}>
               <div>
@@ -905,7 +1011,6 @@ export default function App() {
                           <td style={{ padding: '12px' }}>
                             <span style={{ backgroundColor: '#e2e8f0', padding: '3px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>{admin.usuario}</span>
                           </td>
-                          {/* PROTECCIÓN: SOLO mmaquieira VE Y PUEDE USAR ESTOS BOTONES */}
                           {usuarioActual?.usuario === 'mmaquieira' && (
                             <td style={{ padding: '12px', textAlign: 'right' }}>
                               <button onClick={() => setAdminEditando(admin)} style={{ padding: '4px 8px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', marginRight: '5px' }}>Editar</button>
