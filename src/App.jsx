@@ -36,7 +36,6 @@ export default function App() {
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
 
-  // Verificar si ya estaba bloqueado al cargar la página
   useEffect(() => {
     const tiempoBloqueo = localStorage.getItem('sodimac_bloqueo_seguridad');
     if (tiempoBloqueo) {
@@ -59,10 +58,9 @@ export default function App() {
     setIntentosFallidos(nuevosIntentos);
     if (nuevosIntentos >= 3) {
       setBloqueoSeguridad(true);
-      const veinticuatroHorasMs = 86400000; // 24 * 60 * 60 * 1000
+      const veinticuatroHorasMs = 86400000; 
       localStorage.setItem('sodimac_bloqueo_seguridad', Date.now() + veinticuatroHorasMs);
       alert("⚠️ ALERTA DE SEGURIDAD EXTREMA: 3 intentos fallidos. Sistema bloqueado automáticamente por 24 HORAS.");
-      
       setTimeout(() => {
         setBloqueoSeguridad(false);
         localStorage.removeItem('sodimac_bloqueo_seguridad');
@@ -337,7 +335,38 @@ export default function App() {
     if (error) alert("⚠️ Error al actualizar."); else { alert("✅ Usuario actualizado."); setAdminEditando(null); cargarAdministradores(); }
   };
 
-  // --- DASHBOARD ---
+  // --- EXPORTACIÓN CSV ---
+  const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
+  const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
+  const proveedoresFiltrados = proveedoresAprobados.filter(p => p.rut.toLowerCase().includes(filtroRut.toLowerCase()) && p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) && (filtroCategoria === '' || p.categoria === filtroCategoria) && (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria));
+  const toggleSeleccion = (id) => setSeleccionados(seleccionados.includes(id) ? seleccionados.filter(i => i !== id) : [...seleccionados, id]);
+  const toggleSeleccionarTodo = (e) => setSeleccionados(e.target.checked ? proveedoresFiltrados.map(p => p.id) : []);
+  const exportarCSV = () => {
+    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor.");
+    let csvC = "data:text/csv;charset=utf-8,\uFEFFId,Nombre de la empresa*,Nombre del contacto,Correo electrónico*,Código del idioma,Código de Región\n";
+    proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).forEach(p => { csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,\n`; });
+    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  // --- RECUPERAR PASS ---
+  const [resetStep, setResetStep] = useState(1); const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
+  const buscarCorreo = async (e) => {
+    e.preventDefault();
+    if (bloqueoSeguridad) return alert("Sistema bloqueado por seguridad.");
+    const { data, error } = await supabase.from('administradores').select('id').eq('correo', resetData.correo.replace(/[<>]/g, '').toLowerCase().trim()).maybeSingle();
+    if (error || !data) {
+      registrarAuditoria(resetData.correo, 'Fallido', 'Recuperación de Password');
+      const fueBloqueado = registrarIntentoFallido();
+      if (!fueBloqueado) alert("No se encontró administrador con este correo.");
+    } else { setResetData({ ...resetData, idUsuario: data.id }); setResetStep(2); setIntentosFallidos(0); }
+  };
+  const actualizarPassword = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from('administradores').update({ password: resetData.nuevaPass.replace(/[<>]/g, ''), pin: resetData.nuevoPin.replace(/[<>]/g, '') }).eq('id', resetData.idUsuario);
+    if (error) alert("⚠️ Error."); else { alert("✅ Credenciales actualizadas."); setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null }); }
+  };
+
+  // --- DASHBOARD Y GRÁFICOS ---
   const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
   const [filtroTendenciaCat, setFiltroTendenciaCat] = useState('');
   const [filtroTendenciaSub, setFiltroTendenciaSub] = useState('');
@@ -382,10 +411,13 @@ export default function App() {
   const stepX = stats.fechasOrdenadas.length > 1 ? (chartWidth - 2 * padX) / (stats.fechasOrdenadas.length - 1) : 0;
   const puntosLinea = stats.fechasOrdenadas.map((f, i) => `${padX + i * stepX},${chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY))}`).join(' ');
 
-  const [filtroMapaCat, setFiltroMapaCat] = useState(''); const [filtroMapaSub, setFiltroMapaSub] = useState(''); const [filtroMapaZona, setFiltroMapaZona] = useState('');
-  const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
-  
-  // Gráfico de torta variables
+  const enviarRecordatorio = (prov) => {
+    const destinatarios = prov.email_secundario ? `${prov.email_principal},${prov.email_secundario}` : prov.email_principal;
+    const asunto = encodeURIComponent("Actualización de Datos - Portal Proveedores Sodimac");
+    const cuerpo = encodeURIComponent(`Estimado(a) proveedor ${prov.razon_social},\n\nPor favor actualizar sus datos de contacto.\n\nSodimac S.A.`);
+    window.location.href = `mailto:${destinatarios}?subject=${asunto}&body=${cuerpo}`;
+  };
+
   const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
   const tortaData = {};
   proveedoresAprobados.forEach(p => {
@@ -401,6 +433,7 @@ export default function App() {
   });
   const tortaGradient = proveedoresAprobados.length > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
+  const [filtroMapaCat, setFiltroMapaCat] = useState(''); const [filtroMapaSub, setFiltroMapaSub] = useState(''); const [filtroMapaZona, setFiltroMapaZona] = useState('');
   const statsMapa = () => {
     const conteo = {}; zonasOpciones.filter(z => z !== "Todo el País").forEach(z => conteo[z] = 0);
     const filtradosMapa = proveedoresAprobados.filter(p => {
@@ -419,39 +452,9 @@ export default function App() {
     return { conteo, maxMapa: Math.max(...Object.values(conteo), 1), totalMapeados: filtradosMapa.length };
   };
   const mapStats = statsMapa();
-
-  // --- EXPORTACIÓN CSV ---
-  const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
-  const proveedoresFiltrados = proveedoresAprobados.filter(p => p.rut.toLowerCase().includes(filtroRut.toLowerCase()) && p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) && (filtroCategoria === '' || p.categoria === filtroCategoria) && (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria));
-  const toggleSeleccion = (id) => setSeleccionados(seleccionados.includes(id) ? seleccionados.filter(i => i !== id) : [...seleccionados, id]);
-  const toggleSeleccionarTodo = (e) => setSeleccionados(e.target.checked ? proveedoresFiltrados.map(p => p.id) : []);
-  const exportarCSV = () => {
-    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor.");
-    let csvC = "data:text/csv;charset=utf-8,\uFEFFId,Nombre de la empresa*,Nombre del contacto,Correo electrónico*,Código del idioma,Código de Región\n";
-    proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).forEach(p => { csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,\n`; });
-    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
-
-  // --- RECUPERAR PASS ---
-  const [resetStep, setResetStep] = useState(1); const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
-  const buscarCorreo = async (e) => {
-    e.preventDefault();
-    if (bloqueoSeguridad) return alert("Sistema bloqueado por seguridad.");
-    const { data, error } = await supabase.from('administradores').select('id').eq('correo', resetData.correo.replace(/[<>]/g, '').toLowerCase().trim()).maybeSingle();
-    if (error || !data) {
-      registrarAuditoria(resetData.correo, 'Fallido', 'Recuperación de Password');
-      const fueBloqueado = registrarIntentoFallido();
-      if (!fueBloqueado) alert("No se encontró administrador con este correo.");
-    } else { setResetData({ ...resetData, idUsuario: data.id }); setResetStep(2); setIntentosFallidos(0); }
-  };
-  const actualizarPassword = async (e) => {
-    e.preventDefault();
-    const { error } = await supabase.from('administradores').update({ password: resetData.nuevaPass.replace(/[<>]/g, ''), pin: resetData.nuevoPin.replace(/[<>]/g, '') }).eq('id', resetData.idUsuario);
-    if (error) alert("⚠️ Error."); else { alert("✅ Credenciales actualizadas."); setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null }); }
-  };
-
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
+      
       {/* NAVBAR */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#004A99', padding: '15px 20px', borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -465,6 +468,72 @@ export default function App() {
           {vista === 'panel' && <button onClick={() => {setUsuarioActual(null); setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Cerrar Sesión</button>}
         </div>
       </div>
+
+      {/* MODAL EDICIÓN PROVEEDOR */}
+      {proveedorEditando && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
+          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '800px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+            <button onClick={() => setProveedorEditando(null)} style={{ position: 'absolute', top: '15px', right: '20px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#EE2D24', fontWeight: 'bold' }}>&times;</button>
+            <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Editar Datos del Proveedor</h2>
+            <form onSubmit={guardarEdicionProveedor}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Razón Social *</label><input required value={proveedorEditando.razon_social} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, razon_social: e.target.value})} /></div>
+                <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nombre de Fantasía *</label><input required value={proveedorEditando.nombre_fantasia} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, nombre_fantasia: e.target.value})} /></div>
+                <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required value={proveedorEditando.rut} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, rut: formatearRUT(e.target.value)})} /></div>
+                <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required value={proveedorEditando.domicilio_comercial} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, domicilio_comercial: e.target.value})} /></div>
+                <div>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Categoría *</label>
+                  <select required value={proveedorEditando.categoria} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, categoria: e.target.value, subcategoria: ''})}>
+                    <option value="">Seleccione...</option>
+                    {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Subcategoría *</label>
+                  <select required value={proveedorEditando.subcategoria} disabled={!proveedorEditando.categoria} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, subcategoria: e.target.value})}>
+                    <option value="">Seleccione...</option>
+                    {proveedorEditando.categoria && categoriasSodimac[proveedorEditando.categoria]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                  </select>
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Zona(s) de Cobertura *</label>
+                  <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '120px', overflowY: 'auto', backgroundColor: '#fafafa', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    {zonasOpciones.map(zona => (
+                      <label key={zona} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={proveedorEditando.zonas_cobertura_arr.includes(zona)} onChange={(e) => manejarCambioZona(zona, e.target.checked, true)} /> {zona}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Email Principal *</label><input type="email" required value={proveedorEditando.email_principal} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, email_principal: e.target.value})} /></div>
+                <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Email Secundario</label><input type="email" value={proveedorEditando.email_secundario || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, email_secundario: e.target.value})} /></div>
+                <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Contacto *</label><input required value={proveedorEditando.nombre_contacto} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, nombre_contacto: e.target.value})} /></div>
+                <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Cargo *</label><input required value={proveedorEditando.cargo} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, cargo: e.target.value})} /></div>
+                <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Teléfono *</label><input required value={proveedorEditando.telefono} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, telefono: e.target.value})} /></div>
+              </div>
+              <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', marginTop: '20px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>GUARDAR CAMBIOS</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDICIÓN ADMIN */}
+      {adminEditando && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
+          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '500px', width: '100%', position: 'relative' }}>
+            <button onClick={() => setAdminEditando(null)} style={{ position: 'absolute', top: '15px', right: '20px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#EE2D24', fontWeight: 'bold' }}>&times;</button>
+            <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Editar Administrador</h2>
+            <form onSubmit={guardarEdicionAdmin} style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '15px' }}>
+              <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nombre Completo</label><input required value={adminEditando.nombre_completo} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setAdminEditando({...adminEditando, nombre_completo: e.target.value})} /></div>
+              <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Usuario</label><input required value={adminEditando.usuario} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setAdminEditando({...adminEditando, usuario: e.target.value})} /></div>
+              <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Correo</label><input required type="email" value={adminEditando.correo} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setAdminEditando({...adminEditando, correo: e.target.value})} /></div>
+              <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Contraseña</label><input required type="text" value={adminEditando.password} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setAdminEditando({...adminEditando, password: e.target.value})} /></div>
+              <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>PIN (6 dígitos)</label><input required type="text" maxLength="6" value={adminEditando.pin} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setAdminEditando({...adminEditando, pin: e.target.value})} /></div>
+              <button type="submit" disabled={bloqueoSeguridad} style={{ padding: '12px', marginTop: '10px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>GUARDAR USUARIO</button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* REGISTRO PÚBLICO */}
       {vista === 'registro' && (
@@ -582,15 +651,13 @@ export default function App() {
       {vista === 'panel' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           
-          {/* BARRA DE NAVEGACIÓN DEL PANEL (TABS) */}
+          {/* BARRA DE NAVEGACIÓN DEL PANEL */}
           <div style={{ display: 'flex', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px', gap: '20px', overflowX: 'auto' }}>
             <h2 onClick={() => setTabAdmin('dashboard')} style={{ color: tabAdmin === 'dashboard' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Dashboard</h2>
             <h2 onClick={() => setTabAdmin('proveedores')} style={{ color: tabAdmin === 'proveedores' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Pendientes / Gestión</h2>
             <h2 onClick={() => setTabAdmin('carga_masiva')} style={{ color: tabAdmin === 'carga_masiva' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Carga Masiva</h2>
             <h2 onClick={() => {setTabAdmin('exportar'); setSeleccionados([]);}} style={{ color: tabAdmin === 'exportar' ? '#28a745' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Exportar Aprobados</h2>
             <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Admin / Roles</h2>
-            
-            {/* 🛡️ PESTAÑA DE AUDITORÍA EXCLUSIVA PARA MMAQUIEIRA */}
             {usuarioActual?.usuario === 'mmaquieira' && (
               <h2 onClick={() => { setTabAdmin('auditoria'); cargarLogsAuditoria(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>🛡️ Auditoría</h2>
             )}
@@ -680,8 +747,25 @@ export default function App() {
               {/* MAPA DE CALOR */}
               <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', marginBottom: '30px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-                  <h3 style={{ margin: '0 0 5px 0', color: '#333', fontSize: '16px' }}>Mapa de Cobertura Regional (Aprobados)</h3>
+                  <div>
+                    <h3 style={{ margin: '0 0 5px 0', color: '#333', fontSize: '16px' }}>Mapa de Cobertura Regional (Aprobados)</h3>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <select style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => {setFiltroMapaCat(e.target.value); setFiltroMapaSub('');}} value={filtroMapaCat}>
+                      <option value="">Todas las Categorías</option>
+                      {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                    <select disabled={!filtroMapaCat} style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setFiltroMapaSub(e.target.value)} value={filtroMapaSub}>
+                      <option value="">Todas las Subcategorías</option>
+                      {filtroMapaCat && categoriasSodimac[filtroMapaCat].map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                    </select>
+                    <select style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setFiltroMapaZona(e.target.value)} value={filtroMapaZona}>
+                      <option value="">Cualquier Zona</option>
+                      {zonasOpciones.filter(z => z !== 'Todo el País').map(z => <option key={z} value={z}>{z}</option>)}
+                    </select>
+                  </div>
                 </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px' }}>
                   {Object.entries(macroZonas).map(([macro, regiones]) => (
                     <div key={macro} style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '15px', backgroundColor: '#fafafa' }}>
@@ -744,7 +828,6 @@ export default function App() {
           {tabAdmin === 'carga_masiva' && (
             <div>
               <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '18px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>Carga Masiva de Proveedores</h3>
-              <p style={{ fontSize: '14px', color: '#555', marginBottom: '20px' }}>Sube múltiples proveedores a la vez mediante un archivo CSV.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={{ padding: '20px', border: '1px dashed #ccc', borderRadius: '8px', backgroundColor: '#f9f9f9', textAlign: 'center' }}>
                   <button onClick={descargarPlantillaCSV} style={{ padding: '10px 20px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Descargar Plantilla CSV</button>
@@ -787,9 +870,7 @@ export default function App() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', width: '40px', textAlign: 'center' }}>
-                        <input type="checkbox" onChange={toggleSeleccionarTodo} checked={seleccionados.length === proveedoresFiltrados.length && proveedoresFiltrados.length > 0} />
-                      </th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', width: '40px', textAlign: 'center' }}><input type="checkbox" onChange={toggleSeleccionarTodo} checked={seleccionados.length === proveedoresFiltrados.length && proveedoresFiltrados.length > 0} /></th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>RUT</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Nombre Fantasía (Empresa)</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría / Sub</th>
@@ -798,12 +879,10 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {proveedoresFiltrados.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay resultados con estos filtros.</td></tr> : 
+                    {proveedoresFiltrados.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay resultados.</td></tr> : 
                     proveedoresFiltrados.map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee', backgroundColor: seleccionados.includes(prov.id) ? '#f0f8ff' : 'white' }}>
-                        <td style={{ padding: '12px', textAlign: 'center' }}>
-                          <input type="checkbox" checked={seleccionados.includes(prov.id)} onChange={() => toggleSeleccion(prov.id)} />
-                        </td>
+                        <td style={{ padding: '12px', textAlign: 'center' }}><input type="checkbox" checked={seleccionados.includes(prov.id)} onChange={() => toggleSeleccion(prov.id)} /></td>
                         <td style={{ padding: '12px' }}>{prov.rut}</td>
                         <td style={{ padding: '12px' }}><strong>{prov.nombre_fantasia}</strong></td>
                         <td style={{ padding: '12px' }}>{prov.categoria} <br/><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
@@ -860,37 +939,31 @@ export default function App() {
             </div>
           )}
 
-          {/* 🛡️ PESTAÑA DE AUDITORÍA SOLO PARA MMAQUIEIRA */}
+          {/* PESTAÑA AUDITORÍA */}
           {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>
-                <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Registro de Auditoría de Accesos</h3>
-                <button onClick={cargarLogsAuditoria} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Actualizar Registros</button>
+                <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Auditoría de Accesos</h3>
+                <button onClick={cargarLogsAuditoria} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Actualizar</button>
               </div>
-              <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>Historial de intentos de conexión a la plataforma administrativa. Muestra accesos exitosos y bloqueos de seguridad de cualquier usuario.</p>
-              
               <div style={{ overflowX: 'auto', border: '1px solid #ccc', borderRadius: '8px', maxHeight: '500px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Fecha y Hora</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Tipo de Evento</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Usuario / Input</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Tipo</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Usuario</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Estado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {logsAuditoria.length === 0 ? <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay registros de auditoría aún.</td></tr> : 
+                    {logsAuditoria.length === 0 ? <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center' }}>Sin registros.</td></tr> : 
                     logsAuditoria.map(log => (
                       <tr key={log.id} style={{ borderBottom: '1px solid #eee', backgroundColor: log.estado === 'Fallido' ? '#fff5f5' : 'white' }}>
                         <td style={{ padding: '12px' }}>{new Date(log.created_at).toLocaleString('es-CL')}</td>
                         <td style={{ padding: '12px', fontWeight: 'bold', color: '#004A99' }}>{log.tipo}</td>
                         <td style={{ padding: '12px', fontFamily: 'monospace' }}>{log.usuario_intentado}</td>
-                        <td style={{ padding: '12px' }}>
-                          <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', backgroundColor: log.estado === 'Éxito' ? '#d4edda' : '#f8d7da', color: log.estado === 'Éxito' ? '#155724' : '#721c24' }}>
-                            {log.estado}
-                          </span>
-                        </td>
+                        <td style={{ padding: '12px' }}><span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', backgroundColor: log.estado === 'Éxito' ? '#d4edda' : '#f8d7da', color: log.estado === 'Éxito' ? '#155724' : '#721c24' }}>{log.estado}</span></td>
                       </tr>
                     ))}
                   </tbody>
