@@ -30,11 +30,9 @@ export default function App() {
   const [vista, setVista] = useState('registro'); 
   const [tabAdmin, setTabAdmin] = useState('dashboard');
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
-  const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
-
   const [usuarioActual, setUsuarioActual] = useState(null);
 
-  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA (PERSISTENTE 24H) ---
+  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA CON MEMORIA (24 HORAS) ---
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
 
@@ -106,9 +104,8 @@ export default function App() {
   const manejarCambioCategoria = (cat, checked) => {
     let nuevasCat = [...formData.categoria];
     let nuevasSub = [...formData.subcategoria];
-    if (checked) {
-      nuevasCat.push(cat);
-    } else {
+    if (checked) nuevasCat.push(cat);
+    else {
       nuevasCat = nuevasCat.filter(c => c !== cat);
       const subsParaRemover = categoriasSodimac[cat] || [];
       nuevasSub = nuevasSub.filter(s => !subsParaRemover.includes(s));
@@ -195,10 +192,8 @@ export default function App() {
 
     const intentoUsuario = credenciales.usuario.replace(/[<>]/g, '').trim();
     const { data, error } = await supabase.from('administradores').select('*')
-      .eq('usuario', intentoUsuario)
-      .eq('password', credenciales.password.replace(/[<>]/g, ''))
-      .eq('pin', credenciales.pin.replace(/[<>]/g, ''))
-      .maybeSingle();
+      .eq('usuario', intentoUsuario).eq('password', credenciales.password.replace(/[<>]/g, ''))
+      .eq('pin', credenciales.pin.replace(/[<>]/g, '')).maybeSingle();
 
     if (error) {
       console.error(error);
@@ -291,7 +286,79 @@ export default function App() {
     }
   };
 
-  // --- GESTIÓN DE ADMINISTRADORES (CREAR / EDITAR / ELIMINAR) ---
+  // --- CARGA MASIVA DE PROVEEDORES ---
+  const descargarPlantillaCSV = () => {
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += "Razon Social,Nombre de Fantasia,RUT,Domicilio Comercial,Categoria,Subcategoria,Zonas de Cobertura (Separadas por guion -),Email Principal,Email Secundario,Nombre Contacto,Cargo,Telefono\n";
+    csvContent += "Empresa Ejemplo SpA,Ejemplo,12345678-9,Av. Siempre Viva 123,Seguridad,Barreras De Seguridad,Metropolitana de Santiago - Valparaíso,contacto@ejemplo.cl,,Juan Perez,Gerente General,+56912345678\n";
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "Plantilla_Carga_Masiva_Sodimac.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const manejarCargaMasiva = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target.result;
+      const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+      if (lines.length <= 1) return alert("El archivo está vacío o solo contiene encabezados.");
+
+      const proveedoresNuevos = [];
+      for (let i = 1; i < lines.length; i++) {
+        const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
+        if (currentLine.length < 12) continue;
+
+        const rutLimpio = formatearRUT(currentLine[2].replace(/[<>]/g, ''));
+        if (!rutLimpio || rutLimpio === '') continue;
+
+        let zonasArr = currentLine[6].split('-').map(z => sanitizarYCapitalizar(z.trim())).filter(z => z !== '');
+        if (zonasArr.includes("Todo El Pais") || zonasArr.includes("Todo el País")) zonasArr = ["Todo el País"];
+
+        proveedoresNuevos.push({
+          razon_social: sanitizarYCapitalizar(currentLine[0]),
+          nombre_fantasia: sanitizarYCapitalizar(currentLine[1]),
+          rut: rutLimpio,
+          domicilio_comercial: sanitizarYCapitalizar(currentLine[3]),
+          categoria: sanitizarYCapitalizar(currentLine[4]),
+          subcategoria: sanitizarYCapitalizar(currentLine[5]),
+          zonas_cobertura: zonasArr.join(', '),
+          email_principal: currentLine[7].replace(/[<>]/g, '').toLowerCase(),
+          email_secundario: currentLine[8] ? currentLine[8].replace(/[<>]/g, '').toLowerCase() : '',
+          nombre_contacto: sanitizarYCapitalizar(currentLine[9]),
+          cargo: sanitizarYCapitalizar(currentLine[10]),
+          telefono: currentLine[11].replace(/[<>]/g, ''),
+          estado: 'Pendiente',
+          terminos_aceptados: true
+        });
+      }
+
+      if (proveedoresNuevos.length > 0) {
+        const { error } = await supabase.from('proveedores').insert(proveedoresNuevos);
+        if (error) {
+          console.error(error);
+          alert("⚠️ Error en carga masiva por validación de seguridad.");
+        } else {
+          alert(`✅ Carga masiva exitosa: ${proveedoresNuevos.length} proveedores agregados como Pendientes.`);
+          cargarProveedores();
+          setTabAdmin('proveedores');
+        }
+      } else {
+        alert("No se encontraron registros válidos para cargar. Revisa que el RUT esté presente y el formato sea correcto.");
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = null; 
+  };
+
+  // --- GESTIÓN DE ADMINISTRADORES ---
   const crearAdministrador = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from('administradores').insert([{
@@ -302,8 +369,10 @@ export default function App() {
       correo: nuevoAdmin.correo.replace(/[<>]/g, '').toLowerCase().trim()
     }]);
 
-    if (error) alert("Error al crear usuario. Verifique que el correo o usuario no existan ya.");
-    else {
+    if (error) {
+      console.error(error);
+      alert("⚠️ Error seguro. Verifique que el correo o usuario no existan ya.");
+    } else {
       alert("✅ Usuario administrador creado exitosamente.");
       setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' });
       cargarAdministradores();
@@ -331,8 +400,10 @@ export default function App() {
       pin: adminEditando.pin.replace(/[<>]/g, '')
     }).eq('id', adminEditando.id);
 
-    if (error) alert("Error al actualizar usuario.");
-    else {
+    if (error) {
+      console.error(error);
+      alert("⚠️ Error de seguridad al actualizar usuario.");
+    } else {
       alert("✅ Usuario actualizado correctamente.");
       setAdminEditando(null);
       cargarAdministradores();
@@ -384,14 +455,17 @@ export default function App() {
     link.click();
     document.body.removeChild(link);
   };
-
   // --- RECUPERACIÓN DE CONTRASEÑA ---
   const [resetStep, setResetStep] = useState(1);
   const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
+  
   const buscarCorreo = async (e) => {
     e.preventDefault();
-    if (bloqueoSeguridad) return alert("Sistema bloqueado por seguridad.");
-    const { data, error } = await supabase.from('administradores').select('id').eq('correo', resetData.correo.replace(/[<>]/g, '').toLowerCase().trim()).maybeSingle();
+    if (bloqueoSeguridad) return alert("Sistema bloqueado temporalmente por seguridad. Faltan minutos para la reactivación.");
+
+    const { data, error } = await supabase.from('administradores').select('id')
+      .eq('correo', resetData.correo.replace(/[<>]/g, '').toLowerCase().trim()).maybeSingle();
+    
     if (error || !data) {
       registrarAuditoria(resetData.correo, 'Fallido', 'Recuperación de Password');
       const fueBloqueado = registrarIntentoFallido();
@@ -399,38 +473,81 @@ export default function App() {
     } else { 
       setResetData({ ...resetData, idUsuario: data.id }); 
       setResetStep(2); 
-      setIntentosFallidos(0); 
+      setIntentosFallidos(0);
     }
   };
+
   const actualizarPassword = async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from('administradores').update({ password: resetData.nuevaPass.replace(/[<>]/g, ''), pin: resetData.nuevoPin.replace(/[<>]/g, '') }).eq('id', resetData.idUsuario);
-    if (error) alert("⚠️ Error al actualizar.");
-    else {
+    const { error } = await supabase.from('administradores').update({ 
+      password: resetData.nuevaPass.replace(/[<>]/g, ''), 
+      pin: resetData.nuevoPin.replace(/[<>]/g, '') 
+    }).eq('id', resetData.idUsuario);
+    
+    if (error) {
+      console.error(error);
+      alert("⚠️ Error al actualizar credenciales.");
+    } else {
       alert("✅ Credenciales actualizadas.");
       setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
     }
   };
 
-  // --- DASHBOARD (MÉTRICAS Y GRÁFICOS) ---
+  // --- DASHBOARD (GRÁFICOS, FILTROS Y MÉTRICAS) ---
+  const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
+  const [filtroTendenciaCat, setFiltroTendenciaCat] = useState('');
+  const [filtroTendenciaSub, setFiltroTendenciaSub] = useState('');
+  const [filtroTendenciaTiempo, setFiltroTendenciaTiempo] = useState('30'); 
+
   const statsDashboard = () => {
     const total = proveedores.length;
+    let fechasOrdenadas = [];
     const fechasRaw = {};
     const renovaciones = [];
     const hace90Dias = new Date();
     hace90Dias.setDate(hace90Dias.getDate() - 90);
 
-    proveedores.forEach(p => {
+    let fechaLimite = new Date();
+    if (filtroTendenciaTiempo !== 'all') {
+      const dias = parseInt(filtroTendenciaTiempo);
+      for (let i = dias - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const ds = d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        fechasOrdenadas.push(ds);
+        fechasRaw[ds] = 0; 
+      }
+      fechaLimite.setDate(fechaLimite.getDate() - dias);
+    }
+
+    const proveedoresTendencia = proveedores.filter(p => {
+      const catMatch = filtroTendenciaCat === '' || p.categoria === filtroTendenciaCat;
+      const subMatch = filtroTendenciaSub === '' || p.subcategoria === filtroTendenciaSub;
+      const dateMatch = filtroTendenciaTiempo === 'all' || new Date(p.fecha_registro) >= fechaLimite;
+      return catMatch && subMatch && dateMatch;
+    });
+
+    proveedoresTendencia.forEach(p => {
       const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1;
+      if (filtroTendenciaTiempo !== 'all') {
+        if (fechasRaw[fechaCorta] !== undefined) fechasRaw[fechaCorta]++;
+      } else {
+        fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1;
+      }
+    });
+
+    if (filtroTendenciaTiempo === 'all') {
+      fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => {
+        const [da, ma, ya] = a.split('-');
+        const [db, mb, yb] = b.split('-');
+        return new Date(`${ya}-${ma}-${da}`) - new Date(`${yb}-${mb}-${db}`);
+      });
+    }
+
+    proveedores.forEach(p => {
       if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p);
     });
 
-    const fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => {
-      const [da, ma, ya] = a.split('-');
-      const [db, mb, yb] = b.split('-');
-      return new Date(`${ya}-${ma}-${da}`) - new Date(`${yb}-${mb}-${db}`);
-    });
     return { total, fechasRaw, fechasOrdenadas, renovaciones };
   };
 
@@ -497,6 +614,7 @@ export default function App() {
   };
 
   const mapStats = statsMapa();
+
   // --- RENDERIZADO VISUAL ---
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
@@ -581,7 +699,7 @@ export default function App() {
         </div>
       )}
 
-      {/* REGISTRO PÚBLICO */}
+      {/* PANTALLAS PÚBLICAS */}
       {vista === 'registro' && (
         <div style={{ maxWidth: '800px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ color: '#333', fontSize: '22px', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px' }}>Registro de Nuevos Proveedores</h2>
@@ -699,27 +817,6 @@ export default function App() {
         </div>
       )}
 
-      {mostrarTerminos && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
-          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '800px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-            <button onClick={() => setMostrarTerminos(false)} style={{ position: 'absolute', top: '15px', right: '20px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#EE2D24', fontWeight: 'bold' }}>&times;</button>
-            <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Términos y condiciones</h2>
-            <div style={{ fontSize: '13px', color: '#444', lineHeight: '1.6' }}>
-              <p>Al completar y enviar el formulario de registro de proveedores, el postulante declara y acepta expresamente que la información proporcionada podrá ser utilizada por Sodimac S.A. para fines de evaluación, contacto, validación, precalificación y eventual incorporación como proveedor en procesos de negociación, cotización, homologación, compra o contratación.</p>
-              <strong>1. Información recopilada</strong><p>Sodimac podrá recopilar, almacenar, organizar, revisar y tratar información de carácter empresarial y de contacto.</p>
-              <strong>2. Finalidad del tratamiento</strong><p>Los datos serán tratados con la exclusiva finalidad de: gestionar el registro, evaluar idoneidad, contactar, administrar procesos y mantener historial.</p>
-              <strong>3. Aceptación expresa</strong><p>El proveedor declara que ha leído y comprendido estos términos, autoriza el tratamiento y entiende que no garantiza adjudicación.</p>
-              <strong>4. Declaración sobre la información entregada</strong><p>El proveedor declara que la información proporcionada es veraz, actualizada y suficiente.</p>
-              <strong>5. Conservación de la información</strong><p>Sodimac podrá conservar la información por el tiempo necesario.</p>
-              <strong>6. Encargados y acceso</strong><p>El acceso quedará restringido a personal autorizado.</p>
-              <strong>7. Modificaciones</strong><p>Sodimac podrá modificar estos términos publicando la versión actualizada.</p>
-              <strong>8. Aceptación final</strong><p>Al enviar este formulario, acepto estos Términos y autorizo a Sodimac S.A. a tratar mis datos.</p>
-            </div>
-            <button onClick={() => setMostrarTerminos(false)} style={{ width: '100%', padding: '12px', marginTop: '15px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>CERRAR</button>
-          </div>
-        </div>
-      )}
-
       {/* PANEL ADMINISTRATIVO PRINCIPAL */}
       {vista === 'panel' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
@@ -823,6 +920,7 @@ export default function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                   <div>
                     <h3 style={{ margin: '0 0 5px 0', color: '#333', fontSize: '16px' }}>Mapa de Cobertura Regional (Aprobados)</h3>
+                    <p style={{ fontSize: '12px', color: '#666', margin: 0 }}>Visualización térmica de proveedores según filtros aplicados.</p>
                   </div>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <select style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => {setFiltroMapaCat(e.target.value); setFiltroMapaSub('');}} value={filtroMapaCat}>
@@ -860,6 +958,19 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              {stats.renovaciones.length > 0 && (
+                <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffeeba', padding: '20px', borderRadius: '8px' }}>
+                  <h3 style={{ margin: '0 0 15px 0', color: '#856404' }}>Acción Requerida: Envío de Recordatorios</h3>
+                  <p style={{ fontSize: '13px', color: '#856404', marginBottom: '15px' }}>Los siguientes proveedores llevan más de 90 días en la base y necesitan actualizar su información.</p>
+                  {stats.renovaciones.map(prov => (
+                    <div key={prov.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '10px', borderRadius: '4px', marginBottom: '8px', border: '1px solid #ddd' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{prov.razon_social} <span style={{ color: '#666', fontWeight: 'normal' }}>({prov.rut})</span></span>
+                      <button onClick={() => enviarRecordatorio(prov)} style={{ backgroundColor: '#004A99', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Enviar Correo de Actualización</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1017,7 +1128,7 @@ export default function App() {
           {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>
-                <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Registro de Auditoría de Accesos</h3>
+                <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Registro de Auditoría de Accesos</h3>
                 <button onClick={cargarLogsAuditoria} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Actualizar Registros</button>
               </div>
               <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>Historial de intentos de conexión a la plataforma administrativa. Muestra accesos exitosos y bloqueos de seguridad de cualquier usuario.</p>
