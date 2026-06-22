@@ -2,13 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { categoriasSodimac, formatearRUT, validarRUT } from './datosSodimac';
 
-// --- LISTA DE ZONAS ---
+// --- LISTA DE ZONAS Y MACROZONAS ---
 const zonasOpciones = [
   "Todo el País", "Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", 
   "Coquimbo", "Valparaíso", "Metropolitana de Santiago", "O'Higgins", "Maule", 
   "Ñuble", "Biobío", "La Araucanía", "Los Ríos", "Los Lagos", "Aysén", 
   "Magallanes y de la Antártica Chilena"
 ];
+
+const macroZonas = {
+  "Norte": ["Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", "Coquimbo"],
+  "Centro": ["Valparaíso", "Metropolitana de Santiago", "O'Higgins", "Maule", "Ñuble"],
+  "Sur": ["Biobío", "La Araucanía", "Los Ríos", "Los Lagos"],
+  "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
+};
 
 // --- FUNCIÓN DE FORMATO ---
 const capitalizarTexto = (texto) => {
@@ -62,7 +69,7 @@ export default function App() {
       nombre_contacto: capitalizarTexto(formData.contacto), 
       cargo: capitalizarTexto(formData.cargo),
       telefono: formData.telefono.trim(), 
-      zonas_cobertura: zonasFinales.join(', '), // Se guarda como texto separado por comas
+      zonas_cobertura: zonasFinales.join(', '), 
       terminos_aceptados: formData.terminos,
       estado: 'Pendiente'
     }]);
@@ -133,7 +140,7 @@ export default function App() {
     }
   };
 
-  // --- LÓGICA MÓDULO EXPORTACIÓN (CSV LIMPIO SIN COMILLAS) ---
+  // --- LÓGICA MÓDULO EXPORTACIÓN (CSV LIMPIO) ---
   const [filtroRut, setFiltroRut] = useState('');
   const [filtroNombre, setFiltroNombre] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
@@ -171,7 +178,6 @@ export default function App() {
       const nombreEmpresa = p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ');
       const nombreContacto = p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ');
       const correo = p.email_principal.replace(/"/g, '').replace(/,/g, ' ');
-      
       csvContent += `,${nombreEmpresa},${nombreContacto},${correo},,\n`;
     });
     
@@ -191,7 +197,7 @@ export default function App() {
   const buscarCorreo = async (e) => {
     e.preventDefault();
     const { data, error } = await supabase.from('administradores').select('id').eq('correo', resetData.correo.toLowerCase().trim()).maybeSingle();
-    if (error || !data) alert("No se encontró ningún administrador asociado a este correo.");
+    if (error || !data) alert("No se encontró administrador con este correo.");
     else { setResetData({ ...resetData, idUsuario: data.id }); setResetStep(2); }
   };
 
@@ -205,7 +211,7 @@ export default function App() {
     }
   };
 
-  // --- LÓGICA DEL DASHBOARD ---
+  // --- LÓGICA DEL DASHBOARD (GRÁFICOS) ---
   const statsDashboard = () => {
     const total = proveedores.length;
     const fechasRaw = {};
@@ -237,36 +243,69 @@ export default function App() {
 
   const stats = statsDashboard();
 
-  // --- GENERADORES DE GRÁFICOS NATIVOS ---
+  // Variables Gráfico de Torta
   const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
   const tortaData = {};
   proveedoresAprobados.forEach(p => {
     const clave = tipoGraficoTorta === 'categoria' ? p.categoria : p.subcategoria;
     tortaData[clave] = (tortaData[clave] || 0) + 1;
   });
-  
   let cumulativePercent = 0;
-  const totalAprobados = proveedoresAprobados.length;
   const pieSlices = Object.entries(tortaData).map(([key, val], i) => {
-    const percent = totalAprobados > 0 ? (val / totalAprobados) * 100 : 0;
+    const percent = proveedoresAprobados.length > 0 ? (val / proveedoresAprobados.length) * 100 : 0;
     const slice = `${coloresGrafico[i % coloresGrafico.length]} ${cumulativePercent}% ${cumulativePercent + percent}%`;
     cumulativePercent += percent;
     return { key, val, percent, color: coloresGrafico[i % coloresGrafico.length], slice };
   });
-  const tortaGradient = totalAprobados > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
+  const tortaGradient = proveedoresAprobados.length > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
-  const chartWidth = 800;
-  const chartHeight = 250;
-  const padX = 40;
-  const padY = 30;
+  // Variables Gráfico de Línea
+  const chartWidth = 800; const chartHeight = 250; const padX = 40; const padY = 30;
   const maxReg = Math.max(...stats.fechasOrdenadas.map(f => stats.fechasRaw[f]), 1);
   const stepX = stats.fechasOrdenadas.length > 1 ? (chartWidth - 2 * padX) / (stats.fechasOrdenadas.length - 1) : 0;
-  
-  const puntosLinea = stats.fechasOrdenadas.map((f, i) => {
-    const x = padX + i * stepX;
-    const y = chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY));
-    return `${x},${y}`;
-  }).join(' ');
+  const puntosLinea = stats.fechasOrdenadas.map((f, i) => `${padX + i * stepX},${chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY))}`).join(' ');
+
+  // --- LÓGICA MAPA DE CALOR GEOGRÁFICO ---
+  const [filtroMapaCat, setFiltroMapaCat] = useState('');
+  const [filtroMapaSub, setFiltroMapaSub] = useState('');
+  const [filtroMapaZona, setFiltroMapaZona] = useState('');
+
+  const statsMapa = () => {
+    const conteo = {};
+    zonasOpciones.filter(z => z !== "Todo el País").forEach(z => conteo[z] = 0);
+
+    const filtradosMapa = proveedoresAprobados.filter(p => {
+      const catMatch = filtroMapaCat === '' || p.categoria === filtroMapaCat;
+      const subMatch = filtroMapaSub === '' || p.subcategoria === filtroMapaSub;
+      let zonaMatch = true;
+      if (filtroMapaZona !== '') {
+        if (!p.zonas_cobertura) zonaMatch = false;
+        else {
+          const zProv = p.zonas_cobertura.split(',').map(z => z.trim());
+          zonaMatch = zProv.includes('Todo el País') || zProv.includes(filtroMapaZona);
+        }
+      }
+      return catMatch && subMatch && zonaMatch;
+    });
+
+    filtradosMapa.forEach(p => {
+      if (!p.zonas_cobertura) return;
+      const zonasProv = p.zonas_cobertura.split(',').map(z => z.trim());
+      // Si dice Todo el País, sumamos a TODAS las regiones
+      if (zonasProv.includes('Todo el País')) {
+        Object.keys(conteo).forEach(z => conteo[z]++);
+      } else {
+        zonasProv.forEach(z => {
+          if (conteo[z] !== undefined) conteo[z]++;
+        });
+      }
+    });
+
+    const maxMapa = Math.max(...Object.values(conteo), 1);
+    return { conteo, maxMapa, totalMapeados: filtradosMapa.length };
+  };
+
+  const mapStats = statsMapa();
 
 
   // --- RENDERIZADO VISUAL ---
@@ -275,12 +314,10 @@ export default function App() {
       
       {/* NAVBAR */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#004A99', padding: '15px 20px', borderRadius: '8px', color: 'white', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-        
         <div style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
           <img src="/logo.png" alt="Sodimac" style={{ height: '50px', objectFit: 'contain', transform: 'scale(2.8)', transformOrigin: 'left center', marginLeft: '5px' }} />
           <span style={{ fontSize: '22px', fontWeight: '600', letterSpacing: '0.5px', zIndex: 10 }}>Portal de Proveedores</span>
         </div>
-
         <div style={{ zIndex: 10 }}>
           {['login', 'recuperar', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro Público</button>}
           {vista === 'registro' && <button onClick={() => setVista('pre_login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Acceso Interno</button>}
@@ -314,18 +351,13 @@ export default function App() {
                 </select>
               </div>
 
-              {/* NUEVO CAMPO: ZONA DE COBERTURA MULTI-SELECT */}
+              {/* ZONA DE COBERTURA MULTI-SELECT */}
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Zona(s) de Cobertura *</label>
                 <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '160px', overflowY: 'auto', backgroundColor: '#fafafa', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   {zonasOpciones.map(zona => (
                     <label key={zona} style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={formData.zonasCobertura.includes(zona)} 
-                        onChange={(e) => manejarCambioZona(zona, e.target.checked)} 
-                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                      />
+                      <input type="checkbox" checked={formData.zonasCobertura.includes(zona)} onChange={(e) => manejarCambioZona(zona, e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
                       {zona}
                     </label>
                   ))}
@@ -430,14 +462,15 @@ export default function App() {
           
           {tabAdmin === 'dashboard' && (
             <div>
+              {/* Tarjetas Superiores */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
                 <div style={{ backgroundColor: '#004A99', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
-                  <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores Registrados</h3>
+                  <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores</h3>
                   <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{stats.total}</p>
                 </div>
                 <div style={{ backgroundColor: '#EE2D24', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Aprobados en Base</h3>
-                  <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{totalAprobados}</p>
+                  <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{proveedoresAprobados.length}</p>
                 </div>
                 <div style={{ backgroundColor: '#ffc107', color: '#333', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Requieren Actualización (>90 días)</h3>
@@ -445,7 +478,10 @@ export default function App() {
                 </div>
               </div>
 
+              {/* GRÁFICOS */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '30px', marginBottom: '30px' }}>
+                
+                {/* 1. Gráfico de Torta */}
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <h3 style={{ margin: 0, color: '#333', fontSize: '16px' }}>Distribución Aprobados</h3>
@@ -454,7 +490,7 @@ export default function App() {
                       <option value="subcategoria">Por Subcategoría</option>
                     </select>
                   </div>
-                  {totalAprobados === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados aún</p> : (
+                  {proveedoresAprobados.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados aún</p> : (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: tortaGradient, marginBottom: '20px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}></div>
                       <div style={{ width: '100%', maxHeight: '150px', overflowY: 'auto' }}>
@@ -470,6 +506,7 @@ export default function App() {
                   )}
                 </div>
 
+                {/* 2. Gráfico de Línea */}
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
                   <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '16px' }}>Tendencia de Registros</h3>
                   {stats.fechasOrdenadas.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay registros para graficar</p> : (
@@ -495,6 +532,56 @@ export default function App() {
                 </div>
               </div>
 
+              {/* 3. NUEVO: MAPA DE CALOR GEOGRÁFICO */}
+              <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', marginBottom: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 5px 0', color: '#333', fontSize: '16px' }}>Mapa de Cobertura Regional (Aprobados)</h3>
+                    <p style={{ fontSize: '12px', color: '#666', margin: 0 }}>Visualización térmica de proveedores según filtros aplicados.</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <select style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => {setFiltroMapaCat(e.target.value); setFiltroMapaSub('');}} value={filtroMapaCat}>
+                      <option value="">Todas las Categorías</option>
+                      {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                    <select disabled={!filtroMapaCat} style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setFiltroMapaSub(e.target.value)} value={filtroMapaSub}>
+                      <option value="">Todas las Subcategorías</option>
+                      {filtroMapaCat && categoriasSodimac[filtroMapaCat].map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                    </select>
+                    <select style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setFiltroMapaZona(e.target.value)} value={filtroMapaZona}>
+                      <option value="">Cualquier Zona</option>
+                      {zonasOpciones.filter(z => z !== 'Todo el País').map(z => <option key={z} value={z}>{z}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px' }}>
+                  {Object.entries(macroZonas).map(([macro, regiones]) => (
+                    <div key={macro} style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '15px', backgroundColor: '#fafafa' }}>
+                      <h4 style={{ margin: '0 0 15px 0', fontSize: '14px', color: '#004A99', borderBottom: '2px solid #EE2D24', paddingBottom: '5px' }}>Zona {macro}</h4>
+                      {regiones.map(reg => {
+                        const cantidad = mapStats.conteo[reg] || 0;
+                        const intensidad = mapStats.maxMapa > 0 ? cantidad / mapStats.maxMapa : 0;
+                        // Cálculo de color de Calor
+                        const bgColor = cantidad > 0 ? `rgba(238, 45, 36, ${0.15 + (intensidad * 0.85)})` : '#ffffff';
+                        const txtColor = cantidad > 0 ? (intensidad > 0.5 ? '#ffffff' : '#333333') : '#999999';
+                        
+                        return (
+                          <div key={reg} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '12px', padding: '8px 10px', backgroundColor: bgColor, color: txtColor, borderRadius: '4px', border: '1px solid #eee', transition: 'all 0.3s' }}>
+                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }} title={reg}>{reg}</span>
+                            <span style={{ fontWeight: 'bold' }}>{cantidad}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ textAlign: 'right', marginTop: '10px', fontSize: '11px', color: '#666' }}>
+                  Total filtrados: <strong>{mapStats.totalMapeados}</strong> proveedores
+                </div>
+              </div>
+
+              {/* RECORDATORIOS 90 DÍAS */}
               {stats.renovaciones.length > 0 && (
                 <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffeeba', padding: '20px', borderRadius: '8px' }}>
                   <h3 style={{ margin: '0 0 15px 0', color: '#856404' }}>Acción Requerida: Envío de Recordatorios</h3>
@@ -541,9 +628,7 @@ export default function App() {
                       </td>
                       <td style={{ padding: '12px' }}>
                         {prov.nombre_contacto}<br />
-                        <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>
-                          {prov.email_principal}
-                        </a><br />
+                        <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a><br />
                         <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span>
                       </td>
                       <td style={{ padding: '12px' }}>
@@ -552,9 +637,7 @@ export default function App() {
                         </span>
                       </td>
                       <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
-                        {prov.estado === 'Pendiente' && (
-                          <button onClick={() => aprobarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>
-                        )}
+                        {prov.estado === 'Pendiente' && <button onClick={() => aprobarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>}
                         <button onClick={() => rechazarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Eliminar</button>
                       </td>
                     </tr>
