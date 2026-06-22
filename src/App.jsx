@@ -17,10 +17,12 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
-// --- FUNCIÓN DE FORMATO ---
-const capitalizarTexto = (texto) => {
+// --- BARRERA DE SEGURIDAD 1: SANITIZACIÓN ANTI-XSS ---
+const sanitizarYCapitalizar = (texto) => {
   if (!texto) return '';
-  return texto.toLowerCase().trim().split(/\s+/).map(palabra => 
+  // Elimina caracteres peligrosos para evitar inyección de código (XSS)
+  const textoSeguro = texto.replace(/[<>]/g, '').toLowerCase().trim();
+  return textoSeguro.split(/\s+/).map(palabra => 
     palabra.charAt(0).toUpperCase() + palabra.slice(1)
   ).join(' ');
 };
@@ -31,10 +33,27 @@ export default function App() {
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState(null);
 
+  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA ---
+  const [intentosFallidos, setIntentosFallidos] = useState(0);
+  const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
+
+  const registrarIntentoFallido = () => {
+    const nuevosIntentos = intentosFallidos + 1;
+    setIntentosFallidos(nuevosIntentos);
+    if (nuevosIntentos >= 5) {
+      setBloqueoSeguridad(true);
+      alert("⚠️ ALERTA DE SEGURIDAD: Múltiples intentos fallidos. Sistema bloqueado por 30 segundos.");
+      setTimeout(() => {
+        setBloqueoSeguridad(false);
+        setIntentosFallidos(0);
+      }, 30000); // Bloqueo de 30 segundos
+    }
+  };
+
   // --- LÓGICA DEL FORMULARIO PÚBLICO ---
   const [formData, setFormData] = useState({
     razonSocial: '', nombreFantasia: '', rut: '', domicilio: '',
-    categoria: [], subcategoria: [], emailPrincipal: '', emailSecundario: '', // Ahora son Arrays
+    categoria: [], subcategoria: [], emailPrincipal: '', emailSecundario: '',
     contacto: '', cargo: '', telefono: '', zonasCobertura: [], terminos: false
   });
 
@@ -59,7 +78,6 @@ export default function App() {
       nuevasCat.push(cat);
     } else {
       nuevasCat = nuevasCat.filter(c => c !== cat);
-      // Al desmarcar una categoría, eliminamos sus subcategorías de la selección
       const subsParaRemover = categoriasSodimac[cat] || [];
       nuevasSub = nuevasSub.filter(s => !subsParaRemover.includes(s));
     }
@@ -83,41 +101,52 @@ export default function App() {
     let zonasFinales = formData.zonasCobertura;
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
 
-    // CREACIÓN MÚLTIPLE DE REGISTROS (1 Por cada Subcategoría seleccionada)
     const registrosAInsertar = formData.subcategoria.map(sub => {
-      // Búsqueda inversa: Encontramos a qué categoría pertenece esta subcategoría específica
       const catAsociada = Object.keys(categoriasSodimac).find(key => categoriasSodimac[key].includes(sub));
-      
       return {
-        razon_social: capitalizarTexto(formData.razonSocial), 
-        nombre_fantasia: capitalizarTexto(formData.nombreFantasia),
-        rut: formData.rut, 
-        domicilio_comercial: capitalizarTexto(formData.domicilio),
-        categoria: catAsociada, // Asignación de categoría específica
-        subcategoria: sub,      // Asignación de subcategoría específica
-        email_principal: formData.emailPrincipal.toLowerCase().trim(), 
-        email_secundario: formData.emailSecundario ? formData.emailSecundario.toLowerCase().trim() : '',
-        nombre_contacto: capitalizarTexto(formData.contacto), 
-        cargo: capitalizarTexto(formData.cargo),
-        telefono: formData.telefono.trim(), 
+        razon_social: sanitizarYCapitalizar(formData.razonSocial), 
+        nombre_fantasia: sanitizarYCapitalizar(formData.nombreFantasia),
+        rut: formData.rut.replace(/[<>]/g, ''), 
+        domicilio_comercial: sanitizarYCapitalizar(formData.domicilio),
+        categoria: catAsociada, 
+        subcategoria: sub,      
+        email_principal: formData.emailPrincipal.replace(/[<>]/g, '').toLowerCase().trim(), 
+        email_secundario: formData.emailSecundario ? formData.emailSecundario.replace(/[<>]/g, '').toLowerCase().trim() : '',
+        nombre_contacto: sanitizarYCapitalizar(formData.contacto), 
+        cargo: sanitizarYCapitalizar(formData.cargo),
+        telefono: formData.telefono.replace(/[<>]/g, '').trim(), 
         zonas_cobertura: zonasFinales.join(', '), 
         terminos_aceptados: formData.terminos,
         estado: 'Pendiente'
       };
     });
 
-    // Inyectamos el array completo a Supabase
     const { error } = await supabase.from('proveedores').insert(registrosAInsertar);
 
-    if (error) alert("Error al guardar: " + error.message);
-    else { alert(`✅ Registro enviado con éxito. Se generaron ${registrosAInsertar.length} postulaciones individuales.`); window.location.reload(); }
+    // --- BARRERA DE SEGURIDAD 3: ENMASCARAMIENTO DE ERRORES ---
+    if (error) {
+      console.error(error); // El error real se queda en la consola para ti
+      alert("⚠️ Error de sistema. La información no pudo ser procesada de forma segura.");
+    } else { 
+      alert(`✅ Registro enviado con éxito. Se generaron ${registrosAInsertar.length} postulaciones individuales.`); 
+      window.location.reload(); 
+    }
   };
 
   const [preLoginPin, setPreLoginPin] = useState('');
   const manejarPreLogin = (e) => {
     e.preventDefault();
-    if (preLoginPin === '171819') { setVista('login'); setPreLoginPin(''); } 
-    else { alert("⚠️ Código de autorización incorrecto."); setPreLoginPin(''); }
+    if (bloqueoSeguridad) return alert("Sistema bloqueado temporalmente por seguridad.");
+    
+    if (preLoginPin === '171819') { 
+      setVista('login'); 
+      setPreLoginPin(''); 
+      setIntentosFallidos(0); // Resetea si tiene éxito
+    } else { 
+      registrarIntentoFallido();
+      if(intentosFallidos < 4) alert("⚠️ Código de autorización incorrecto."); 
+      setPreLoginPin(''); 
+    }
   };
 
   // --- LÓGICA DE ADMINISTRADOR Y LOGIN ---
@@ -128,12 +157,25 @@ export default function App() {
 
   const manejarLogin = async (e) => {
     e.preventDefault();
+    if (bloqueoSeguridad) return alert("Sistema bloqueado temporalmente por seguridad.");
+
     const { data, error } = await supabase.from('administradores').select('*')
-      .eq('usuario', credenciales.usuario.trim()).eq('password', credenciales.password).eq('pin', credenciales.pin).maybeSingle();
+      .eq('usuario', credenciales.usuario.replace(/[<>]/g, '').trim())
+      .eq('password', credenciales.password.replace(/[<>]/g, ''))
+      .eq('pin', credenciales.pin.replace(/[<>]/g, ''))
+      .maybeSingle();
 
-    if (error) return alert("⚠️ Error de conexión con Supabase.");
-    if (!data) return alert("🔍 Credenciales incorrectas.");
+    if (error) {
+      console.error(error);
+      return alert("⚠️ Error de conexión seguro.");
+    }
+    
+    if (!data) {
+      registrarIntentoFallido();
+      return alert("🔍 Credenciales incorrectas.");
+    }
 
+    setIntentosFallidos(0);
     setUsuarioActual(data);
     setVista('panel');
     cargarProveedores();
@@ -182,22 +224,24 @@ export default function App() {
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
 
     const { error } = await supabase.from('proveedores').update({
-      razon_social: capitalizarTexto(proveedorEditando.razon_social),
-      nombre_fantasia: capitalizarTexto(proveedorEditando.nombre_fantasia),
-      rut: proveedorEditando.rut,
-      domicilio_comercial: capitalizarTexto(proveedorEditando.domicilio_comercial),
+      razon_social: sanitizarYCapitalizar(proveedorEditando.razon_social),
+      nombre_fantasia: sanitizarYCapitalizar(proveedorEditando.nombre_fantasia),
+      rut: proveedorEditando.rut.replace(/[<>]/g, ''),
+      domicilio_comercial: sanitizarYCapitalizar(proveedorEditando.domicilio_comercial),
       categoria: proveedorEditando.categoria,
       subcategoria: proveedorEditando.subcategoria,
-      email_principal: proveedorEditando.email_principal.toLowerCase().trim(),
-      email_secundario: proveedorEditando.email_secundario ? proveedorEditando.email_secundario.toLowerCase().trim() : '',
-      nombre_contacto: capitalizarTexto(proveedorEditando.nombre_contacto),
-      cargo: capitalizarTexto(proveedorEditando.cargo),
-      telefono: proveedorEditando.telefono.trim(),
+      email_principal: proveedorEditando.email_principal.replace(/[<>]/g, '').toLowerCase().trim(),
+      email_secundario: proveedorEditando.email_secundario ? proveedorEditando.email_secundario.replace(/[<>]/g, '').toLowerCase().trim() : '',
+      nombre_contacto: sanitizarYCapitalizar(proveedorEditando.nombre_contacto),
+      cargo: sanitizarYCapitalizar(proveedorEditando.cargo),
+      telefono: proveedorEditando.telefono.replace(/[<>]/g, '').trim(),
       zonas_cobertura: zonasFinales.join(', ')
     }).eq('id', proveedorEditando.id);
 
-    if (error) alert("Error al actualizar: " + error.message);
-    else {
+    if (error) {
+      console.error(error);
+      alert("⚠️ Error de seguridad al actualizar.");
+    } else {
       alert("✅ Proveedor actualizado correctamente.");
       setProveedorEditando(null);
       cargarProveedores();
@@ -234,25 +278,25 @@ export default function App() {
         const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
         if (currentLine.length < 12) continue;
 
-        const rutLimpio = formatearRUT(currentLine[2]);
+        const rutLimpio = formatearRUT(currentLine[2].replace(/[<>]/g, ''));
         if (!rutLimpio || rutLimpio === '') continue;
 
-        let zonasArr = currentLine[6].split('-').map(z => capitalizarTexto(z.trim())).filter(z => z !== '');
+        let zonasArr = currentLine[6].split('-').map(z => sanitizarYCapitalizar(z.trim())).filter(z => z !== '');
         if (zonasArr.includes("Todo El Pais") || zonasArr.includes("Todo el País")) zonasArr = ["Todo el País"];
 
         proveedoresNuevos.push({
-          razon_social: capitalizarTexto(currentLine[0]),
-          nombre_fantasia: capitalizarTexto(currentLine[1]),
+          razon_social: sanitizarYCapitalizar(currentLine[0]),
+          nombre_fantasia: sanitizarYCapitalizar(currentLine[1]),
           rut: rutLimpio,
-          domicilio_comercial: capitalizarTexto(currentLine[3]),
-          categoria: capitalizarTexto(currentLine[4]),
-          subcategoria: capitalizarTexto(currentLine[5]),
+          domicilio_comercial: sanitizarYCapitalizar(currentLine[3]),
+          categoria: sanitizarYCapitalizar(currentLine[4]),
+          subcategoria: sanitizarYCapitalizar(currentLine[5]),
           zonas_cobertura: zonasArr.join(', '),
-          email_principal: currentLine[7].toLowerCase(),
-          email_secundario: currentLine[8] ? currentLine[8].toLowerCase() : '',
-          nombre_contacto: capitalizarTexto(currentLine[9]),
-          cargo: capitalizarTexto(currentLine[10]),
-          telefono: currentLine[11],
+          email_principal: currentLine[7].replace(/[<>]/g, '').toLowerCase(),
+          email_secundario: currentLine[8] ? currentLine[8].replace(/[<>]/g, '').toLowerCase() : '',
+          nombre_contacto: sanitizarYCapitalizar(currentLine[9]),
+          cargo: sanitizarYCapitalizar(currentLine[10]),
+          telefono: currentLine[11].replace(/[<>]/g, ''),
           estado: 'Pendiente',
           terminos_aceptados: true
         });
@@ -260,8 +304,10 @@ export default function App() {
 
       if (proveedoresNuevos.length > 0) {
         const { error } = await supabase.from('proveedores').insert(proveedoresNuevos);
-        if (error) alert("Error en carga masiva: " + error.message);
-        else {
+        if (error) {
+          console.error(error);
+          alert("⚠️ Error en carga masiva por validación de seguridad.");
+        } else {
           alert(`✅ Carga masiva exitosa: ${proveedoresNuevos.length} proveedores agregados como Pendientes.`);
           cargarProveedores();
           setTabAdmin('proveedores');
@@ -278,13 +324,17 @@ export default function App() {
   const crearAdministrador = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from('administradores').insert([{
-      usuario: nuevoAdmin.usuario.trim(), password: nuevoAdmin.password, pin: nuevoAdmin.pin,
-      nombre_completo: capitalizarTexto(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`), 
-      correo: nuevoAdmin.correo.toLowerCase().trim()
+      usuario: nuevoAdmin.usuario.replace(/[<>]/g, '').trim(), 
+      password: nuevoAdmin.password.replace(/[<>]/g, ''), 
+      pin: nuevoAdmin.pin.replace(/[<>]/g, ''),
+      nombre_completo: sanitizarYCapitalizar(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`), 
+      correo: nuevoAdmin.correo.replace(/[<>]/g, '').toLowerCase().trim()
     }]);
 
-    if (error) alert("Error al crear usuario. Verifique que el correo o usuario no existan ya.");
-    else {
+    if (error) {
+      console.error(error);
+      alert("⚠️ Error seguro. Verifique que el correo o usuario no existan ya.");
+    } else {
       alert("✅ Usuario administrador creado exitosamente.");
       setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' });
       cargarAdministradores();
@@ -305,15 +355,17 @@ export default function App() {
   const guardarEdicionAdmin = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from('administradores').update({
-      nombre_completo: capitalizarTexto(adminEditando.nombre_completo),
-      usuario: adminEditando.usuario.trim(),
-      correo: adminEditando.correo.toLowerCase().trim(),
-      password: adminEditando.password,
-      pin: adminEditando.pin
+      nombre_completo: sanitizarYCapitalizar(adminEditando.nombre_completo),
+      usuario: adminEditando.usuario.replace(/[<>]/g, '').trim(),
+      correo: adminEditando.correo.replace(/[<>]/g, '').toLowerCase().trim(),
+      password: adminEditando.password.replace(/[<>]/g, ''),
+      pin: adminEditando.pin.replace(/[<>]/g, '')
     }).eq('id', adminEditando.id);
 
-    if (error) alert("Error al actualizar usuario.");
-    else {
+    if (error) {
+      console.error(error);
+      alert("⚠️ Error de seguridad al actualizar usuario.");
+    } else {
       alert("✅ Usuario actualizado correctamente.");
       setAdminEditando(null);
       cargarAdministradores();
@@ -369,23 +421,41 @@ export default function App() {
   // --- RECUPERACIÓN DE CONTRASEÑA ---
   const [resetStep, setResetStep] = useState(1);
   const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
+  
   const buscarCorreo = async (e) => {
     e.preventDefault();
-    const { data, error } = await supabase.from('administradores').select('id').eq('correo', resetData.correo.toLowerCase().trim()).maybeSingle();
-    if (error || !data) alert("No se encontró administrador con este correo.");
-    else { setResetData({ ...resetData, idUsuario: data.id }); setResetStep(2); }
+    if (bloqueoSeguridad) return alert("Sistema bloqueado temporalmente por seguridad.");
+
+    const { data, error } = await supabase.from('administradores').select('id')
+      .eq('correo', resetData.correo.replace(/[<>]/g, '').toLowerCase().trim()).maybeSingle();
+    
+    if (error || !data) {
+      registrarIntentoFallido();
+      alert("No se encontró administrador con este correo.");
+    } else { 
+      setResetData({ ...resetData, idUsuario: data.id }); 
+      setResetStep(2); 
+      setIntentosFallidos(0);
+    }
   };
+
   const actualizarPassword = async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from('administradores').update({ password: resetData.nuevaPass, pin: resetData.nuevoPin }).eq('id', resetData.idUsuario);
-    if (error) alert("Error al actualizar.");
-    else {
+    const { error } = await supabase.from('administradores').update({ 
+      password: resetData.nuevaPass.replace(/[<>]/g, ''), 
+      pin: resetData.nuevoPin.replace(/[<>]/g, '') 
+    }).eq('id', resetData.idUsuario);
+    
+    if (error) {
+      console.error(error);
+      alert("⚠️ Error al actualizar credenciales.");
+    } else {
       alert("✅ Credenciales actualizadas.");
       setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
     }
   };
 
-  // --- DASHBOARD (GRÁFICOS Y MÉTRICAS) ---
+  // --- DASHBOARD (GRÁFICOS, FILTROS Y MÉTRICAS) ---
   const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
   const [filtroTendenciaCat, setFiltroTendenciaCat] = useState('');
   const [filtroTendenciaSub, setFiltroTendenciaSub] = useState('');
@@ -398,10 +468,6 @@ export default function App() {
     const renovaciones = [];
     const hace90Dias = new Date();
     hace90Dias.setDate(hace90Dias.getDate() - 90);
-
-    proveedores.forEach(p => {
-      if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p);
-    });
 
     let fechaLimite = new Date();
     if (filtroTendenciaTiempo !== 'all') {
@@ -439,6 +505,10 @@ export default function App() {
         return new Date(`${ya}-${ma}-${da}`) - new Date(`${yb}-${mb}-${db}`);
       });
     }
+
+    proveedores.forEach(p => {
+      if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p);
+    });
 
     return { total, fechasRaw, fechasOrdenadas, renovaciones };
   };
@@ -567,7 +637,7 @@ export default function App() {
                 <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Cargo *</label><input required value={proveedorEditando.cargo} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, cargo: e.target.value})} /></div>
                 <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Teléfono *</label><input required value={proveedorEditando.telefono} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, telefono: e.target.value})} /></div>
               </div>
-              <button type="submit" style={{ width: '100%', padding: '12px', marginTop: '20px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>GUARDAR CAMBIOS</button>
+              <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', marginTop: '20px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>GUARDAR CAMBIOS</button>
             </form>
           </div>
         </div>
@@ -585,7 +655,7 @@ export default function App() {
               <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Correo</label><input required type="email" value={adminEditando.correo} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setAdminEditando({...adminEditando, correo: e.target.value})} /></div>
               <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Contraseña</label><input required type="text" value={adminEditando.password} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setAdminEditando({...adminEditando, password: e.target.value})} /></div>
               <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>PIN (6 dígitos)</label><input required type="text" maxLength="6" value={adminEditando.pin} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setAdminEditando({...adminEditando, pin: e.target.value})} /></div>
-              <button type="submit" style={{ padding: '12px', marginTop: '10px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>GUARDAR USUARIO</button>
+              <button type="submit" disabled={bloqueoSeguridad} style={{ padding: '12px', marginTop: '10px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>GUARDAR USUARIO</button>
             </form>
           </div>
         </div>
@@ -602,7 +672,6 @@ export default function App() {
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required placeholder="12345678-9" value={formData.rut} style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, rut: formatearRUT(e.target.value)})} /></div>
               <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, domicilio: e.target.value})} /></div>
               
-              {/* CATEGORÍA MULTI-SELECT */}
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Categoría(s) *</label>
                 <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '160px', overflowY: 'auto', backgroundColor: '#fafafa', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -614,7 +683,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SUBCATEGORÍA MULTI-SELECT (DINÁMICO) */}
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Subcategoría(s) *</label>
                 <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto', backgroundColor: '#fafafa' }}>
@@ -661,7 +729,7 @@ export default function App() {
                 <span>He leído y acepto los <strong onClick={(e) => {e.preventDefault(); setMostrarTerminos(true);}} style={{ color: '#004A99', textDecoration: 'underline', cursor: 'pointer' }}>Términos y Condiciones</strong> de Sodimac.</span>
               </label>
             </div>
-            <button type="submit" style={{ width: '100%', padding: '15px', marginTop: '25px', backgroundColor: '#EE2D24', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', borderRadius: '4px' }}>ENVIAR REGISTRO</button>
+            <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '15px', marginTop: '25px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#EE2D24', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer', borderRadius: '4px' }}>ENVIAR REGISTRO</button>
           </form>
         </div>
       )}
@@ -675,7 +743,7 @@ export default function App() {
             <div style={{ marginBottom: '30px', display: 'flex', justifyContent: 'center' }}>
               <input required type="password" maxLength="6" placeholder="******" value={preLoginPin} onChange={e => setPreLoginPin(e.target.value)} style={{ width: '100%', maxWidth: '250px', padding: '15px', border: '2px solid #ccc', borderRadius: '8px', letterSpacing: '15px', textAlign: 'center', fontSize: '28px', outline: 'none', fontWeight: 'bold', color: '#004A99' }} />
             </div>
-            <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '14px', borderRadius: '4px', cursor: 'pointer' }}>VALIDAR ACCESO</button>
+            <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '14px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '14px', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>VALIDAR ACCESO</button>
             <button type="button" onClick={() => setVista('registro')} style={{ width: '100%', padding: '14px', marginTop: '10px', backgroundColor: 'transparent', color: '#555', border: '1px solid #ccc', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VOLVER</button>
           </form>
         </div>
@@ -709,7 +777,7 @@ export default function App() {
             <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Usuario</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setCredenciales({...credenciales, usuario: e.target.value})} /></div>
             <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setCredenciales({...credenciales, password: e.target.value})} /></div>
             <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>PIN de Seguridad Interno</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', letterSpacing: '3px' }} onChange={e => setCredenciales({...credenciales, pin: e.target.value})} /></div>
-            <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>INGRESAR AL PANEL</button>
+            <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>INGRESAR AL PANEL</button>
             <div style={{ textAlign: 'center', marginTop: '15px' }}><button type="button" onClick={() => setVista('recuperar')} style={{ background: 'none', border: 'none', color: '#004A99', textDecoration: 'underline', fontSize: '12px', cursor: 'pointer' }}>¿Olvidaste tu contraseña?</button></div>
           </form>
         </div>
@@ -721,13 +789,13 @@ export default function App() {
           {resetStep === 1 ? (
             <form onSubmit={buscarCorreo}>
               <div style={{ marginBottom: '20px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Correo Registrado</label><input required type="email" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, correo: e.target.value})} /></div>
-              <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VERIFICAR</button>
+              <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>VERIFICAR</button>
             </form>
           ) : (
             <form onSubmit={actualizarPassword}>
               <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nueva Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, nuevaPass: e.target.value})} /></div>
               <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nuevo PIN</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, nuevoPin: e.target.value})} /></div>
-              <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#28a745', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>GUARDAR</button>
+              <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#28a745', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>GUARDAR</button>
             </form>
           )}
         </div>
@@ -797,6 +865,12 @@ export default function App() {
                       <select disabled={!filtroTendenciaCat} style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', maxWidth: '140px' }} onChange={e => setFiltroTendenciaSub(e.target.value)} value={filtroTendenciaSub}>
                         <option value="">Subcat (Todas)</option>
                         {filtroTendenciaCat && categoriasSodimac[filtroTendenciaCat].map(sub => <option key={sub} value={sub}>{sub.substring(0,20)}...</option>)}
+                      </select>
+                      <select style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', fontWeight: 'bold' }} onChange={e => setFiltroTendenciaTiempo(e.target.value)} value={filtroTendenciaTiempo}>
+                        <option value="7">Últimos 7 días</option>
+                        <option value="15">Últimos 15 días</option>
+                        <option value="30">Últimos 30 días</option>
+                        <option value="all">Histórico completo</option>
                       </select>
                     </div>
                   </div>
@@ -1021,6 +1095,7 @@ export default function App() {
             </div>
           )}
 
+          {/* PESTAÑA: + NUEVO ADMIN Y GESTIÓN DE ROLES */}
           {tabAdmin === 'crear_admin' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '40px' }}>
               <div>
@@ -1032,7 +1107,7 @@ export default function App() {
                   <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Correo</label><input required type="email" value={nuevoAdmin.correo} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, correo: e.target.value})} /></div>
                   <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Contraseña</label><input required type="password" value={nuevoAdmin.password} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, password: e.target.value})} /></div>
                   <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>PIN (6 dígitos)</label><input required type="password" maxLength="6" value={nuevoAdmin.pin} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', letterSpacing: '3px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, pin: e.target.value})} /></div>
-                  <button type="submit" style={{ gridColumn: '1 / -1', padding: '12px', marginTop: '10px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>CREAR USUARIO</button>
+                  <button type="submit" disabled={bloqueoSeguridad} style={{ gridColumn: '1 / -1', padding: '12px', marginTop: '10px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>CREAR USUARIO</button>
                 </form>
               </div>
 
