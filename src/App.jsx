@@ -17,7 +17,7 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
-// SANITIZACIÓN Y CAPITALIZACIÓN (Ej: mAtIaS -> Matias)
+// --- BARRERA DE SEGURIDAD 1: SANITIZACIÓN ANTI-XSS ---
 const sanitizarYCapitalizar = (texto) => {
   if (!texto) return '';
   const textoSeguro = texto.replace(/[<>]/g, '').toLowerCase().trim();
@@ -30,9 +30,11 @@ export default function App() {
   const [vista, setVista] = useState('registro'); 
   const [tabAdmin, setTabAdmin] = useState('dashboard');
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
+  const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
+
   const [usuarioActual, setUsuarioActual] = useState(null);
 
-  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA CON MEMORIA (24 HORAS) ---
+  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA (PERSISTENTE 24H) ---
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
 
@@ -104,8 +106,9 @@ export default function App() {
   const manejarCambioCategoria = (cat, checked) => {
     let nuevasCat = [...formData.categoria];
     let nuevasSub = [...formData.subcategoria];
-    if (checked) nuevasCat.push(cat);
-    else {
+    if (checked) {
+      nuevasCat.push(cat);
+    } else {
       nuevasCat = nuevasCat.filter(c => c !== cat);
       const subsParaRemover = categoriasSodimac[cat] || [];
       nuevasSub = nuevasSub.filter(s => !subsParaRemover.includes(s));
@@ -151,8 +154,14 @@ export default function App() {
     });
 
     const { error } = await supabase.from('proveedores').insert(registrosAInsertar);
-    if (error) { console.error(error); alert("⚠️ Error de sistema. Posible duplicidad o falla de conexión."); }
-    else { alert(`✅ Registro enviado. Se generaron ${registrosAInsertar.length} postulaciones.`); window.location.reload(); }
+
+    if (error) {
+      console.error(error); 
+      alert("⚠️ Error de sistema. La información no pudo ser procesada de forma segura.");
+    } else { 
+      alert(`✅ Registro enviado con éxito. Se generaron ${registrosAInsertar.length} postulaciones individuales.`); 
+      window.location.reload(); 
+    }
   };
 
   const [preLoginPin, setPreLoginPin] = useState('');
@@ -186,10 +195,15 @@ export default function App() {
 
     const intentoUsuario = credenciales.usuario.replace(/[<>]/g, '').trim();
     const { data, error } = await supabase.from('administradores').select('*')
-      .eq('usuario', intentoUsuario).eq('password', credenciales.password.replace(/[<>]/g, ''))
-      .eq('pin', credenciales.pin.replace(/[<>]/g, '')).maybeSingle();
+      .eq('usuario', intentoUsuario)
+      .eq('password', credenciales.password.replace(/[<>]/g, ''))
+      .eq('pin', credenciales.pin.replace(/[<>]/g, ''))
+      .maybeSingle();
 
-    if (error) return alert("⚠️ Error de conexión seguro.");
+    if (error) {
+      console.error(error);
+      return alert("⚠️ Error de conexión seguro.");
+    }
     
     if (!data) {
       registrarAuditoria(intentoUsuario || 'Desconocido', 'Fallido', 'Login Panel Admin');
@@ -221,10 +235,13 @@ export default function App() {
     if (!error && data) setLogsAuditoria(data);
   };
 
-  // --- GESTIÓN DE PROVEEDORES ---
+  // --- GESTIÓN DE PROVEEDORES (APROBAR / ELIMINAR / EDITAR) ---
   const aprobarProveedor = async (id) => {
     if(!window.confirm("¿Aprobar este proveedor?")) return;
-    const { error } = await supabase.from('proveedores').update({ estado: 'Aprobado', aprobado_por: usuarioActual.usuario }).eq('id', id);
+    const { error } = await supabase.from('proveedores').update({ 
+      estado: 'Aprobado',
+      aprobado_por: usuarioActual.usuario 
+    }).eq('id', id);
     if (!error) cargarProveedores();
   };
 
@@ -235,6 +252,7 @@ export default function App() {
   };
 
   const [proveedorEditando, setProveedorEditando] = useState(null);
+
   const abrirEditorProveedor = (prov) => {
     const zonasArr = prov.zonas_cobertura ? prov.zonas_cobertura.split(',').map(z => z.trim()) : [];
     setProveedorEditando({ ...prov, zonas_cobertura_arr: zonasArr });
@@ -242,8 +260,8 @@ export default function App() {
 
   const guardarEdicionProveedor = async (e) => {
     e.preventDefault();
-    if (!validarRUT(proveedorEditando.rut)) return alert("El RUT no es válido.");
-    if (proveedorEditando.zonas_cobertura_arr.length === 0) return alert("Seleccione al menos una Zona.");
+    if (!validarRUT(proveedorEditando.rut)) return alert("El RUT ingresado no es válido.");
+    if (proveedorEditando.zonas_cobertura_arr.length === 0) return alert("Seleccione al menos una Zona de Cobertura.");
 
     let zonasFinales = proveedorEditando.zonas_cobertura_arr;
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
@@ -263,93 +281,113 @@ export default function App() {
       zonas_cobertura: zonasFinales.join(', ')
     }).eq('id', proveedorEditando.id);
 
-    if (error) { console.error(error); alert("⚠️ Error al actualizar."); }
-    else { alert("✅ Proveedor actualizado."); setProveedorEditando(null); cargarProveedores(); }
+    if (error) {
+      console.error(error);
+      alert("⚠️ Error de seguridad al actualizar.");
+    } else {
+      alert("✅ Proveedor actualizado correctamente.");
+      setProveedorEditando(null);
+      cargarProveedores();
+    }
   };
 
-  // --- CARGA MASIVA ---
-  const descargarPlantillaCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "Razon Social,Nombre de Fantasia,RUT,Domicilio Comercial,Categoria,Subcategoria,Zonas de Cobertura (Separadas por guion -),Email Principal,Email Secundario,Nombre Contacto,Cargo,Telefono\n";
-    csvContent += "Empresa Ejemplo SpA,Ejemplo,12345678-9,Av. Siempre Viva 123,Seguridad,Barreras De Seguridad,Metropolitana de Santiago - Valparaíso,contacto@ejemplo.cl,,Juan Perez,Gerente General,+56912345678\n";
-    const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "Plantilla_Carga_Masiva_Sodimac.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
-
-  const manejarCargaMasiva = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const lines = event.target.result.split(/\r?\n/).filter(line => line.trim() !== "");
-      if (lines.length <= 1) return alert("El archivo está vacío.");
-      const proveedoresNuevos = [];
-      for (let i = 1; i < lines.length; i++) {
-        const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
-        if (currentLine.length < 12) continue;
-        const rutLimpio = formatearRUT(currentLine[2].replace(/[<>]/g, ''));
-        if (!rutLimpio) continue;
-
-        let zonasArr = currentLine[6].split('-').map(z => sanitizarYCapitalizar(z.trim())).filter(z => z !== '');
-        if (zonasArr.includes("Todo El Pais") || zonasArr.includes("Todo el País")) zonasArr = ["Todo el País"];
-
-        proveedoresNuevos.push({
-          razon_social: sanitizarYCapitalizar(currentLine[0]), nombre_fantasia: sanitizarYCapitalizar(currentLine[1]), rut: rutLimpio,
-          domicilio_comercial: sanitizarYCapitalizar(currentLine[3]), categoria: sanitizarYCapitalizar(currentLine[4]), subcategoria: sanitizarYCapitalizar(currentLine[5]),
-          zonas_cobertura: zonasArr.join(', '), email_principal: currentLine[7].replace(/[<>]/g, '').toLowerCase(), email_secundario: currentLine[8] ? currentLine[8].replace(/[<>]/g, '').toLowerCase() : '',
-          nombre_contacto: sanitizarYCapitalizar(currentLine[9]), cargo: sanitizarYCapitalizar(currentLine[10]), telefono: currentLine[11].replace(/[<>]/g, ''), estado: 'Pendiente', terminos_aceptados: true
-        });
-      }
-      if (proveedoresNuevos.length > 0) {
-        const { error } = await supabase.from('proveedores').insert(proveedoresNuevos);
-        if (error) alert("⚠️ Error de seguridad en base."); else { alert(`✅ ${proveedoresNuevos.length} proveedores agregados.`); cargarProveedores(); setTabAdmin('proveedores'); }
-      }
-    };
-    reader.readAsText(file, 'UTF-8'); e.target.value = null; 
-  };
-
-  // --- GESTIÓN DE ADMINISTRADORES ---
+  // --- GESTIÓN DE ADMINISTRADORES (CREAR / EDITAR / ELIMINAR) ---
   const crearAdministrador = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from('administradores').insert([{
-      usuario: nuevoAdmin.usuario.replace(/[<>]/g, '').trim(), password: nuevoAdmin.password.replace(/[<>]/g, ''), pin: nuevoAdmin.pin.replace(/[<>]/g, ''),
-      nombre_completo: sanitizarYCapitalizar(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`), correo: nuevoAdmin.correo.replace(/[<>]/g, '').toLowerCase().trim()
+      usuario: nuevoAdmin.usuario.replace(/[<>]/g, '').trim(), 
+      password: nuevoAdmin.password.replace(/[<>]/g, ''), 
+      pin: nuevoAdmin.pin.replace(/[<>]/g, ''),
+      nombre_completo: sanitizarYCapitalizar(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`), 
+      correo: nuevoAdmin.correo.replace(/[<>]/g, '').toLowerCase().trim()
     }]);
-    if (error) alert("⚠️ Error. Verifique que el correo/usuario no existan."); else { alert("✅ Usuario creado."); setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' }); cargarAdministradores(); }
+
+    if (error) alert("Error al crear usuario. Verifique que el correo o usuario no existan ya.");
+    else {
+      alert("✅ Usuario administrador creado exitosamente.");
+      setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' });
+      cargarAdministradores();
+    }
   };
 
   const eliminarAdmin = async (id, usuario) => {
-    if(usuarioActual.usuario !== 'mmaquieira') return alert("No tienes permisos.");
+    if(usuarioActual.usuario !== 'mmaquieira') return alert("No tienes permisos para esta acción.");
     if(usuario === 'mmaquieira') return alert("No puedes eliminar al usuario principal.");
-    if(!window.confirm(`¿Seguro de eliminar a ${usuario}?`)) return;
-    const { error } = await supabase.from('administradores').delete().eq('id', id); if (!error) cargarAdministradores();
+    if(!window.confirm(`¿Estás seguro de eliminar al usuario ${usuario}?`)) return;
+    
+    const { error } = await supabase.from('administradores').delete().eq('id', id);
+    if (!error) cargarAdministradores();
   };
 
   const [adminEditando, setAdminEditando] = useState(null);
+
   const guardarEdicionAdmin = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from('administradores').update({
-      nombre_completo: sanitizarYCapitalizar(adminEditando.nombre_completo), usuario: adminEditando.usuario.replace(/[<>]/g, '').trim(),
-      correo: adminEditando.correo.replace(/[<>]/g, '').toLowerCase().trim(), password: adminEditando.password.replace(/[<>]/g, ''), pin: adminEditando.pin.replace(/[<>]/g, '')
+      nombre_completo: sanitizarYCapitalizar(adminEditando.nombre_completo),
+      usuario: adminEditando.usuario.replace(/[<>]/g, '').trim(),
+      correo: adminEditando.correo.replace(/[<>]/g, '').toLowerCase().trim(),
+      password: adminEditando.password.replace(/[<>]/g, ''),
+      pin: adminEditando.pin.replace(/[<>]/g, '')
     }).eq('id', adminEditando.id);
-    if (error) alert("⚠️ Error al actualizar."); else { alert("✅ Usuario actualizado."); setAdminEditando(null); cargarAdministradores(); }
+
+    if (error) alert("Error al actualizar usuario.");
+    else {
+      alert("✅ Usuario actualizado correctamente.");
+      setAdminEditando(null);
+      cargarAdministradores();
+    }
   };
 
   // --- EXPORTACIÓN CSV ---
-  const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
+  const [filtroRut, setFiltroRut] = useState('');
+  const [filtroNombre, setFiltroNombre] = useState('');
+  const [filtroCategoria, setFiltroCategoria] = useState('');
+  const [filtroSubcategoria, setFiltroSubcategoria] = useState('');
+  const [seleccionados, setSeleccionados] = useState([]);
+
   const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
-  const proveedoresFiltrados = proveedoresAprobados.filter(p => p.rut.toLowerCase().includes(filtroRut.toLowerCase()) && p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) && (filtroCategoria === '' || p.categoria === filtroCategoria) && (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria));
-  const toggleSeleccion = (id) => setSeleccionados(seleccionados.includes(id) ? seleccionados.filter(i => i !== id) : [...seleccionados, id]);
-  const toggleSeleccionarTodo = (e) => setSeleccionados(e.target.checked ? proveedoresFiltrados.map(p => p.id) : []);
-  const exportarCSV = () => {
-    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor.");
-    let csvC = "data:text/csv;charset=utf-8,\uFEFFId,Nombre de la empresa*,Nombre del contacto,Correo electrónico*,Código del idioma,Código de Región\n";
-    proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).forEach(p => { csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,\n`; });
-    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  const proveedoresFiltrados = proveedoresAprobados.filter(p => {
+    return (
+      p.rut.toLowerCase().includes(filtroRut.toLowerCase()) &&
+      p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) &&
+      (filtroCategoria === '' || p.categoria === filtroCategoria) &&
+      (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria)
+    );
+  });
+
+  const toggleSeleccion = (id) => {
+    if (seleccionados.includes(id)) setSeleccionados(seleccionados.filter(item => item !== id));
+    else setSeleccionados([...seleccionados, id]);
+  };
+  const toggleSeleccionarTodo = (e) => {
+    if (e.target.checked) setSeleccionados(proveedoresFiltrados.map(p => p.id));
+    else setSeleccionados([]);
   };
 
-  // --- RECUPERAR PASS ---
-  const [resetStep, setResetStep] = useState(1); const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
+  const exportarCSV = () => {
+    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor para exportar.");
+    const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += "Id,Nombre de la empresa*,Nombre del contacto,Correo electrónico*,Código del idioma,Código de Región\n";
+    dataAExportar.forEach(p => {
+      const nombreEmpresa = p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ');
+      const nombreContacto = p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ');
+      const correo = p.email_principal.replace(/"/g, '').replace(/,/g, ' ');
+      csvContent += `,${nombreEmpresa},${nombreContacto},${correo},,\n`;
+    });
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "proveedores_aprobados.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // --- RECUPERACIÓN DE CONTRASEÑA ---
+  const [resetStep, setResetStep] = useState(1);
+  const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
   const buscarCorreo = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("Sistema bloqueado por seguridad.");
@@ -358,65 +396,52 @@ export default function App() {
       registrarAuditoria(resetData.correo, 'Fallido', 'Recuperación de Password');
       const fueBloqueado = registrarIntentoFallido();
       if (!fueBloqueado) alert("No se encontró administrador con este correo.");
-    } else { setResetData({ ...resetData, idUsuario: data.id }); setResetStep(2); setIntentosFallidos(0); }
+    } else { 
+      setResetData({ ...resetData, idUsuario: data.id }); 
+      setResetStep(2); 
+      setIntentosFallidos(0); 
+    }
   };
   const actualizarPassword = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from('administradores').update({ password: resetData.nuevaPass.replace(/[<>]/g, ''), pin: resetData.nuevoPin.replace(/[<>]/g, '') }).eq('id', resetData.idUsuario);
-    if (error) alert("⚠️ Error."); else { alert("✅ Credenciales actualizadas."); setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null }); }
+    if (error) alert("⚠️ Error al actualizar.");
+    else {
+      alert("✅ Credenciales actualizadas.");
+      setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
+    }
   };
 
-  // --- DASHBOARD Y GRÁFICOS ---
-  const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
-  const [filtroTendenciaCat, setFiltroTendenciaCat] = useState('');
-  const [filtroTendenciaSub, setFiltroTendenciaSub] = useState('');
-  const [filtroTendenciaTiempo, setFiltroTendenciaTiempo] = useState('30'); 
-
+  // --- DASHBOARD (MÉTRICAS Y GRÁFICOS) ---
   const statsDashboard = () => {
-    const total = proveedores.length; let fechasOrdenadas = []; const fechasRaw = {}; const renovaciones = [];
-    const hace90Dias = new Date(); hace90Dias.setDate(hace90Dias.getDate() - 90);
+    const total = proveedores.length;
+    const fechasRaw = {};
+    const renovaciones = [];
+    const hace90Dias = new Date();
+    hace90Dias.setDate(hace90Dias.getDate() - 90);
 
-    let fechaLimite = new Date();
-    if (filtroTendenciaTiempo !== 'all') {
-      const dias = parseInt(filtroTendenciaTiempo);
-      for (let i = dias - 1; i >= 0; i--) {
-        const d = new Date(); d.setDate(d.getDate() - i);
-        const ds = d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        fechasOrdenadas.push(ds); fechasRaw[ds] = 0; 
-      }
-      fechaLimite.setDate(fechaLimite.getDate() - dias);
-    }
-
-    const proveedoresTendencia = proveedores.filter(p => {
-      return (filtroTendenciaCat === '' || p.categoria === filtroTendenciaCat) && 
-             (filtroTendenciaSub === '' || p.subcategoria === filtroTendenciaSub) && 
-             (filtroTendenciaTiempo === 'all' || new Date(p.fecha_registro) >= fechaLimite);
-    });
-
-    proveedoresTendencia.forEach(p => {
+    proveedores.forEach(p => {
       const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      if (filtroTendenciaTiempo !== 'all') { if (fechasRaw[fechaCorta] !== undefined) fechasRaw[fechaCorta]++; } 
-      else { fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1; }
+      fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1;
+      if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p);
     });
 
-    if (filtroTendenciaTiempo === 'all') fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => new Date(`${a.split('-')[2]}-${a.split('-')[1]}-${a.split('-')[0]}`) - new Date(`${b.split('-')[2]}-${b.split('-')[1]}-${b.split('-')[0]}`));
-    proveedores.forEach(p => { if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p); });
-
+    const fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => {
+      const [da, ma, ya] = a.split('-');
+      const [db, mb, yb] = b.split('-');
+      return new Date(`${ya}-${ma}-${da}`) - new Date(`${yb}-${mb}-${db}`);
+    });
     return { total, fechasRaw, fechasOrdenadas, renovaciones };
   };
-  const stats = statsDashboard();
-
-  const chartWidth = 800; const chartHeight = 250; const padX = 40; const padY = 30;
-  const maxReg = Math.max(...stats.fechasOrdenadas.map(f => stats.fechasRaw[f]), 1);
-  const stepX = stats.fechasOrdenadas.length > 1 ? (chartWidth - 2 * padX) / (stats.fechasOrdenadas.length - 1) : 0;
-  const puntosLinea = stats.fechasOrdenadas.map((f, i) => `${padX + i * stepX},${chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY))}`).join(' ');
 
   const enviarRecordatorio = (prov) => {
     const destinatarios = prov.email_secundario ? `${prov.email_principal},${prov.email_secundario}` : prov.email_principal;
     const asunto = encodeURIComponent("Actualización de Datos - Portal Proveedores Sodimac");
-    const cuerpo = encodeURIComponent(`Estimado(a) proveedor ${prov.razon_social},\n\nPor favor actualizar sus datos de contacto.\n\nSodimac S.A.`);
+    const cuerpo = encodeURIComponent(`Estimado(a) proveedor ${prov.razon_social},\n\nPor favor actualizar sus datos de contacto en el portal.\n\nSaludos cordiales,\nSodimac S.A.`);
     window.location.href = `mailto:${destinatarios}?subject=${asunto}&body=${cuerpo}`;
   };
+
+  const stats = statsDashboard();
 
   const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
   const tortaData = {};
@@ -433,25 +458,46 @@ export default function App() {
   });
   const tortaGradient = proveedoresAprobados.length > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
-  const [filtroMapaCat, setFiltroMapaCat] = useState(''); const [filtroMapaSub, setFiltroMapaSub] = useState(''); const [filtroMapaZona, setFiltroMapaZona] = useState('');
+  const chartWidth = 800; const chartHeight = 250; const padX = 40; const padY = 30;
+  const maxReg = Math.max(...stats.fechasOrdenadas.map(f => stats.fechasRaw[f]), 1);
+  const stepX = stats.fechasOrdenadas.length > 1 ? (chartWidth - 2 * padX) / (stats.fechasOrdenadas.length - 1) : 0;
+  const puntosLinea = stats.fechasOrdenadas.map((f, i) => `${padX + i * stepX},${chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY))}`).join(' ');
+
+  const [filtroMapaCat, setFiltroMapaCat] = useState('');
+  const [filtroMapaSub, setFiltroMapaSub] = useState('');
+  const [filtroMapaZona, setFiltroMapaZona] = useState('');
+
   const statsMapa = () => {
-    const conteo = {}; zonasOpciones.filter(z => z !== "Todo el País").forEach(z => conteo[z] = 0);
+    const conteo = {};
+    zonasOpciones.filter(z => z !== "Todo el País").forEach(z => conteo[z] = 0);
+
     const filtradosMapa = proveedoresAprobados.filter(p => {
+      const catMatch = filtroMapaCat === '' || p.categoria === filtroMapaCat;
+      const subMatch = filtroMapaSub === '' || p.subcategoria === filtroMapaSub;
       let zonaMatch = true;
       if (filtroMapaZona !== '') {
-        const zProv = p.zonas_cobertura ? p.zonas_cobertura.split(',').map(z => z.trim()) : [];
-        zonaMatch = zProv.includes('Todo el País') || zProv.includes(filtroMapaZona);
+        if (!p.zonas_cobertura) zonaMatch = false;
+        else {
+          const zProv = p.zonas_cobertura.split(',').map(z => z.trim());
+          zonaMatch = zProv.includes('Todo el País') || zProv.includes(filtroMapaZona);
+        }
       }
-      return (filtroMapaCat === '' || p.categoria === filtroMapaCat) && (filtroMapaSub === '' || p.subcategoria === filtroMapaSub) && zonaMatch;
+      return catMatch && subMatch && zonaMatch;
     });
+
     filtradosMapa.forEach(p => {
       if (!p.zonas_cobertura) return;
-      const zP = p.zonas_cobertura.split(',').map(z => z.trim());
-      if (zP.includes('Todo el País')) Object.keys(conteo).forEach(z => conteo[z]++); else zP.forEach(z => { if (conteo[z] !== undefined) conteo[z]++; });
+      const zonasProv = p.zonas_cobertura.split(',').map(z => z.trim());
+      if (zonasProv.includes('Todo el País')) Object.keys(conteo).forEach(z => conteo[z]++);
+      else zonasProv.forEach(z => { if (conteo[z] !== undefined) conteo[z]++; });
     });
-    return { conteo, maxMapa: Math.max(...Object.values(conteo), 1), totalMapeados: filtradosMapa.length };
+
+    const maxMapa = Math.max(...Object.values(conteo), 1);
+    return { conteo, maxMapa, totalMapeados: filtradosMapa.length };
   };
+
   const mapStats = statsMapa();
+  // --- RENDERIZADO VISUAL ---
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
       
@@ -462,8 +508,8 @@ export default function App() {
           <span style={{ fontSize: '22px', fontWeight: '600', letterSpacing: '0.5px', zIndex: 10, marginLeft: '4cm' }}>Portal de Proveedores</span>
         </div>
         <div style={{ zIndex: 10, display: 'flex', alignItems: 'center', gap: '15px' }}>
-          {usuarioActual && <span style={{ fontSize: '14px', color: '#cce5ff', borderRight: '1px solid rgba(255,255,255,0.3)', paddingRight: '15px' }}>👤 {usuarioActual.usuario}</span>}
-          {['login', 'pre_login', 'recuperar'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro</button>}
+          {usuarioActual && <span style={{ fontSize: '13px', color: '#cce5ff', borderRight: '1px solid #cce5ff', paddingRight: '15px' }}>👤 {usuarioActual.usuario}</span>}
+          {['login', 'recuperar', 'pre_login'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro</button>}
           {vista === 'registro' && <button onClick={() => setVista('pre_login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Acceso Interno</button>}
           {vista === 'panel' && <button onClick={() => {setUsuarioActual(null); setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Cerrar Sesión</button>}
         </div>
@@ -551,34 +597,40 @@ export default function App() {
                 <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '160px', overflowY: 'auto', backgroundColor: '#fafafa', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   {Object.keys(categoriasSodimac).map(cat => (
                     <label key={cat} style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={formData.categoria.includes(cat)} onChange={(e) => manejarCambioCategoria(cat, e.target.checked)} style={{ width: '16px', height: '16px' }} /> {cat}
+                      <input type="checkbox" checked={formData.categoria.includes(cat)} onChange={(e) => manejarCambioCategoria(cat, e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} /> {cat}
                     </label>
                   ))}
                 </div>
               </div>
+
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Subcategoría(s) *</label>
                 <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto', backgroundColor: '#fafafa' }}>
-                  {formData.categoria.length === 0 ? <span style={{ fontSize: '13px', color: '#999' }}>Seleccione categoría...</span> : formData.categoria.map(cat => (
+                  {formData.categoria.length === 0 ? (
+                    <span style={{ fontSize: '13px', color: '#999' }}>Seleccione una categoría para ver las opciones...</span>
+                  ) : (
+                    formData.categoria.map(cat => (
                       <div key={cat} style={{ marginBottom: '15px' }}>
                         <strong style={{ fontSize: '13px', color: '#004A99', display: 'block', marginBottom: '8px', borderBottom: '1px solid #ddd', paddingBottom: '4px' }}>{cat}</strong>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                           {categoriasSodimac[cat]?.map(sub => (
                             <label key={sub} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                              <input type="checkbox" checked={formData.subcategoria.includes(sub)} onChange={(e) => manejarCambioSubcategoria(sub, e.target.checked)} style={{ width: '14px', height: '14px' }} /> {sub}
+                              <input type="checkbox" checked={formData.subcategoria.includes(sub)} onChange={(e) => manejarCambioSubcategoria(sub, e.target.checked)} style={{ width: '14px', height: '14px', cursor: 'pointer' }} /> {sub}
                             </label>
                           ))}
                         </div>
                       </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
+
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Zona(s) de Cobertura *</label>
                 <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '160px', overflowY: 'auto', backgroundColor: '#fafafa', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   {zonasOpciones.map(zona => (
                     <label key={zona} style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={formData.zonasCobertura.includes(zona)} onChange={(e) => manejarCambioZona(zona, e.target.checked)} style={{ width: '16px', height: '16px' }} /> {zona}
+                      <input type="checkbox" checked={formData.zonasCobertura.includes(zona)} onChange={(e) => manejarCambioZona(zona, e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} /> {zona}
                     </label>
                   ))}
                 </div>
@@ -647,6 +699,27 @@ export default function App() {
         </div>
       )}
 
+      {mostrarTerminos && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
+          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '800px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+            <button onClick={() => setMostrarTerminos(false)} style={{ position: 'absolute', top: '15px', right: '20px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#EE2D24', fontWeight: 'bold' }}>&times;</button>
+            <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Términos y condiciones</h2>
+            <div style={{ fontSize: '13px', color: '#444', lineHeight: '1.6' }}>
+              <p>Al completar y enviar el formulario de registro de proveedores, el postulante declara y acepta expresamente que la información proporcionada podrá ser utilizada por Sodimac S.A. para fines de evaluación, contacto, validación, precalificación y eventual incorporación como proveedor en procesos de negociación, cotización, homologación, compra o contratación.</p>
+              <strong>1. Información recopilada</strong><p>Sodimac podrá recopilar, almacenar, organizar, revisar y tratar información de carácter empresarial y de contacto.</p>
+              <strong>2. Finalidad del tratamiento</strong><p>Los datos serán tratados con la exclusiva finalidad de: gestionar el registro, evaluar idoneidad, contactar, administrar procesos y mantener historial.</p>
+              <strong>3. Aceptación expresa</strong><p>El proveedor declara que ha leído y comprendido estos términos, autoriza el tratamiento y entiende que no garantiza adjudicación.</p>
+              <strong>4. Declaración sobre la información entregada</strong><p>El proveedor declara que la información proporcionada es veraz, actualizada y suficiente.</p>
+              <strong>5. Conservación de la información</strong><p>Sodimac podrá conservar la información por el tiempo necesario.</p>
+              <strong>6. Encargados y acceso</strong><p>El acceso quedará restringido a personal autorizado.</p>
+              <strong>7. Modificaciones</strong><p>Sodimac podrá modificar estos términos publicando la versión actualizada.</p>
+              <strong>8. Aceptación final</strong><p>Al enviar este formulario, acepto estos Términos y autorizo a Sodimac S.A. a tratar mis datos.</p>
+            </div>
+            <button onClick={() => setMostrarTerminos(false)} style={{ width: '100%', padding: '12px', marginTop: '15px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>CERRAR</button>
+          </div>
+        </div>
+      )}
+
       {/* PANEL ADMINISTRATIVO PRINCIPAL */}
       {vista === 'panel' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
@@ -658,6 +731,7 @@ export default function App() {
             <h2 onClick={() => setTabAdmin('carga_masiva')} style={{ color: tabAdmin === 'carga_masiva' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Carga Masiva</h2>
             <h2 onClick={() => {setTabAdmin('exportar'); setSeleccionados([]);}} style={{ color: tabAdmin === 'exportar' ? '#28a745' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Exportar Aprobados</h2>
             <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Admin / Roles</h2>
+            {/* 🛡️ PESTAÑA DE AUDITORÍA EXCLUSIVA PARA MMAQUIEIRA */}
             {usuarioActual?.usuario === 'mmaquieira' && (
               <h2 onClick={() => { setTabAdmin('auditoria'); cargarLogsAuditoria(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>🛡️ Auditoría</h2>
             )}
@@ -776,8 +850,8 @@ export default function App() {
                         const bgColor = cantidad > 0 ? `rgba(238, 45, 36, ${0.15 + (intensidad * 0.85)})` : '#ffffff';
                         const txtColor = cantidad > 0 ? (intensidad > 0.5 ? '#ffffff' : '#333333') : '#999999';
                         return (
-                          <div key={reg} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '12px', padding: '8px 10px', backgroundColor: bgColor, color: txtColor, borderRadius: '4px', border: '1px solid #eee' }}>
-                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>{reg}</span>
+                          <div key={reg} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '12px', padding: '8px 10px', backgroundColor: bgColor, color: txtColor, borderRadius: '4px', border: '1px solid #eee', transition: 'all 0.3s' }}>
+                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }} title={reg}>{reg}</span>
                             <span style={{ fontWeight: 'bold' }}>{cantidad}</span>
                           </div>
                         );
@@ -939,31 +1013,37 @@ export default function App() {
             </div>
           )}
 
-          {/* PESTAÑA AUDITORÍA */}
+          {/* 🛡️ PESTAÑA DE AUDITORÍA SOLO PARA MMAQUIEIRA */}
           {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>
-                <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Auditoría de Accesos</h3>
-                <button onClick={cargarLogsAuditoria} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Actualizar</button>
+                <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Registro de Auditoría de Accesos</h3>
+                <button onClick={cargarLogsAuditoria} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Actualizar Registros</button>
               </div>
+              <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>Historial de intentos de conexión a la plataforma administrativa. Muestra accesos exitosos y bloqueos de seguridad de cualquier usuario.</p>
+              
               <div style={{ overflowX: 'auto', border: '1px solid #ccc', borderRadius: '8px', maxHeight: '500px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Fecha y Hora</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Tipo</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Usuario</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Tipo de Evento</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Usuario / Input</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Estado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {logsAuditoria.length === 0 ? <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center' }}>Sin registros.</td></tr> : 
+                    {logsAuditoria.length === 0 ? <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay registros de auditoría aún.</td></tr> : 
                     logsAuditoria.map(log => (
                       <tr key={log.id} style={{ borderBottom: '1px solid #eee', backgroundColor: log.estado === 'Fallido' ? '#fff5f5' : 'white' }}>
                         <td style={{ padding: '12px' }}>{new Date(log.created_at).toLocaleString('es-CL')}</td>
                         <td style={{ padding: '12px', fontWeight: 'bold', color: '#004A99' }}>{log.tipo}</td>
                         <td style={{ padding: '12px', fontFamily: 'monospace' }}>{log.usuario_intentado}</td>
-                        <td style={{ padding: '12px' }}><span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', backgroundColor: log.estado === 'Éxito' ? '#d4edda' : '#f8d7da', color: log.estado === 'Éxito' ? '#155724' : '#721c24' }}>{log.estado}</span></td>
+                        <td style={{ padding: '12px' }}>
+                          <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', backgroundColor: log.estado === 'Éxito' ? '#d4edda' : '#f8d7da', color: log.estado === 'Éxito' ? '#155724' : '#721c24' }}>
+                            {log.estado}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
