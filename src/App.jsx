@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
-import { categoriasSodimac, formatearRUT, validarRUT } from './datosSodimac';
+import { categoriasSodimac as catSodimacOriginal, formatearRUT, validarRUT } from './datosSodimac';
+
+// --- INYECCIÓN DINÁMICA DE NUEVAS SUBCATEGORÍAS ---
+const categoriasSodimac = JSON.parse(JSON.stringify(catSodimacOriginal));
+if (categoriasSodimac['Equipamiento'] && !categoriasSodimac['Equipamiento'].includes('Mobiliario de Oficina')) {
+  categoriasSodimac['Equipamiento'].push('Mobiliario de Oficina');
+} else if (!categoriasSodimac['Equipamiento']) {
+  categoriasSodimac['Equipamiento'] = ['Mobiliario de Oficina'];
+}
+if (categoriasSodimac['Materiales'] && !categoriasSodimac['Materiales'].includes('Gráfica Publicitaria')) {
+  categoriasSodimac['Materiales'].push('Gráfica Publicitaria');
+} else if (!categoriasSodimac['Materiales']) {
+  categoriasSodimac['Materiales'] = ['Gráfica Publicitaria'];
+}
 
 // --- LISTA DE ZONAS Y MACROZONAS ---
 const zonasOpciones = [
@@ -17,7 +30,6 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
-// SANITIZACIÓN Y CAPITALIZACIÓN (Ej: mAtIaS -> Matias)
 const sanitizarYCapitalizar = (texto) => {
   if (!texto) return '';
   const textoSeguro = texto.replace(/[<>]/g, '').toLowerCase().trim();
@@ -32,7 +44,6 @@ export default function App() {
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState(null);
 
-  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA CON MEMORIA (24 HORAS) ---
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
 
@@ -71,7 +82,6 @@ export default function App() {
     return false; 
   };
 
-  // --- REGISTRO DE AUDITORÍA SILENCIOSO ---
   const registrarAuditoria = async (usuario, estado, tipo) => {
     try {
       const { error } = await supabase.from('auditoria_logins').insert([{
@@ -91,7 +101,6 @@ export default function App() {
     }
   }, [tabAdmin, usuarioActual]);
 
-  // --- LÓGICA DEL FORMULARIO PÚBLICO ---
   const [formData, setFormData] = useState({
     razonSocial: '', nombreFantasia: '', rut: '', domicilio: '',
     categoria: [], subcategoria: [], emailPrincipal: '', emailSecundario: '',
@@ -184,7 +193,6 @@ export default function App() {
     }
   };
 
-  // --- LÓGICA DE ADMINISTRADOR Y LOGIN ---
   const [credenciales, setCredenciales] = useState({ usuario: '', password: '', pin: '' });
   const [proveedores, setProveedores] = useState([]);
   const [administradoresDb, setAdministradoresDb] = useState([]);
@@ -232,7 +240,6 @@ export default function App() {
     if (!error && data) setLogsAuditoria(data);
   };
 
-  // --- GESTIÓN DE PROVEEDORES (NUEVO: REVOCAR A PENDIENTE) ---
   const aprobarProveedor = async (id) => {
     if(!window.confirm("¿Aprobar este proveedor?")) return;
     const { error } = await supabase.from('proveedores').update({ estado: 'Aprobado', aprobado_por: usuarioActual.usuario }).eq('id', id);
@@ -361,7 +368,6 @@ export default function App() {
     proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).forEach(p => { csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,\n`; });
     const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
-  // --- RECUPERAR PASS ---
   const [resetStep, setResetStep] = useState(1); const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
   const buscarCorreo = async (e) => {
     e.preventDefault();
@@ -379,7 +385,11 @@ export default function App() {
     if (error) alert("⚠️ Error."); else { alert("✅ Actualizado."); setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null }); }
   };
 
+  // --- FILTROS DE DASHBOARD ---
   const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
+  const [filtroTortaCat, setFiltroTortaCat] = useState('');
+  const [filtroTortaSub, setFiltroTortaSub] = useState([]);
+  
   const [filtroTendenciaCat, setFiltroTendenciaCat] = useState('');
   const [filtroTendenciaSub, setFiltroTendenciaSub] = useState('');
   const [filtroTendenciaTiempo, setFiltroTendenciaTiempo] = useState('30'); 
@@ -430,20 +440,28 @@ export default function App() {
     window.location.href = `mailto:${destinatarios}?subject=${asunto}&body=${cuerpo}`;
   };
 
+  // --- CÁLCULO TORTA CON FILTROS MÚLTIPLES ---
   const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
+  
+  const proveedoresParaTorta = proveedoresAprobados.filter(p => {
+    const catMatch = filtroTortaCat === '' || p.categoria === filtroTortaCat;
+    const subMatch = filtroTortaSub.length === 0 || filtroTortaSub.includes(p.subcategoria);
+    return catMatch && subMatch;
+  });
+
   const tortaData = {};
-  proveedoresAprobados.forEach(p => {
+  proveedoresParaTorta.forEach(p => {
     const clave = tipoGraficoTorta === 'categoria' ? p.categoria : p.subcategoria;
     tortaData[clave] = (tortaData[clave] || 0) + 1;
   });
   let cumulativePercent = 0;
   const pieSlices = Object.entries(tortaData).map(([key, val], i) => {
-    const percent = proveedoresAprobados.length > 0 ? (val / proveedoresAprobados.length) * 100 : 0;
+    const percent = proveedoresParaTorta.length > 0 ? (val / proveedoresParaTorta.length) * 100 : 0;
     const slice = `${coloresGrafico[i % coloresGrafico.length]} ${cumulativePercent}% ${cumulativePercent + percent}%`;
     cumulativePercent += percent;
     return { key, val, percent, color: coloresGrafico[i % coloresGrafico.length], slice };
   });
-  const tortaGradient = proveedoresAprobados.length > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
+  const tortaGradient = proveedoresParaTorta.length > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
   const [filtroMapaCat, setFiltroMapaCat] = useState(''); const [filtroMapaSub, setFiltroMapaSub] = useState(''); const [filtroMapaZona, setFiltroMapaZona] = useState('');
   const statsMapa = () => {
@@ -724,14 +742,36 @@ export default function App() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '30px', marginBottom: '30px' }}>
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                     <h3 style={{ margin: 0, color: '#333', fontSize: '16px' }}>Distribución Aprobados</h3>
                     <select style={{ padding: '5px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setTipoGraficoTorta(e.target.value)} value={tipoGraficoTorta}>
-                      <option value="categoria">Por Categoría</option>
-                      <option value="subcategoria">Por Subcategoría</option>
+                      <option value="categoria">Ver por Categoría</option>
+                      <option value="subcategoria">Ver por Subcategoría</option>
                     </select>
                   </div>
-                  {proveedoresAprobados.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados aún</p> : (
+
+                  {/* NUEVO FILTRO MÚLTIPLE PARA TORTA */}
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '20px', backgroundColor: '#f9f9f9', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}>
+                    <select style={{ padding: '6px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', minWidth: '130px' }} onChange={e => {setFiltroTortaCat(e.target.value); setFiltroTortaSub([]);}} value={filtroTortaCat}>
+                      <option value="">Todas las Categorías</option>
+                      {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                    
+                    <div style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '55px', overflowY: 'auto', backgroundColor: '#fff', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                      {filtroTortaCat === '' ? <span style={{ fontSize: '11px', color: '#999', padding: '2px' }}>Seleccione una categoría para filtrar subcategorías...</span> : 
+                        categoriasSodimac[filtroTortaCat]?.map(sub => (
+                          <label key={sub} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', backgroundColor: '#f0f0f0', padding: '2px 6px', border: '1px solid #ccc', borderRadius: '12px' }}>
+                            <input type="checkbox" checked={filtroTortaSub.includes(sub)} onChange={(e) => {
+                              if (e.target.checked) setFiltroTortaSub([...filtroTortaSub, sub]);
+                              else setFiltroTortaSub(filtroTortaSub.filter(s => s !== sub));
+                            }} style={{ margin: 0, cursor: 'pointer' }} /> {sub}
+                          </label>
+                        ))
+                      }
+                    </div>
+                  </div>
+
+                  {proveedoresParaTorta.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados con estos filtros</p> : (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: tortaGradient, marginBottom: '20px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}></div>
                       <div style={{ width: '100%', maxHeight: '150px', overflowY: 'auto' }}>
@@ -1011,7 +1051,9 @@ export default function App() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', width: '40px', textAlign: 'center' }}><input type="checkbox" onChange={toggleSeleccionarTodo} checked={seleccionados.length === proveedoresFiltrados.length && proveedoresFiltrados.length > 0} /></th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', width: '40px', textAlign: 'center' }}>
+                        <input type="checkbox" onChange={toggleSeleccionarTodo} checked={seleccionados.length === proveedoresFiltrados.length && proveedoresFiltrados.length > 0} />
+                      </th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>RUT</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Nombre Fantasía (Empresa)</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría / Sub</th>
@@ -1023,7 +1065,9 @@ export default function App() {
                     {proveedoresFiltrados.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay resultados con estos filtros.</td></tr> : 
                     proveedoresFiltrados.map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee', backgroundColor: seleccionados.includes(prov.id) ? '#f0f8ff' : 'white' }}>
-                        <td style={{ padding: '12px', textAlign: 'center' }}><input type="checkbox" checked={seleccionados.includes(prov.id)} onChange={() => toggleSeleccion(prov.id)} /></td>
+                        <td style={{ padding: '12px', textAlign: 'center' }}>
+                          <input type="checkbox" checked={seleccionados.includes(prov.id)} onChange={() => toggleSeleccion(prov.id)} />
+                        </td>
                         <td style={{ padding: '12px' }}>{prov.rut}</td>
                         <td style={{ padding: '12px' }}><strong>{prov.nombre_fantasia}</strong></td>
                         <td style={{ padding: '12px' }}>{prov.categoria} <br/><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
@@ -1040,7 +1084,7 @@ export default function App() {
           {tabAdmin === 'crear_admin' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '40px' }}>
               <div>
-                <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '18px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>Nuevo Administrador</h3>
+                <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '18px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>Registrar Nuevo Administrador</h3>
                 <form onSubmit={crearAdministrador} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                   <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nombre</label><input required value={nuevoAdmin.nombre} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, nombre: e.target.value})} /></div>
                   <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Apellido</label><input required value={nuevoAdmin.apellido} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, apellido: e.target.value})} /></div>
@@ -1051,11 +1095,13 @@ export default function App() {
                   <button type="submit" disabled={bloqueoSeguridad} style={{ gridColumn: '1 / -1', padding: '12px', marginTop: '10px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>CREAR USUARIO</button>
                 </form>
               </div>
+
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #004A99', paddingBottom: '10px', marginBottom: '20px' }}>
                   <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Gestión de Usuarios</h3>
                   {usuarioActual?.usuario === 'mmaquieira' && <span style={{ fontSize: '11px', backgroundColor: '#EE2D24', color: 'white', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold' }}>👑 Modo SuperAdmin Activo</span>}
                 </div>
+                
                 <div style={{ overflowX: 'auto', border: '1px solid #eee', borderRadius: '8px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
@@ -1078,7 +1124,9 @@ export default function App() {
                           {usuarioActual?.usuario === 'mmaquieira' && (
                             <td style={{ padding: '12px', textAlign: 'right' }}>
                               <button onClick={() => setAdminEditando(admin)} style={{ padding: '4px 8px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', marginRight: '5px' }}>Editar</button>
-                              {admin.usuario !== 'mmaquieira' && <button onClick={() => eliminarAdmin(admin.id, admin.usuario)} style={{ padding: '4px 8px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>}
+                              {admin.usuario !== 'mmaquieira' && (
+                                <button onClick={() => eliminarAdmin(admin.id, admin.usuario)} style={{ padding: '4px 8px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>
+                              )}
                             </td>
                           )}
                         </tr>
