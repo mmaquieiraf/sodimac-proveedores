@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { categoriasSodimac, formatearRUT, validarRUT } from './datosSodimac';
 
+// --- LISTA DE ZONAS Y MACROZONAS ---
 const zonasOpciones = [
   "Todo el País", "Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", 
   "Coquimbo", "Valparaíso", "Metropolitana de Santiago", "O'Higgins", "Maule", 
@@ -16,6 +17,7 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
+// SANITIZACIÓN Y CAPITALIZACIÓN (Ej: mAtIaS -> Matias)
 const sanitizarYCapitalizar = (texto) => {
   if (!texto) return '';
   const textoSeguro = texto.replace(/[<>]/g, '').toLowerCase().trim();
@@ -30,7 +32,7 @@ export default function App() {
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState(null);
 
-  // --- BLOQUEO PERSISTENTE (24 HORAS) ---
+  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA CON MEMORIA (24 HORAS) ---
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
 
@@ -69,7 +71,7 @@ export default function App() {
     return false; 
   };
 
-  // --- REGISTRO DE AUDITORÍA ASEGURADO ---
+  // --- REGISTRO DE AUDITORÍA SILENCIOSO ---
   const registrarAuditoria = async (usuario, estado, tipo) => {
     try {
       const { error } = await supabase.from('auditoria_logins').insert([{
@@ -83,13 +85,13 @@ export default function App() {
     }
   };
 
-  // Carga automática de auditoría al abrir la pestaña
   useEffect(() => {
     if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira') {
       cargarLogsAuditoria();
     }
   }, [tabAdmin, usuarioActual]);
 
+  // --- LÓGICA DEL FORMULARIO PÚBLICO ---
   const [formData, setFormData] = useState({
     razonSocial: '', nombreFantasia: '', rut: '', domicilio: '',
     categoria: [], subcategoria: [], emailPrincipal: '', emailSecundario: '',
@@ -131,7 +133,7 @@ export default function App() {
 
   const manejarEnvioRegistro = async (e) => {
     e.preventDefault();
-    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido.");
+    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido. Por favor revise.");
     if (formData.categoria.length === 0) return alert("Debe seleccionar al menos una Categoría.");
     if (formData.subcategoria.length === 0) return alert("Debe seleccionar al menos una Subcategoría.");
     if (formData.zonasCobertura.length === 0) return alert("Debe seleccionar al menos una Zona de Cobertura.");
@@ -182,6 +184,7 @@ export default function App() {
     }
   };
 
+  // --- LÓGICA DE ADMINISTRADOR Y LOGIN ---
   const [credenciales, setCredenciales] = useState({ usuario: '', password: '', pin: '' });
   const [proveedores, setProveedores] = useState([]);
   const [administradoresDb, setAdministradoresDb] = useState([]);
@@ -190,7 +193,7 @@ export default function App() {
 
   const manejarLogin = async (e) => {
     e.preventDefault();
-    if (bloqueoSeguridad) return alert("❌ Sistema bloqueado por 24 horas.");
+    if (bloqueoSeguridad) return alert("❌ Sistema bloqueado temporalmente por 24 horas.");
 
     const intentoUsuario = credenciales.usuario.replace(/[<>]/g, '').trim();
     const { data, error } = await supabase.from('administradores').select('*')
@@ -229,9 +232,16 @@ export default function App() {
     if (!error && data) setLogsAuditoria(data);
   };
 
+  // --- GESTIÓN DE PROVEEDORES (NUEVO: REVOCAR A PENDIENTE) ---
   const aprobarProveedor = async (id) => {
     if(!window.confirm("¿Aprobar este proveedor?")) return;
     const { error } = await supabase.from('proveedores').update({ estado: 'Aprobado', aprobado_por: usuarioActual.usuario }).eq('id', id);
+    if (!error) cargarProveedores();
+  };
+
+  const revocarProveedor = async (id) => {
+    if(!window.confirm("¿Cambiar el estado de este proveedor a Pendiente?")) return;
+    const { error } = await supabase.from('proveedores').update({ estado: 'Pendiente', aprobado_por: null }).eq('id', id);
     if (!error) cargarProveedores();
   };
 
@@ -288,7 +298,7 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = async (event) => {
       const lines = event.target.result.split(/\r?\n/).filter(line => line.trim() !== "");
-      if (lines.length <= 1) return alert("El archivo está vacío o solo contiene encabezados.");
+      if (lines.length <= 1) return alert("El archivo está vacío.");
       const proveedoresNuevos = [];
       for (let i = 1; i < lines.length; i++) {
         const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
@@ -308,7 +318,7 @@ export default function App() {
       }
       if (proveedoresNuevos.length > 0) {
         const { error } = await supabase.from('proveedores').insert(proveedoresNuevos);
-        if (error) alert("⚠️ Error de seguridad en base."); else { alert(`✅ ${proveedoresNuevos.length} proveedores agregados.`); cargarProveedores(); setTabAdmin('proveedores'); }
+        if (error) alert("⚠️ Error de seguridad en base."); else { alert(`✅ ${proveedoresNuevos.length} proveedores agregados.`); cargarProveedores(); setTabAdmin('pendientes'); }
       }
     };
     reader.readAsText(file, 'UTF-8'); e.target.value = null; 
@@ -320,7 +330,7 @@ export default function App() {
       usuario: nuevoAdmin.usuario.replace(/[<>]/g, '').trim(), password: nuevoAdmin.password.replace(/[<>]/g, ''), pin: nuevoAdmin.pin.replace(/[<>]/g, ''),
       nombre_completo: sanitizarYCapitalizar(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`), correo: nuevoAdmin.correo.replace(/[<>]/g, '').toLowerCase().trim()
     }]);
-    if (error) alert("⚠️ Error. Verifique que el correo o usuario no existan ya."); else { alert("✅ Usuario creado."); setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' }); cargarAdministradores(); }
+    if (error) alert("⚠️ Error. Verifique que el correo/usuario no existan."); else { alert("✅ Usuario creado."); setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' }); cargarAdministradores(); }
   };
 
   const eliminarAdmin = async (id, usuario) => {
@@ -351,7 +361,7 @@ export default function App() {
     proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).forEach(p => { csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,\n`; });
     const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
-
+  // --- RECUPERAR PASS ---
   const [resetStep, setResetStep] = useState(1); const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
   const buscarCorreo = async (e) => {
     e.preventDefault();
@@ -454,6 +464,7 @@ export default function App() {
     return { conteo, maxMapa: Math.max(...Object.values(conteo), 1), totalMapeados: filtradosMapa.length };
   };
   const mapStats = statsMapa();
+
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
       
@@ -680,13 +691,15 @@ export default function App() {
       {vista === 'panel' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           
-          {/* BARRA DE NAVEGACIÓN DEL PANEL */}
+          {/* BARRA DE NAVEGACIÓN DEL PANEL CON LAS PESTAÑAS SEPARADAS */}
           <div style={{ display: 'flex', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px', gap: '20px', overflowX: 'auto' }}>
             <h2 onClick={() => setTabAdmin('dashboard')} style={{ color: tabAdmin === 'dashboard' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Dashboard</h2>
-            <h2 onClick={() => setTabAdmin('proveedores')} style={{ color: tabAdmin === 'proveedores' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Pendientes / Gestión</h2>
+            <h2 onClick={() => setTabAdmin('pendientes')} style={{ color: tabAdmin === 'pendientes' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Pendientes</h2>
+            <h2 onClick={() => setTabAdmin('gestion')} style={{ color: tabAdmin === 'gestion' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Gestión</h2>
             <h2 onClick={() => setTabAdmin('carga_masiva')} style={{ color: tabAdmin === 'carga_masiva' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Carga Masiva</h2>
             <h2 onClick={() => {setTabAdmin('exportar'); setSeleccionados([]);}} style={{ color: tabAdmin === 'exportar' ? '#28a745' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Exportar Aprobados</h2>
             <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Admin / Roles</h2>
+            {/* 🛡️ PESTAÑA DE AUDITORÍA EXCLUSIVA PARA MMAQUIEIRA */}
             {usuarioActual?.usuario === 'mmaquieira' && (
               <h2 onClick={() => { setTabAdmin('auditoria'); cargarLogsAuditoria(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>🛡️ Auditoría</h2>
             )}
@@ -832,59 +845,117 @@ export default function App() {
             </div>
           )}
 
-          {tabAdmin === 'proveedores' && (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Razón Social / RUT</th>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Cobertura</th>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto</th>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Estado / Aprobación</th>
-                    <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {proveedores.map(prov => (
-                    <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: '12px' }}>
-                        <strong>{prov.razon_social}</strong><br />
-                        <span style={{ color: '#666' }}>{prov.rut}</span>
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        {prov.categoria}<br />
-                        <span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span>
-                      </td>
-                      <td style={{ padding: '12px', maxWidth: '150px' }}>
-                        <span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>
-                          {prov.zonas_cobertura || 'No especificada'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        {prov.nombre_contacto}<br />
-                        <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a><br />
-                        <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span>
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', backgroundColor: prov.estado === 'Aprobado' ? '#d4edda' : '#fff3cd', color: prov.estado === 'Aprobado' ? '#155724' : '#856404', display: 'inline-block', marginBottom: '5px' }}>
-                          {prov.estado}
-                        </span>
-                        {prov.estado === 'Aprobado' && prov.aprobado_por && (
-                          <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold', marginTop: '2px' }}>
-                            ✓ Por: {prov.aprobado_por}
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                        {prov.estado === 'Pendiente' && <button onClick={() => aprobarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>}
-                        <button onClick={() => abrirEditorProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Editar</button>
-                        <button onClick={() => rechazarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Eliminar</button>
-                      </td>
+          {/* NUEVO MÓDULO: PENDIENTES */}
+          {tabAdmin === 'pendientes' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Proveedores Pendientes</h3>
+                <button onClick={cargarProveedores} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Actualizar Registros</button>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Razón Social / RUT</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Cobertura</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Acciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {proveedores.filter(p => p.estado === 'Pendiente').length === 0 ? <tr><td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay proveedores pendientes.</td></tr> : 
+                    proveedores.filter(p => p.estado === 'Pendiente').map(prov => (
+                      <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '12px' }}>
+                          <strong>{prov.razon_social}</strong><br />
+                          <span style={{ color: '#666' }}>{prov.rut}</span>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          {prov.categoria}<br />
+                          <span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span>
+                        </td>
+                        <td style={{ padding: '12px', maxWidth: '150px' }}>
+                          <span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>
+                            {prov.zonas_cobertura || 'No especificada'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          {prov.nombre_contacto}<br />
+                          <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a><br />
+                          <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span>
+                        </td>
+                        <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <button onClick={() => aprobarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>
+                          <button onClick={() => abrirEditorProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Editar</button>
+                          <button onClick={() => rechazarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Eliminar</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* NUEVO MÓDULO: GESTIÓN (APROBADOS) */}
+          {tabAdmin === 'gestion' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Gestión de Proveedores Aprobados</h3>
+                <button onClick={cargarProveedores} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Actualizar Registros</button>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Razón Social / RUT</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Cobertura</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Auditoría</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {proveedores.filter(p => p.estado === 'Aprobado').length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay proveedores aprobados.</td></tr> : 
+                    proveedores.filter(p => p.estado === 'Aprobado').map(prov => (
+                      <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '12px' }}>
+                          <strong>{prov.razon_social}</strong><br />
+                          <span style={{ color: '#666' }}>{prov.rut}</span>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          {prov.categoria}<br />
+                          <span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span>
+                        </td>
+                        <td style={{ padding: '12px', maxWidth: '150px' }}>
+                          <span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>
+                            {prov.zonas_cobertura || 'No especificada'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          {prov.nombre_contacto}<br />
+                          <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a><br />
+                          <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          {prov.aprobado_por ? (
+                            <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold' }}>✓ Por: {prov.aprobado_por}</div>
+                          ) : (
+                            <span style={{ color: '#999', fontSize: '11px' }}>No registrado</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <button onClick={() => abrirEditorProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Editar</button>
+                          <button onClick={() => revocarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#ffc107', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>A Pendiente</button>
+                          <button onClick={() => rechazarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Eliminar</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -940,9 +1011,7 @@ export default function App() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', width: '40px', textAlign: 'center' }}>
-                        <input type="checkbox" onChange={toggleSeleccionarTodo} checked={seleccionados.length === proveedoresFiltrados.length && proveedoresFiltrados.length > 0} />
-                      </th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', width: '40px', textAlign: 'center' }}><input type="checkbox" onChange={toggleSeleccionarTodo} checked={seleccionados.length === proveedoresFiltrados.length && proveedoresFiltrados.length > 0} /></th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>RUT</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Nombre Fantasía (Empresa)</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría / Sub</th>
@@ -954,9 +1023,7 @@ export default function App() {
                     {proveedoresFiltrados.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay resultados con estos filtros.</td></tr> : 
                     proveedoresFiltrados.map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee', backgroundColor: seleccionados.includes(prov.id) ? '#f0f8ff' : 'white' }}>
-                        <td style={{ padding: '12px', textAlign: 'center' }}>
-                          <input type="checkbox" checked={seleccionados.includes(prov.id)} onChange={() => toggleSeleccion(prov.id)} />
-                        </td>
+                        <td style={{ padding: '12px', textAlign: 'center' }}><input type="checkbox" checked={seleccionados.includes(prov.id)} onChange={() => toggleSeleccion(prov.id)} /></td>
                         <td style={{ padding: '12px' }}>{prov.rut}</td>
                         <td style={{ padding: '12px' }}><strong>{prov.nombre_fantasia}</strong></td>
                         <td style={{ padding: '12px' }}>{prov.categoria} <br/><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
@@ -973,7 +1040,7 @@ export default function App() {
           {tabAdmin === 'crear_admin' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '40px' }}>
               <div>
-                <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '18px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>Registrar Nuevo Administrador</h3>
+                <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '18px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>Nuevo Administrador</h3>
                 <form onSubmit={crearAdministrador} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                   <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nombre</label><input required value={nuevoAdmin.nombre} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, nombre: e.target.value})} /></div>
                   <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Apellido</label><input required value={nuevoAdmin.apellido} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, apellido: e.target.value})} /></div>
@@ -989,7 +1056,6 @@ export default function App() {
                   <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Gestión de Usuarios</h3>
                   {usuarioActual?.usuario === 'mmaquieira' && <span style={{ fontSize: '11px', backgroundColor: '#EE2D24', color: 'white', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold' }}>👑 Modo SuperAdmin Activo</span>}
                 </div>
-                
                 <div style={{ overflowX: 'auto', border: '1px solid #eee', borderRadius: '8px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
@@ -1012,9 +1078,7 @@ export default function App() {
                           {usuarioActual?.usuario === 'mmaquieira' && (
                             <td style={{ padding: '12px', textAlign: 'right' }}>
                               <button onClick={() => setAdminEditando(admin)} style={{ padding: '4px 8px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', marginRight: '5px' }}>Editar</button>
-                              {admin.usuario !== 'mmaquieira' && (
-                                <button onClick={() => eliminarAdmin(admin.id, admin.usuario)} style={{ padding: '4px 8px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>
-                              )}
+                              {admin.usuario !== 'mmaquieira' && <button onClick={() => eliminarAdmin(admin.id, admin.usuario)} style={{ padding: '4px 8px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>}
                             </td>
                           )}
                         </tr>
