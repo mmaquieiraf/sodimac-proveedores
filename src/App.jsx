@@ -2,20 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { categoriasSodimac as catSodimacOriginal, formatearRUT, validarRUT } from './datosSodimac';
 
-// --- INYECCIÓN DINÁMICA DE NUEVAS SUBCATEGORÍAS ---
-const categoriasSodimac = JSON.parse(JSON.stringify(catSodimacOriginal));
-if (categoriasSodimac['Equipamiento'] && !categoriasSodimac['Equipamiento'].includes('Mobiliario de Oficina')) {
-  categoriasSodimac['Equipamiento'].push('Mobiliario de Oficina');
-} else if (!categoriasSodimac['Equipamiento']) {
-  categoriasSodimac['Equipamiento'] = ['Mobiliario de Oficina'];
-}
-if (categoriasSodimac['Materiales'] && !categoriasSodimac['Materiales'].includes('Gráfica Publicitaria')) {
-  categoriasSodimac['Materiales'].push('Gráfica Publicitaria');
-} else if (!categoriasSodimac['Materiales']) {
-  categoriasSodimac['Materiales'] = ['Gráfica Publicitaria'];
-}
+// Consolidación de categorías iniciales con las nuevas incluidas
+const categoriasDefault = JSON.parse(JSON.stringify(catSodimacOriginal));
+const nuevasSubcategorias = {
+  'Equipamiento': ['Mobiliario de Oficina', 'Maquinaria'],
+  'Materiales': ['Gráfica Publicitaria', 'Repuestos de maquinaria', 'Uniformes corporativos', 'Elementos de protección personal', 'Sellos de seguridad', 'Agua embotellada'],
+  'Servicios': ['Arriendo e insumos cafeteria', 'Mantención de maquinaria', 'Control de plagas', 'Higiene', 'Maquina dispensadoras de alimentos', 'Gestión de residuos', 'Arriendo de dispensadores de agua', 'Higienicos (bactereostatico, aromatización, riles, contenedores femeninos)', 'Acustico, música']
+};
+Object.keys(nuevasSubcategorias).forEach(cat => {
+  if (!categoriasDefault[cat]) categoriasDefault[cat] = [];
+  nuevasSubcategorias[cat].forEach(sub => { if (!categoriasDefault[cat].includes(sub)) categoriasDefault[cat].push(sub); });
+});
 
-// --- LISTA DE ZONAS Y MACROZONAS ---
 const zonasOpciones = [
   "Todo el País", "Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", 
   "Coquimbo", "Valparaíso", "Metropolitana de Santiago", "O'Higgins", "Maule", 
@@ -33,9 +31,7 @@ const macroZonas = {
 const sanitizarYCapitalizar = (texto) => {
   if (!texto) return '';
   const textoSeguro = texto.replace(/[<>]/g, '').toLowerCase().trim();
-  return textoSeguro.split(/\s+/).map(palabra => 
-    palabra.charAt(0).toUpperCase() + palabra.slice(1)
-  ).join(' ');
+  return textoSeguro.split(/\s+/).map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1)).join(' ');
 };
 
 export default function App() {
@@ -44,6 +40,34 @@ export default function App() {
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState(null);
 
+  // --- CATEGORÍAS DINÁMICAS (TIEMPO REAL) ---
+  const [categoriasMenu, setCategoriasMenu] = useState(categoriasDefault);
+  
+  const cargarCategoriasDB = async () => {
+    try {
+      const { data, error } = await supabase.from('categorias_form').select('datos').eq('id', 1).maybeSingle();
+      if (data && data.datos && Object.keys(data.datos).length > 0) {
+        setCategoriasMenu(data.datos);
+      } else {
+        guardarCategoriasDB(categoriasDefault); 
+      }
+    } catch (e) { console.error("Usando cat default local"); }
+  };
+
+  const guardarCategoriasDB = async (nuevasCat) => {
+    setCategoriasMenu(nuevasCat);
+    await supabase.from('categorias_form').upsert({ id: 1, datos: nuevasCat });
+  };
+
+  useEffect(() => { cargarCategoriasDB(); }, []);
+
+  // Filtros de Cabecera para Pestaña GESTIÓN
+  const [filtroGestionNombre, setFiltroGestionNombre] = useState('');
+  const [filtroGestionCat, setFiltroGestionCat] = useState('');
+  const [filtroGestionSub, setFiltroGestionSub] = useState('');
+  const [filtroGestionZona, setFiltroGestionZona] = useState('');
+
+  // Bloqueo 24 Horas
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
 
@@ -53,14 +77,8 @@ export default function App() {
       const tiempoRestante = parseInt(tiempoBloqueo) - Date.now();
       if (tiempoRestante > 0) {
         setBloqueoSeguridad(true);
-        setTimeout(() => {
-          setBloqueoSeguridad(false);
-          localStorage.removeItem('sodimac_bloqueo_seguridad');
-          setIntentosFallidos(0);
-        }, tiempoRestante);
-      } else {
-        localStorage.removeItem('sodimac_bloqueo_seguridad');
-      }
+        setTimeout(() => { setBloqueoSeguridad(false); localStorage.removeItem('sodimac_bloqueo_seguridad'); setIntentosFallidos(0); }, tiempoRestante);
+      } else { localStorage.removeItem('sodimac_bloqueo_seguridad'); }
     }
   }, []);
 
@@ -69,65 +87,48 @@ export default function App() {
     setIntentosFallidos(nuevosIntentos);
     if (nuevosIntentos >= 3) {
       setBloqueoSeguridad(true);
-      const veinticuatroHorasMs = 86400000; 
-      localStorage.setItem('sodimac_bloqueo_seguridad', Date.now() + veinticuatroHorasMs);
+      const ms24h = 86400000; 
+      localStorage.setItem('sodimac_bloqueo_seguridad', Date.now() + ms24h);
       alert("⚠️ ALERTA DE SEGURIDAD EXTREMA: 3 intentos fallidos. Sistema bloqueado automáticamente por 24 HORAS.");
-      setTimeout(() => {
-        setBloqueoSeguridad(false);
-        localStorage.removeItem('sodimac_bloqueo_seguridad');
-        setIntentosFallidos(0);
-      }, veinticuatroHorasMs);
+      setTimeout(() => { setBloqueoSeguridad(false); localStorage.removeItem('sodimac_bloqueo_seguridad'); setIntentosFallidos(0); }, ms24h);
       return true; 
     }
     return false; 
   };
 
   const registrarAuditoria = async (usuario, estado, tipo) => {
-    try {
-      const { error } = await supabase.from('auditoria_logins').insert([{
-        usuario_intentado: usuario,
-        estado: estado,
-        tipo: tipo
-      }]);
-      if (error) console.error("Error de auditoría:", error);
-    } catch (err) {
-      console.error(err);
-    }
+    try { await supabase.from('auditoria_logins').insert([{ usuario_intentado: usuario, estado: estado, tipo: tipo }]); } 
+    catch (err) { console.error(err); }
   };
 
   useEffect(() => {
-    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira') {
-      cargarLogsAuditoria();
-    }
+    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira') cargarLogsAuditoria();
   }, [tabAdmin, usuarioActual]);
 
+  // --- FORMULARIO PÚBLICO (CON WEBSITE) ---
   const [formData, setFormData] = useState({
-    razonSocial: '', nombreFantasia: '', rut: '', domicilio: '',
-    categoria: [], subcategoria: [], emailPrincipal: '', emailSecundario: '',
-    contacto: '', cargo: '', telefono: '', zonasCobertura: [], terminos: false
+    razonSocial: '', nombreFantasia: '', rut: '', domicilio: '', poseeWebsite: 'no', websiteUrl: '',
+    categoria: [], subcategoria: [], emailPrincipal: '', emailSecundario: '', contacto: '', cargo: '', telefono: '', zonasCobertura: [], terminos: false
   });
 
   const manejarCambioZona = (zona, checked, isEdit = false) => {
     if (isEdit) {
       let nuevasZonas = [...proveedorEditando.zonas_cobertura_arr];
-      if (checked) nuevasZonas.push(zona);
-      else nuevasZonas = nuevasZonas.filter(z => z !== zona);
+      if (checked) nuevasZonas.push(zona); else nuevasZonas = nuevasZonas.filter(z => z !== zona);
       setProveedorEditando({ ...proveedorEditando, zonas_cobertura_arr: nuevasZonas });
     } else {
       let nuevasZonas = [...formData.zonasCobertura];
-      if (checked) nuevasZonas.push(zona);
-      else nuevasZonas = nuevasZonas.filter(z => z !== zona);
+      if (checked) nuevasZonas.push(zona); else nuevasZonas = nuevasZonas.filter(z => z !== zona);
       setFormData({ ...formData, zonasCobertura: nuevasZonas });
     }
   };
 
   const manejarCambioCategoria = (cat, checked) => {
-    let nuevasCat = [...formData.categoria];
-    let nuevasSub = [...formData.subcategoria];
+    let nuevasCat = [...formData.categoria]; let nuevasSub = [...formData.subcategoria];
     if (checked) nuevasCat.push(cat);
     else {
       nuevasCat = nuevasCat.filter(c => c !== cat);
-      const subsParaRemover = categoriasSodimac[cat] || [];
+      const subsParaRemover = categoriasMenu[cat] || [];
       nuevasSub = nuevasSub.filter(s => !subsParaRemover.includes(s));
     }
     setFormData({ ...formData, categoria: nuevasCat, subcategoria: nuevasSub });
@@ -135,43 +136,37 @@ export default function App() {
 
   const manejarCambioSubcategoria = (sub, checked) => {
     let nuevasSub = [...formData.subcategoria];
-    if (checked) nuevasSub.push(sub);
-    else nuevasSub = nuevasSub.filter(s => s !== sub);
+    if (checked) nuevasSub.push(sub); else nuevasSub = nuevasSub.filter(s => s !== sub);
     setFormData({ ...formData, subcategoria: nuevasSub });
   };
 
   const manejarEnvioRegistro = async (e) => {
     e.preventDefault();
-    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido. Por favor revise.");
-    if (formData.categoria.length === 0) return alert("Debe seleccionar al menos una Categoría.");
-    if (formData.subcategoria.length === 0) return alert("Debe seleccionar al menos una Subcategoría.");
-    if (formData.zonasCobertura.length === 0) return alert("Debe seleccionar al menos una Zona de Cobertura.");
+    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido.");
+    if (formData.categoria.length === 0) return alert("Seleccione al menos una Categoría.");
+    if (formData.subcategoria.length === 0) return alert("Seleccione al menos una Subcategoría.");
+    if (formData.zonasCobertura.length === 0) return alert("Seleccione al menos una Zona de Cobertura.");
 
     let zonasFinales = formData.zonasCobertura;
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
+    
+    const enlaceFinal = formData.poseeWebsite === 'si' && formData.websiteUrl.trim() !== '' ? formData.websiteUrl.trim() : 'No posee';
 
     const registrosAInsertar = formData.subcategoria.map(sub => {
-      const catAsociada = Object.keys(categoriasSodimac).find(key => categoriasSodimac[key].includes(sub));
+      const catAsociada = Object.keys(categoriasMenu).find(key => categoriasMenu[key].includes(sub));
       return {
-        razon_social: sanitizarYCapitalizar(formData.razonSocial), 
-        nombre_fantasia: sanitizarYCapitalizar(formData.nombreFantasia),
-        rut: formData.rut.replace(/[<>]/g, ''), 
-        domicilio_comercial: sanitizarYCapitalizar(formData.domicilio),
-        categoria: catAsociada, 
-        subcategoria: sub,      
-        email_principal: formData.emailPrincipal.replace(/[<>]/g, '').toLowerCase().trim(), 
+        razon_social: sanitizarYCapitalizar(formData.razonSocial), nombre_fantasia: sanitizarYCapitalizar(formData.nombreFantasia),
+        rut: formData.rut.replace(/[<>]/g, ''), domicilio_comercial: sanitizarYCapitalizar(formData.domicilio), website: enlaceFinal,
+        categoria: catAsociada, subcategoria: sub, email_principal: formData.emailPrincipal.replace(/[<>]/g, '').toLowerCase().trim(), 
         email_secundario: formData.emailSecundario ? formData.emailSecundario.replace(/[<>]/g, '').toLowerCase().trim() : '',
-        nombre_contacto: sanitizarYCapitalizar(formData.contacto), 
-        cargo: sanitizarYCapitalizar(formData.cargo),
-        telefono: formData.telefono.replace(/[<>]/g, '').trim(), 
-        zonas_cobertura: zonasFinales.join(', '), 
-        terminos_aceptados: formData.terminos,
-        estado: 'Pendiente'
+        nombre_contacto: sanitizarYCapitalizar(formData.contacto), cargo: sanitizarYCapitalizar(formData.cargo),
+        telefono: formData.telefono.replace(/[<>]/g, '').trim(), zonas_cobertura: zonasFinales.join(', '), 
+        terminos_aceptados: formData.terminos, estado: 'Pendiente'
       };
     });
 
     const { error } = await supabase.from('proveedores').insert(registrosAInsertar);
-    if (error) { console.error(error); alert("⚠️ Error de sistema. Posible duplicidad o falla de conexión."); }
+    if (error) { console.error(error); alert("⚠️ Error de sistema al guardar."); }
     else { alert(`✅ Registro enviado. Se generaron ${registrosAInsertar.length} postulaciones.`); window.location.reload(); }
   };
 
@@ -179,12 +174,8 @@ export default function App() {
   const manejarPreLogin = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado por 24 horas.");
-    
     if (preLoginPin === '171819') { 
-      await registrarAuditoria('Anónimo', 'Éxito', 'Acceso a PIN Público');
-      setVista('login'); 
-      setPreLoginPin(''); 
-      setIntentosFallidos(0); 
+      await registrarAuditoria('Anónimo', 'Éxito', 'Acceso a PIN Público'); setVista('login'); setPreLoginPin(''); setIntentosFallidos(0); 
     } else { 
       await registrarAuditoria('Anónimo', 'Fallido', 'Acceso a PIN Público');
       const fueBloqueado = registrarIntentoFallido();
@@ -209,7 +200,6 @@ export default function App() {
       .eq('pin', credenciales.pin.replace(/[<>]/g, '')).maybeSingle();
 
     if (error) return alert("⚠️ Error de conexión seguro.");
-    
     if (!data) {
       await registrarAuditoria(intentoUsuario || 'Desconocido', 'Fallido', 'Login Panel Admin');
       const fueBloqueado = registrarIntentoFallido();
@@ -218,23 +208,18 @@ export default function App() {
     }
 
     await registrarAuditoria(data.usuario, 'Éxito', 'Login Panel Admin');
-    setIntentosFallidos(0);
-    setUsuarioActual(data);
-    setVista('panel');
-    cargarProveedores();
-    cargarAdministradores();
+    setIntentosFallidos(0); setUsuarioActual(data); setVista('panel');
+    cargarProveedores(); cargarAdministradores();
   };
 
   const cargarProveedores = async () => {
     const { data, error } = await supabase.from('proveedores').select('*').order('fecha_registro', { ascending: false });
     if (!error && data) setProveedores(data);
   };
-
   const cargarAdministradores = async () => {
     const { data, error } = await supabase.from('administradores').select('*').order('id', { ascending: true });
     if (!error && data) setAdministradoresDb(data);
   };
-
   const cargarLogsAuditoria = async () => {
     const { data, error } = await supabase.from('auditoria_logins').select('*').order('created_at', { ascending: false }).limit(300);
     if (!error && data) setLogsAuditoria(data);
@@ -245,13 +230,11 @@ export default function App() {
     const { error } = await supabase.from('proveedores').update({ estado: 'Aprobado', aprobado_por: usuarioActual.usuario }).eq('id', id);
     if (!error) cargarProveedores();
   };
-
   const revocarProveedor = async (id) => {
     if(!window.confirm("¿Cambiar el estado de este proveedor a Pendiente?")) return;
     const { error } = await supabase.from('proveedores').update({ estado: 'Pendiente', aprobado_por: null }).eq('id', id);
     if (!error) cargarProveedores();
   };
-
   const rechazarProveedor = async (id) => {
     if(!window.confirm("¿Rechazar y ELIMINAR definitivamente a este proveedor?")) return;
     const { error } = await supabase.from('proveedores').delete().eq('id', id);
@@ -273,62 +256,50 @@ export default function App() {
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
 
     const { error } = await supabase.from('proveedores').update({
-      razon_social: sanitizarYCapitalizar(proveedorEditando.razon_social),
-      nombre_fantasia: sanitizarYCapitalizar(proveedorEditando.nombre_fantasia),
-      rut: proveedorEditando.rut.replace(/[<>]/g, ''),
-      domicilio_comercial: sanitizarYCapitalizar(proveedorEditando.domicilio_comercial),
-      categoria: proveedorEditando.categoria,
-      subcategoria: proveedorEditando.subcategoria,
+      razon_social: sanitizarYCapitalizar(proveedorEditando.razon_social), nombre_fantasia: sanitizarYCapitalizar(proveedorEditando.nombre_fantasia),
+      rut: proveedorEditando.rut.replace(/[<>]/g, ''), domicilio_comercial: sanitizarYCapitalizar(proveedorEditando.domicilio_comercial),
+      website: proveedorEditando.website || 'No posee',
+      categoria: proveedorEditando.categoria, subcategoria: proveedorEditando.subcategoria,
       email_principal: proveedorEditando.email_principal.replace(/[<>]/g, '').toLowerCase().trim(),
       email_secundario: proveedorEditando.email_secundario ? proveedorEditando.email_secundario.replace(/[<>]/g, '').toLowerCase().trim() : '',
-      nombre_contacto: sanitizarYCapitalizar(proveedorEditando.nombre_contacto),
-      cargo: sanitizarYCapitalizar(proveedorEditando.cargo),
-      telefono: proveedorEditando.telefono.replace(/[<>]/g, '').trim(),
-      zonas_cobertura: zonasFinales.join(', ')
+      nombre_contacto: sanitizarYCapitalizar(proveedorEditando.nombre_contacto), cargo: sanitizarYCapitalizar(proveedorEditando.cargo),
+      telefono: proveedorEditando.telefono.replace(/[<>]/g, '').trim(), zonas_cobertura: zonasFinales.join(', ')
     }).eq('id', proveedorEditando.id);
 
     if (error) { console.error(error); alert("⚠️ Error al actualizar."); }
     else { alert("✅ Proveedor actualizado."); setProveedorEditando(null); cargarProveedores(); }
   };
 
-  const descargarPlantillaCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "Razon Social,Nombre de Fantasia,RUT,Domicilio Comercial,Categoria,Subcategoria,Zonas de Cobertura (Separadas por guion -),Email Principal,Email Secundario,Nombre Contacto,Cargo,Telefono\n";
-    csvContent += "Empresa Ejemplo SpA,Ejemplo,12345678-9,Av. Siempre Viva 123,Seguridad,Barreras De Seguridad,Metropolitana de Santiago - Valparaíso,contacto@ejemplo.cl,,Juan Perez,Gerente General,+56912345678\n";
-    const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "Plantilla_Carga_Masiva_Sodimac.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  // --- LÓGICA: ACTUALIZACIÓN DE FORMULARIO DINÁMICO ---
+  const [nuevaCatInput, setNuevaCatInput] = useState('');
+  const [editorCatSelec, setEditorCatSelec] = useState('');
+  const [nuevaSubInput, setNuevaSubInput] = useState('');
+
+  const agCat = async () => {
+    if(!nuevaCatInput.trim()) return;
+    const catL = sanitizarYCapitalizar(nuevaCatInput);
+    if(categoriasMenu[catL]) return alert("Categoría ya existe.");
+    const nc = { ...categoriasMenu, [catL]: [] };
+    await guardarCategoriasDB(nc);
+    setNuevaCatInput(''); alert("Categoría añadida.");
   };
-
-  const manejarCargaMasiva = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const lines = event.target.result.split(/\r?\n/).filter(line => line.trim() !== "");
-      if (lines.length <= 1) return alert("El archivo está vacío.");
-      const proveedoresNuevos = [];
-      for (let i = 1; i < lines.length; i++) {
-        const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
-        if (currentLine.length < 12) continue;
-        const rutLimpio = formatearRUT(currentLine[2].replace(/[<>]/g, ''));
-        if (!rutLimpio) continue;
-
-        let zonasArr = currentLine[6].split('-').map(z => sanitizarYCapitalizar(z.trim())).filter(z => z !== '');
-        if (zonasArr.includes("Todo El Pais") || zonasArr.includes("Todo el País")) zonasArr = ["Todo el País"];
-
-        proveedoresNuevos.push({
-          razon_social: sanitizarYCapitalizar(currentLine[0]), nombre_fantasia: sanitizarYCapitalizar(currentLine[1]), rut: rutLimpio,
-          domicilio_comercial: sanitizarYCapitalizar(currentLine[3]), categoria: sanitizarYCapitalizar(currentLine[4]), subcategoria: sanitizarYCapitalizar(currentLine[5]),
-          zonas_cobertura: zonasArr.join(', '), email_principal: currentLine[7].replace(/[<>]/g, '').toLowerCase(), email_secundario: currentLine[8] ? currentLine[8].replace(/[<>]/g, '').toLowerCase() : '',
-          nombre_contacto: sanitizarYCapitalizar(currentLine[9]), cargo: sanitizarYCapitalizar(currentLine[10]), telefono: currentLine[11].replace(/[<>]/g, ''), estado: 'Pendiente', terminos_aceptados: true
-        });
-      }
-      if (proveedoresNuevos.length > 0) {
-        const { error } = await supabase.from('proveedores').insert(proveedoresNuevos);
-        if (error) alert("⚠️ Error de seguridad en base."); else { alert(`✅ ${proveedoresNuevos.length} proveedores agregados.`); cargarProveedores(); setTabAdmin('pendientes'); }
-      }
-    };
-    reader.readAsText(file, 'UTF-8'); e.target.value = null; 
+  const elimCat = async (cat) => {
+    if(!window.confirm(`¿Eliminar ${cat} y todas sus subcategorías? Esto no afectará a los proveedores ya registrados, pero sí al formulario.`)) return;
+    const nc = { ...categoriasMenu }; delete nc[cat];
+    if(editorCatSelec === cat) setEditorCatSelec('');
+    await guardarCategoriasDB(nc);
+  };
+  const agSub = async () => {
+    if(!editorCatSelec || !nuevaSubInput.trim()) return;
+    const subL = sanitizarYCapitalizar(nuevaSubInput);
+    if(categoriasMenu[editorCatSelec].includes(subL)) return alert("Subcategoría ya existe.");
+    const nc = { ...categoriasMenu }; nc[editorCatSelec] = [...nc[editorCatSelec], subL];
+    await guardarCategoriasDB(nc); setNuevaSubInput(''); alert("Subcategoría añadida.");
+  };
+  const elimSub = async (cat, sub) => {
+    if(!window.confirm(`¿Eliminar subcategoría ${sub}?`)) return;
+    const nc = { ...categoriasMenu }; nc[cat] = nc[cat].filter(s => s !== sub);
+    await guardarCategoriasDB(nc);
   };
 
   const crearAdministrador = async (e) => {
@@ -337,16 +308,14 @@ export default function App() {
       usuario: nuevoAdmin.usuario.replace(/[<>]/g, '').trim(), password: nuevoAdmin.password.replace(/[<>]/g, ''), pin: nuevoAdmin.pin.replace(/[<>]/g, ''),
       nombre_completo: sanitizarYCapitalizar(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`), correo: nuevoAdmin.correo.replace(/[<>]/g, '').toLowerCase().trim()
     }]);
-    if (error) alert("⚠️ Error. Verifique que el correo/usuario no existan."); else { alert("✅ Usuario creado."); setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' }); cargarAdministradores(); }
+    if (error) alert("⚠️ Error. Verifique que el correo o usuario no existan ya."); else { alert("✅ Usuario creado."); setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' }); cargarAdministradores(); }
   };
-
   const eliminarAdmin = async (id, usuario) => {
     if(usuarioActual.usuario !== 'mmaquieira') return alert("No tienes permisos.");
     if(usuario === 'mmaquieira') return alert("No puedes eliminar al usuario principal.");
     if(!window.confirm(`¿Seguro de eliminar a ${usuario}?`)) return;
     const { error } = await supabase.from('administradores').delete().eq('id', id); if (!error) cargarAdministradores();
   };
-
   const [adminEditando, setAdminEditando] = useState(null);
   const guardarEdicionAdmin = async (e) => {
     e.preventDefault();
@@ -362,12 +331,30 @@ export default function App() {
   const proveedoresFiltrados = proveedoresAprobados.filter(p => p.rut.toLowerCase().includes(filtroRut.toLowerCase()) && p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) && (filtroCategoria === '' || p.categoria === filtroCategoria) && (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria));
   const toggleSeleccion = (id) => setSeleccionados(seleccionados.includes(id) ? seleccionados.filter(i => i !== id) : [...seleccionados, id]);
   const toggleSeleccionarTodo = (e) => setSeleccionados(e.target.checked ? proveedoresFiltrados.map(p => p.id) : []);
+
   const exportarCSV = () => {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor.");
-    let csvC = "data:text/csv;charset=utf-8,\uFEFFId,Nombre de la empresa*,Nombre del contacto,Correo electrónico*,Código del idioma,Código de Región\n";
-    proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).forEach(p => { csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,\n`; });
-    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    let csvC = "data:text/csv;charset=utf-8,\uFEFFId,Nombre de la empresa*,Nombre del contacto,Correo electrónico*,Código del idioma,Código de Región,Website\n";
+    proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).forEach(p => { csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,,${p.website || 'No posee'}\n`; });
+    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores_sodimac.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
+  const exportarExcel = () => {
+    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor.");
+    const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
+    let excelHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8" /><style>table { border-collapse: collapse; font-family: Arial; } th { background-color: #004A99; color: white; border: 1px solid #ccc; padding: 10px; } td { border: 1px solid #ccc; padding: 8px; }</style></head><body><h3>Base Oficial Proveedores - Sodimac S.A.</h3><table><thead><tr><th>RUT</th><th>Razón Social</th><th>Nombre Fantasía</th><th>Categoría</th><th>Subcategoría</th><th>Cobertura</th><th>Email</th><th>Contacto</th><th>Teléfono</th><th>Website</th><th>Aprobado Por</th></tr></thead><tbody>`;
+    dataAExportar.forEach(p => { excelHtml += `<tr><td>${p.rut||''}</td><td>${p.razon_social||''}</td><td>${p.nombre_fantasia||''}</td><td>${p.categoria||''}</td><td>${p.subcategoria||''}</td><td>${p.zonas_cobertura||''}</td><td>${p.email_principal||''}</td><td>${p.nombre_contacto||''}</td><td>${p.telefono||''}</td><td>${p.website||'No posee'}</td><td>${p.aprobado_por||''}</td></tr>`; });
+    excelHtml += `</tbody></table></body></html>`;
+    const blob = new Blob([excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.setAttribute("download", "proveedores_sodimac.xls"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  const proveedoresGestionFiltrados = proveedores.filter(p => {
+    if (p.estado !== 'Aprobado') return false;
+    const matchN = p.nombre_fantasia.toLowerCase().includes(filtroGestionNombre.toLowerCase()) || p.razon_social.toLowerCase().includes(filtroGestionNombre.toLowerCase());
+    const matchC = p.categoria.toLowerCase().includes(filtroGestionCat.toLowerCase());
+    const matchS = p.subcategoria.toLowerCase().includes(filtroGestionSub.toLowerCase());
+    const matchZ = p.zonas_cobertura ? p.zonas_cobertura.toLowerCase().includes(filtroGestionZona.toLowerCase()) : true;
+    return matchN && matchC && matchS && matchZ;
+  });
   const [resetStep, setResetStep] = useState(1); const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
   const buscarCorreo = async (e) => {
     e.preventDefault();
@@ -385,7 +372,6 @@ export default function App() {
     if (error) alert("⚠️ Error."); else { alert("✅ Actualizado."); setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null }); }
   };
 
-  // --- FILTROS DE DASHBOARD ---
   const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
   const [filtroTortaCat, setFiltroTortaCat] = useState('');
   const [filtroTortaSub, setFiltroTortaSub] = useState([]);
@@ -436,11 +422,10 @@ export default function App() {
   const enviarRecordatorio = (prov) => {
     const destinatarios = prov.email_secundario ? `${prov.email_principal},${prov.email_secundario}` : prov.email_principal;
     const asunto = encodeURIComponent("Actualización de Datos - Portal Proveedores Sodimac");
-    const cuerpo = encodeURIComponent(`Estimado(a) proveedor ${prov.razon_social},\n\nPor favor actualizar sus datos de contacto.\n\nSodimac S.A.`);
+    const cuerpo = encodeURIComponent(`Estimado(a) proveedor ${prov.razon_social},\n\nPor favor actualizar sus datos de contacto en el portal.\n\nSaludos cordiales,\nSodimac S.A.`);
     window.location.href = `mailto:${destinatarios}?subject=${asunto}&body=${cuerpo}`;
   };
 
-  // --- CÁLCULO TORTA CON FILTROS MÚLTIPLES ---
   const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
   
   const proveedoresParaTorta = proveedoresAprobados.filter(p => {
@@ -493,7 +478,7 @@ export default function App() {
           <span style={{ fontSize: '22px', fontWeight: '600', letterSpacing: '0.5px', zIndex: 10, marginLeft: '4cm' }}>Portal de Proveedores</span>
         </div>
         <div style={{ zIndex: 10, display: 'flex', alignItems: 'center', gap: '15px' }}>
-          {usuarioActual && <span style={{ fontSize: '14px', color: '#cce5ff', borderRight: '1px solid rgba(255,255,255,0.3)', paddingRight: '15px' }}>👤 {usuarioActual.usuario}</span>}
+          {usuarioActual && <span style={{ fontSize: '13px', color: '#cce5ff', borderRight: '1px solid rgba(255,255,255,0.3)', paddingRight: '15px' }}>👤 {usuarioActual.usuario}</span>}
           {['login', 'pre_login', 'recuperar'].includes(vista) && <button onClick={() => setVista('registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro</button>}
           {vista === 'registro' && <button onClick={() => setVista('pre_login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Acceso Interno</button>}
           {vista === 'panel' && <button onClick={() => {setUsuarioActual(null); setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Cerrar Sesión</button>}
@@ -512,18 +497,24 @@ export default function App() {
                 <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nombre de Fantasía *</label><input required value={proveedorEditando.nombre_fantasia} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, nombre_fantasia: e.target.value})} /></div>
                 <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required value={proveedorEditando.rut} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, rut: formatearRUT(e.target.value)})} /></div>
                 <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required value={proveedorEditando.domicilio_comercial} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, domicilio_comercial: e.target.value})} /></div>
+                
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Website Proveedor</label>
+                  <input type="text" placeholder="https://www..." value={proveedorEditando.website !== 'No posee' ? proveedorEditando.website : ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, website: e.target.value})} />
+                </div>
+
                 <div>
                   <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Categoría *</label>
                   <select required value={proveedorEditando.categoria} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, categoria: e.target.value, subcategoria: ''})}>
                     <option value="">Seleccione...</option>
-                    {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    {Object.keys(categoriasMenu).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Subcategoría *</label>
                   <select required value={proveedorEditando.subcategoria} disabled={!proveedorEditando.categoria} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, subcategoria: e.target.value})}>
                     <option value="">Seleccione...</option>
-                    {proveedorEditando.categoria && categoriasSodimac[proveedorEditando.categoria]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                    {proveedorEditando.categoria && categoriasMenu[proveedorEditando.categoria]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
                   </select>
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
@@ -577,10 +568,24 @@ export default function App() {
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required placeholder="12345678-9" value={formData.rut} style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, rut: formatearRUT(e.target.value)})} /></div>
               <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, domicilio: e.target.value})} /></div>
               
+              {/* NUEVO CAMPO: WEBSITE */}
+              <div style={{ gridColumn: '1 / -1', backgroundColor: '#f9f9f9', padding: '15px', borderRadius: '4px', border: '1px solid #eee' }}>
+                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>¿Posee Website de Empresa? *</label>
+                <div style={{ display: 'flex', gap: '20px', marginTop: '10px' }}>
+                  <label style={{ cursor: 'pointer' }}><input type="radio" name="web" checked={formData.poseeWebsite === 'si'} onChange={() => setFormData({...formData, poseeWebsite: 'si'})} /> Sí poseo</label>
+                  <label style={{ cursor: 'pointer' }}><input type="radio" name="web" checked={formData.poseeWebsite === 'no'} onChange={() => setFormData({...formData, poseeWebsite: 'no'})} /> No poseo</label>
+                </div>
+                {formData.poseeWebsite === 'si' && (
+                  <div style={{ marginTop: '10px' }}>
+                    <input required type="url" placeholder="https://www.tuempresa.cl" style={{ width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, websiteUrl: e.target.value})} />
+                  </div>
+                )}
+              </div>
+
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Categoría(s) *</label>
                 <div style={{ marginTop: '5px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '160px', overflowY: 'auto', backgroundColor: '#fafafa', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  {Object.keys(categoriasSodimac).map(cat => (
+                  {Object.keys(categoriasMenu).map(cat => (
                     <label key={cat} style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                       <input type="checkbox" checked={formData.categoria.includes(cat)} onChange={(e) => manejarCambioCategoria(cat, e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} /> {cat}
                     </label>
@@ -598,7 +603,7 @@ export default function App() {
                       <div key={cat} style={{ marginBottom: '15px' }}>
                         <strong style={{ fontSize: '13px', color: '#004A99', display: 'block', marginBottom: '8px', borderBottom: '1px solid #ddd', paddingBottom: '4px' }}>{cat}</strong>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                          {categoriasSodimac[cat]?.map(sub => (
+                          {categoriasMenu[cat]?.map(sub => (
                             <label key={sub} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                               <input type="checkbox" checked={formData.subcategoria.includes(sub)} onChange={(e) => manejarCambioSubcategoria(sub, e.target.checked)} style={{ width: '14px', height: '14px', cursor: 'pointer' }} /> {sub}
                             </label>
@@ -639,7 +644,7 @@ export default function App() {
         </div>
       )}
 
-      {/* LOGIN PIN Y MODAL T&C */}
+      {/* LOGIN PIN */}
       {vista === 'pre_login' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '40px 30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px', fontSize: '24px' }}>Seguridad de Acceso</h2>
@@ -666,58 +671,20 @@ export default function App() {
         </div>
       )}
 
-      {vista === 'recuperar' && (
-        <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-          <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px' }}>Recuperar Acceso</h2>
-          {resetStep === 1 ? (
-            <form onSubmit={buscarCorreo}>
-              <div style={{ marginBottom: '20px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Correo Registrado</label><input required type="email" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, correo: e.target.value})} /></div>
-              <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>VERIFICAR</button>
-            </form>
-          ) : (
-            <form onSubmit={actualizarPassword}>
-              <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nueva Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, nuevaPass: e.target.value})} /></div>
-              <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Nuevo PIN</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setResetData({...resetData, nuevoPin: e.target.value})} /></div>
-              <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#28a745', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>GUARDAR</button>
-            </form>
-          )}
-        </div>
-      )}
-
-      {mostrarTerminos && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
-          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '800px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-            <button onClick={() => setMostrarTerminos(false)} style={{ position: 'absolute', top: '15px', right: '20px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#EE2D24', fontWeight: 'bold' }}>&times;</button>
-            <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Términos y condiciones</h2>
-            <div style={{ fontSize: '13px', color: '#444', lineHeight: '1.6' }}>
-              <p>Al completar y enviar el formulario de registro de proveedores, el postulante declara y acepta expresamente que la información proporcionada podrá ser utilizada por Sodimac S.A. para fines de evaluación, contacto, validación, precalificación y eventual incorporación como proveedor en procesos de negociación, cotización, homologación, compra o contratación.</p>
-              <strong>1. Información recopilada</strong><p>Sodimac podrá recopilar, almacenar, organizar, revisar y tratar información de carácter empresarial y de contacto.</p>
-              <strong>2. Finalidad del tratamiento</strong><p>Los datos serán tratados con la exclusiva finalidad de: gestionar el registro, evaluar idoneidad, contactar, administrar procesos y mantener historial.</p>
-              <strong>3. Aceptación expresa</strong><p>El proveedor declara que ha leído y comprendido estos términos, autoriza el tratamiento y entiende que no garantiza adjudicación.</p>
-              <strong>4. Declaración sobre la información entregada</strong><p>El proveedor declara que la información proporcionada es veraz, actualizada y suficiente.</p>
-              <strong>5. Conservación de la información</strong><p>Sodimac podrá conservar la información por el tiempo necesario.</p>
-              <strong>6. Encargados y acceso</strong><p>El acceso quedará restringido a personal autorizado.</p>
-              <strong>7. Modificaciones</strong><p>Sodimac podrá modificar estos términos publicando la versión actualizada.</p>
-              <strong>8. Aceptación final</strong><p>Al enviar este formulario, acepto estos Términos y autorizo a Sodimac S.A. a tratar mis datos.</p>
-            </div>
-            <button onClick={() => setMostrarTerminos(false)} style={{ width: '100%', padding: '12px', marginTop: '15px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>CERRAR</button>
-          </div>
-        </div>
-      )}
-
       {/* PANEL ADMINISTRATIVO PRINCIPAL */}
       {vista === 'panel' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           
-          {/* BARRA DE NAVEGACIÓN DEL PANEL CON LAS PESTAÑAS SEPARADAS */}
           <div style={{ display: 'flex', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px', gap: '20px', overflowX: 'auto' }}>
             <h2 onClick={() => setTabAdmin('dashboard')} style={{ color: tabAdmin === 'dashboard' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Dashboard</h2>
             <h2 onClick={() => setTabAdmin('pendientes')} style={{ color: tabAdmin === 'pendientes' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Pendientes</h2>
             <h2 onClick={() => setTabAdmin('gestion')} style={{ color: tabAdmin === 'gestion' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Gestión</h2>
-            <h2 onClick={() => setTabAdmin('carga_masiva')} style={{ color: tabAdmin === 'carga_masiva' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Carga Masiva</h2>
+            
+            {/* NUEVO MÓDULO: ACT. FORMULARIO */}
+            <h2 onClick={() => setTabAdmin('act_formulario')} style={{ color: tabAdmin === 'act_formulario' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Act. Formulario</h2>
+            
             <h2 onClick={() => {setTabAdmin('exportar'); setSeleccionados([]);}} style={{ color: tabAdmin === 'exportar' ? '#28a745' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Exportar Aprobados</h2>
             <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Admin / Roles</h2>
-            {/* 🛡️ PESTAÑA DE AUDITORÍA EXCLUSIVA PARA MMAQUIEIRA */}
             {usuarioActual?.usuario === 'mmaquieira' && (
               <h2 onClick={() => { setTabAdmin('auditoria'); cargarLogsAuditoria(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>🛡️ Auditoría</h2>
             )}
@@ -750,21 +717,20 @@ export default function App() {
                     </select>
                   </div>
 
-                  {/* NUEVO FILTRO MÚLTIPLE PARA TORTA */}
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '20px', backgroundColor: '#f9f9f9', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}>
                     <select style={{ padding: '6px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', minWidth: '130px' }} onChange={e => {setFiltroTortaCat(e.target.value); setFiltroTortaSub([]);}} value={filtroTortaCat}>
                       <option value="">Todas las Categorías</option>
-                      {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      {Object.keys(categoriasMenu).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                     </select>
                     
                     <div style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '55px', overflowY: 'auto', backgroundColor: '#fff', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                      {filtroTortaCat === '' ? <span style={{ fontSize: '11px', color: '#999', padding: '2px' }}>Seleccione una categoría para filtrar subcategorías...</span> : 
-                        categoriasSodimac[filtroTortaCat]?.map(sub => (
+                      {filtroTortaCat === '' ? <span style={{ fontSize: '11px', color: '#999', padding: '2px' }}>Seleccione una categoría para filtrar...</span> : 
+                        categoriasMenu[filtroTortaCat]?.map(sub => (
                           <label key={sub} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', backgroundColor: '#f0f0f0', padding: '2px 6px', border: '1px solid #ccc', borderRadius: '12px' }}>
                             <input type="checkbox" checked={filtroTortaSub.includes(sub)} onChange={(e) => {
                               if (e.target.checked) setFiltroTortaSub([...filtroTortaSub, sub]);
                               else setFiltroTortaSub(filtroTortaSub.filter(s => s !== sub));
-                            }} style={{ margin: 0, cursor: 'pointer' }} /> {sub}
+                            }} style={{ margin: 0 }} /> {sub}
                           </label>
                         ))
                       }
@@ -793,11 +759,11 @@ export default function App() {
                     <div style={{ display: 'flex', gap: '10px' }}>
                       <select style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', maxWidth: '140px' }} onChange={e => {setFiltroTendenciaCat(e.target.value); setFiltroTendenciaSub('');}} value={filtroTendenciaCat}>
                         <option value="">Categoría (Todas)</option>
-                        {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat.substring(0,20)}...</option>)}
+                        {Object.keys(categoriasMenu).map(cat => <option key={cat} value={cat}>{cat.substring(0,20)}...</option>)}
                       </select>
                       <select disabled={!filtroTendenciaCat} style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', maxWidth: '140px' }} onChange={e => setFiltroTendenciaSub(e.target.value)} value={filtroTendenciaSub}>
                         <option value="">Subcat (Todas)</option>
-                        {filtroTendenciaCat && categoriasSodimac[filtroTendenciaCat].map(sub => <option key={sub} value={sub}>{sub.substring(0,20)}...</option>)}
+                        {filtroTendenciaCat && categoriasMenu[filtroTendenciaCat].map(sub => <option key={sub} value={sub}>{sub.substring(0,20)}...</option>)}
                       </select>
                       <select style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', fontWeight: 'bold' }} onChange={e => setFiltroTendenciaTiempo(e.target.value)} value={filtroTendenciaTiempo}>
                         <option value="7">Últimos 7 días</option><option value="15">Últimos 15 días</option><option value="30">Últimos 30 días</option><option value="all">Histórico completo</option>
@@ -825,81 +791,24 @@ export default function App() {
                   )}
                 </div>
               </div>
-
-              {/* MAPA DE CALOR */}
-              <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', marginBottom: '30px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-                  <div>
-                    <h3 style={{ margin: '0 0 5px 0', color: '#333', fontSize: '16px' }}>Mapa de Cobertura Regional (Aprobados)</h3>
-                    <p style={{ fontSize: '12px', color: '#666', margin: 0 }}>Visualización térmica de proveedores según filtros aplicados.</p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <select style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => {setFiltroMapaCat(e.target.value); setFiltroMapaSub('');}} value={filtroMapaCat}>
-                      <option value="">Todas las Categorías</option>
-                      {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                    <select disabled={!filtroMapaCat} style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setFiltroMapaSub(e.target.value)} value={filtroMapaSub}>
-                      <option value="">Todas las Subcategorías</option>
-                      {filtroMapaCat && categoriasSodimac[filtroMapaCat].map(sub => <option key={sub} value={sub}>{sub}</option>)}
-                    </select>
-                    <select style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setFiltroMapaZona(e.target.value)} value={filtroMapaZona}>
-                      <option value="">Cualquier Zona</option>
-                      {zonasOpciones.filter(z => z !== 'Todo el País').map(z => <option key={z} value={z}>{z}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px' }}>
-                  {Object.entries(macroZonas).map(([macro, regiones]) => (
-                    <div key={macro} style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '15px', backgroundColor: '#fafafa' }}>
-                      <h4 style={{ margin: '0 0 15px 0', fontSize: '14px', color: '#004A99', borderBottom: '2px solid #EE2D24', paddingBottom: '5px' }}>Zona {macro}</h4>
-                      {regiones.map(reg => {
-                        const cantidad = mapStats.conteo[reg] || 0;
-                        const intensidad = mapStats.maxMapa > 0 ? cantidad / mapStats.maxMapa : 0;
-                        const bgColor = cantidad > 0 ? `rgba(238, 45, 36, ${0.15 + (intensidad * 0.85)})` : '#ffffff';
-                        const txtColor = cantidad > 0 ? (intensidad > 0.5 ? '#ffffff' : '#333333') : '#999999';
-                        return (
-                          <div key={reg} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '12px', padding: '8px 10px', backgroundColor: bgColor, color: txtColor, borderRadius: '4px', border: '1px solid #eee', transition: 'all 0.3s' }}>
-                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }} title={reg}>{reg}</span>
-                            <span style={{ fontWeight: 'bold' }}>{cantidad}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {stats.renovaciones.length > 0 && (
-                <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffeeba', padding: '20px', borderRadius: '8px' }}>
-                  <h3 style={{ margin: '0 0 15px 0', color: '#856404' }}>Acción Requerida: Envío de Recordatorios</h3>
-                  <p style={{ fontSize: '13px', color: '#856404', marginBottom: '15px' }}>Los siguientes proveedores llevan más de 90 días en la base y necesitan actualizar su información.</p>
-                  {stats.renovaciones.map(prov => (
-                    <div key={prov.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '10px', borderRadius: '4px', marginBottom: '8px', border: '1px solid #ddd' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{prov.razon_social} <span style={{ color: '#666', fontWeight: 'normal' }}>({prov.rut})</span></span>
-                      <button onClick={() => enviarRecordatorio(prov)} style={{ backgroundColor: '#004A99', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Enviar Correo de Actualización</button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
-          {/* NUEVO MÓDULO: PENDIENTES */}
+          {/* PESTAÑA PENDIENTES CON VISUALIZACIÓN DE WEBSITE */}
           {tabAdmin === 'pendientes' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Proveedores Pendientes</h3>
-                <button onClick={cargarProveedores} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Actualizar Registros</button>
+                <button onClick={cargarProveedores} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>🔄 Actualizar Registros</button>
               </div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Razón Social / RUT</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría / Sub</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Cobertura</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto / Website</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Acciones</th>
                     </tr>
                   </thead>
@@ -907,23 +816,16 @@ export default function App() {
                     {proveedores.filter(p => p.estado === 'Pendiente').length === 0 ? <tr><td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay proveedores pendientes.</td></tr> : 
                     proveedores.filter(p => p.estado === 'Pendiente').map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '12px' }}>
-                          <strong>{prov.razon_social}</strong><br />
-                          <span style={{ color: '#666' }}>{prov.rut}</span>
-                        </td>
-                        <td style={{ padding: '12px' }}>
-                          {prov.categoria}<br />
-                          <span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span>
-                        </td>
-                        <td style={{ padding: '12px', maxWidth: '150px' }}>
-                          <span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>
-                            {prov.zonas_cobertura || 'No especificada'}
-                          </span>
-                        </td>
+                        <td style={{ padding: '12px' }}><strong>{prov.razon_social}</strong><br /><span style={{ color: '#666' }}>{prov.rut}</span></td>
+                        <td style={{ padding: '12px' }}>{prov.categoria}<br /><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
+                        <td style={{ padding: '12px', maxWidth: '150px' }}><span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>{prov.zonas_cobertura || 'No especificada'}</span></td>
                         <td style={{ padding: '12px' }}>
                           {prov.nombre_contacto}<br />
                           <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a><br />
-                          <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span>
+                          <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span><br/>
+                          <span style={{ color: '#004A99', fontSize: '11px', fontWeight: 'bold' }}>
+                            {prov.website && prov.website !== 'No posee' ? <a href={prov.website} target="_blank" rel="noopener noreferrer" style={{color: '#28a745'}}>🌐 Ver Website</a> : '🚫 Sin website'}
+                          </span>
                         </td>
                         <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                           <button onClick={() => aprobarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>
@@ -938,54 +840,51 @@ export default function App() {
             </div>
           )}
 
-          {/* NUEVO MÓDULO: GESTIÓN (APROBADOS) */}
+          {/* PESTAÑA: GESTIÓN CON FILTROS EN ENCABEZADOS Y WEBSITE */}
           {tabAdmin === 'gestion' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Gestión de Proveedores Aprobados</h3>
-                <button onClick={cargarProveedores} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Actualizar Registros</button>
+                <button onClick={cargarProveedores} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>🔄 Actualizar Registros</button>
               </div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Razón Social / RUT</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Cobertura</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Auditoría</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Acciones</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>
+                        Razón Social / RUT <br />
+                        <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '90%', padding: '4px', marginTop: '6px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', outline: 'none' }} />
+                      </th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>
+                        Categoría / Subcategoría <br />
+                        <input type="text" placeholder="Filtrar Categoria..." value={filtroGestionCat} onChange={e => setFiltroGestionCat(e.target.value)} style={{ width: '90%', padding: '4px', marginTop: '6px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', display: 'block', marginBottom: '4px', outline: 'none' }} />
+                        <input type="text" placeholder="Filtrar Subcategoria..." value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '90%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', display: 'block', outline: 'none' }} />
+                      </th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>
+                        Cobertura <br />
+                        <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '90%', padding: '4px', marginTop: '6px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', outline: 'none' }} />
+                      </th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', paddingTop: '15px' }}>Contacto / Website</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', paddingTop: '15px' }}>Auditoría</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', paddingTop: '15px' }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {proveedores.filter(p => p.estado === 'Aprobado').length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay proveedores aprobados.</td></tr> : 
-                    proveedores.filter(p => p.estado === 'Aprobado').map(prov => (
+                    {proveedoresGestionFiltrados.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se encontraron proveedores con los filtros aplicados.</td></tr> : 
+                    proveedoresGestionFiltrados.map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '12px' }}>
-                          <strong>{prov.razon_social}</strong><br />
-                          <span style={{ color: '#666' }}>{prov.rut}</span>
-                        </td>
-                        <td style={{ padding: '12px' }}>
-                          {prov.categoria}<br />
-                          <span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span>
-                        </td>
-                        <td style={{ padding: '12px', maxWidth: '150px' }}>
-                          <span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>
-                            {prov.zonas_cobertura || 'No especificada'}
-                          </span>
-                        </td>
+                        <td style={{ padding: '12px' }}><strong>{prov.razon_social}</strong><br /><span style={{ color: '#666' }}>{prov.rut}</span></td>
+                        <td style={{ padding: '12px' }}>{prov.categoria}<br /><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
+                        <td style={{ padding: '12px', maxWidth: '150px' }}><span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>{prov.zonas_cobertura || 'No especificada'}</span></td>
                         <td style={{ padding: '12px' }}>
                           {prov.nombre_contacto}<br />
                           <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a><br />
-                          <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span>
+                          <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span><br/>
+                          <span style={{ color: '#004A99', fontSize: '11px', fontWeight: 'bold' }}>
+                            {prov.website && prov.website !== 'No posee' ? <a href={prov.website} target="_blank" rel="noopener noreferrer" style={{color: '#28a745'}}>🌐 Ver Website</a> : '🚫 Sin website'}
+                          </span>
                         </td>
-                        <td style={{ padding: '12px' }}>
-                          {prov.aprobado_por ? (
-                            <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold' }}>✓ Por: {prov.aprobado_por}</div>
-                          ) : (
-                            <span style={{ color: '#999', fontSize: '11px' }}>No registrado</span>
-                          )}
-                        </td>
+                        <td style={{ padding: '12px' }}>{prov.aprobado_por ? <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold' }}>✓ Por: {prov.aprobado_por}</div> : <span style={{ color: '#999', fontSize: '11px' }}>No registrado</span>}</td>
                         <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                           <button onClick={() => abrirEditorProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Editar</button>
                           <button onClick={() => revocarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#ffc107', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>A Pendiente</button>
@@ -999,22 +898,53 @@ export default function App() {
             </div>
           )}
 
-          {tabAdmin === 'carga_masiva' && (
+          {/* NUEVO MÓDULO: ACTUALIZACIÓN DE FORMULARIO (REEMPLAZA CARGA MASIVA) */}
+          {tabAdmin === 'act_formulario' && (
             <div>
-              <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '18px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>Carga Masiva de Proveedores</h3>
-              <p style={{ fontSize: '14px', color: '#555', marginBottom: '20px' }}>Sube múltiples proveedores a la vez mediante un archivo CSV. Los proveedores ingresarán con estado "Pendiente" listos para ser evaluados.</p>
+              <h3 style={{ margin: '0 0 20px 0', color: '#333', fontSize: '18px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>Actualización de Categorías y Subcategorías</h3>
+              <p style={{ fontSize: '14px', color: '#555', marginBottom: '20px' }}>Agrega o elimina elementos del menú desplegable del formulario público en tiempo real.</p>
               
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                <div style={{ padding: '20px', border: '1px dashed #ccc', borderRadius: '8px', backgroundColor: '#f9f9f9', textAlign: 'center' }}>
-                  <h4 style={{ margin: '0 0 10px 0', color: '#004A99' }}>1. Descarga la Plantilla Excel (CSV)</h4>
-                  <p style={{ fontSize: '12px', color: '#666', marginBottom: '15px' }}>Para que el sistema lea la información sin errores, debes usar este formato. Para las zonas de cobertura, sepáralas usando un guion medio (-).</p>
-                  <button onClick={descargarPlantillaCSV} style={{ padding: '10px 20px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Descargar Plantilla CSV</button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '30px' }}>
+                {/* Panel Nueva Categoría */}
+                <div style={{ backgroundColor: '#f9f9f9', border: '1px solid #ddd', padding: '20px', borderRadius: '8px' }}>
+                  <h4 style={{ margin: '0 0 15px 0', color: '#004A99' }}>Gestión de Categorías</h4>
+                  
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                    <input type="text" placeholder="Nueva Categoría..." value={nuevaCatInput} onChange={e => setNuevaCatInput(e.target.value)} style={{ flex: 1, padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
+                    <button onClick={agCat} style={{ backgroundColor: '#28a745', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Añadir</button>
+                  </div>
+
+                  <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                    {Object.keys(categoriasMenu).map(cat => (
+                      <div key={cat} onClick={() => setEditorCatSelec(cat)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderBottom: '1px solid #eee', backgroundColor: editorCatSelec === cat ? '#e6f2ff' : 'white', cursor: 'pointer' }}>
+                        <strong style={{ fontSize: '13px', color: editorCatSelec === cat ? '#004A99' : '#333' }}>{cat}</strong>
+                        <button onClick={(e) => { e.stopPropagation(); elimCat(cat); }} style={{ backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Borrar</button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                <div style={{ padding: '20px', border: '1px dashed #004A99', borderRadius: '8px', backgroundColor: '#f0f8ff', textAlign: 'center' }}>
-                  <h4 style={{ margin: '0 0 10px 0', color: '#004A99' }}>2. Sube el Archivo Completo</h4>
-                  <p style={{ fontSize: '12px', color: '#666', marginBottom: '15px' }}>Selecciona tu archivo .csv listo. El sistema limpiará las mayúsculas, e-mails y zonas de cobertura automáticamente.</p>
-                  <input type="file" accept=".csv" onChange={manejarCargaMasiva} style={{ display: 'block', margin: '0 auto', fontSize: '12px', padding: '10px', backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }} />
+                {/* Panel Nueva Subcategoría */}
+                <div style={{ backgroundColor: '#f0f8ff', border: '1px solid #cce5ff', padding: '20px', borderRadius: '8px' }}>
+                  <h4 style={{ margin: '0 0 15px 0', color: '#004A99' }}>Subcategorías de: {editorCatSelec || <span style={{color: '#999'}}>(Selecciona una Categoría)</span>}</h4>
+                  
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                    <input disabled={!editorCatSelec} type="text" placeholder="Nueva Subcategoría..." value={nuevaSubInput} onChange={e => setNuevaSubInput(e.target.value)} style={{ flex: 1, padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
+                    <button disabled={!editorCatSelec} onClick={agSub} style={{ backgroundColor: editorCatSelec ? '#28a745' : '#ccc', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '4px', cursor: editorCatSelec ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}>Añadir</button>
+                  </div>
+
+                  {editorCatSelec && (
+                    <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      {categoriasMenu[editorCatSelec]?.length === 0 ? <p style={{ fontSize: '12px', color: '#777' }}>No hay subcategorías.</p> : 
+                        categoriasMenu[editorCatSelec]?.map(sub => (
+                          <div key={sub} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', border: '1px solid #eee', backgroundColor: 'white', borderRadius: '4px' }}>
+                            <span style={{ fontSize: '12px' }}>{sub}</span>
+                            <button onClick={() => elimSub(editorCatSelec, sub)} style={{ backgroundColor: '#dc3545', color: 'white', border: 'none', padding: '3px 6px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer' }}>X</button>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1022,7 +952,7 @@ export default function App() {
 
           {tabAdmin === 'exportar' && (
             <div>
-              <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo CSV compatible con los sistemas internos.</p>
+              <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo compatible con los sistemas internos.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', marginBottom: '20px', backgroundColor: '#f9f9f9', padding: '15px', borderRadius: '8px', border: '1px solid #ddd' }}>
                 <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Buscar por RUT</label><input placeholder="Ej: 12345678-9" style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroRut(e.target.value)} /></div>
                 <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Nombre de Fantasía</label><input placeholder="Buscar empresa..." style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroNombre(e.target.value)} /></div>
@@ -1030,30 +960,31 @@ export default function App() {
                   <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Categoría</label>
                   <select style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => {setFiltroCategoria(e.target.value); setFiltroSubcategoria('');}}>
                     <option value="">Todas</option>
-                    {Object.keys(categoriasSodimac).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    {Object.keys(categoriasMenu).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Subcategoría</label>
                   <select disabled={!filtroCategoria} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroSubcategoria(e.target.value)}>
                     <option value="">Todas</option>
-                    {filtroCategoria && categoriasSodimac[filtroCategoria].map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                    {filtroCategoria && categoriasMenu[filtroCategoria]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
                   </select>
                 </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                 <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#004A99' }}>Seleccionados: {seleccionados.length} de {proveedoresFiltrados.length}</span>
-                <button onClick={exportarCSV} style={{ padding: '10px 20px', backgroundColor: '#28a745', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>Descargar CSV Exportable</button>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={exportarCSV} style={{ padding: '10px 20px', backgroundColor: '#28a745', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>Descargar CSV Clean</button>
+                  <button onClick={exportarExcel} style={{ padding: '10px 20px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>Descargar Excel (.xls)</button>
+                </div>
               </div>
 
               <div style={{ overflowX: 'auto', border: '1px solid #ccc', borderRadius: '8px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', width: '40px', textAlign: 'center' }}>
-                        <input type="checkbox" onChange={toggleSeleccionarTodo} checked={seleccionados.length === proveedoresFiltrados.length && proveedoresFiltrados.length > 0} />
-                      </th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', width: '40px', textAlign: 'center' }}><input type="checkbox" onChange={toggleSeleccionarTodo} checked={seleccionados.length === proveedoresFiltrados.length && proveedoresFiltrados.length > 0} /></th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>RUT</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Nombre Fantasía (Empresa)</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría / Sub</th>
@@ -1065,9 +996,7 @@ export default function App() {
                     {proveedoresFiltrados.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay resultados con estos filtros.</td></tr> : 
                     proveedoresFiltrados.map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee', backgroundColor: seleccionados.includes(prov.id) ? '#f0f8ff' : 'white' }}>
-                        <td style={{ padding: '12px', textAlign: 'center' }}>
-                          <input type="checkbox" checked={seleccionados.includes(prov.id)} onChange={() => toggleSeleccion(prov.id)} />
-                        </td>
+                        <td style={{ padding: '12px', textAlign: 'center' }}><input type="checkbox" checked={seleccionados.includes(prov.id)} onChange={() => toggleSeleccion(prov.id)} /></td>
                         <td style={{ padding: '12px' }}>{prov.rut}</td>
                         <td style={{ padding: '12px' }}><strong>{prov.nombre_fantasia}</strong></td>
                         <td style={{ padding: '12px' }}>{prov.categoria} <br/><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
@@ -1095,7 +1024,6 @@ export default function App() {
                   <button type="submit" disabled={bloqueoSeguridad} style={{ gridColumn: '1 / -1', padding: '12px', marginTop: '10px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>CREAR USUARIO</button>
                 </form>
               </div>
-
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #004A99', paddingBottom: '10px', marginBottom: '20px' }}>
                   <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Gestión de Usuarios</h3>
@@ -1134,9 +1062,6 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
-                {usuarioActual?.usuario !== 'mmaquieira' && (
-                  <p style={{ fontSize: '12px', color: '#888', marginTop: '15px', textAlign: 'center' }}>Solo el usuario principal puede editar o eliminar accesos.</p>
-                )}
               </div>
             </div>
           )}
