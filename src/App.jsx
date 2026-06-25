@@ -155,7 +155,6 @@ export default function App() {
     setFormData({ ...formData, subcategoria: nuevasSub });
   };
 
-  // --- REGLA 1: BLOQUEO DE DUPLICADOS EN FORMULARIO ---
   const manejarEnvioRegistro = async (e) => {
     e.preventDefault();
     if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido.");
@@ -168,7 +167,6 @@ export default function App() {
 
     const rutLimpio = formData.rut.replace(/[<>]/g, '');
 
-    // Consulta de verificación en Supabase
     const { data: existentes, error: errExistentes } = await supabase
       .from('proveedores')
       .select('categoria, subcategoria')
@@ -183,7 +181,6 @@ export default function App() {
 
     formData.subcategoria.forEach(sub => {
       const catAsociada = Object.keys(categoriasDinamicas).find(key => categoriasDinamicas[key].includes(sub));
-      
       const yaExiste = existentes?.some(ex => ex.categoria === catAsociada && ex.subcategoria === sub);
       
       if (yaExiste) {
@@ -225,7 +222,6 @@ export default function App() {
   const manejarPreLogin = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado por 24 horas.");
-    
     if (preLoginPin === '171819') { 
       await registrarAuditoria('Anónimo', 'Éxito', 'Acceso a PIN Público');
       setVista('login'); setPreLoginPin(''); setIntentosFallidos(0); 
@@ -264,16 +260,13 @@ export default function App() {
     cargarProveedores(); cargarAdministradores();
   };
 
-  // --- REGLA 2: AUTO-LIMPIEZA DE DUPLICADOS EN BASE DE DATOS ---
   const cargarProveedores = async () => {
     const { data, error } = await supabase.from('proveedores').select('*').order('fecha_registro', { ascending: false });
     if (!error && data) {
-      
       const uniqueMap = new Map();
       const idsToDelete = [];
       const dataLimpia = [];
 
-      // Damos prioridad a los que están "Aprobados"
       const dataOrdenada = [...data].sort((a, b) => {
         if (a.estado === 'Aprobado' && b.estado !== 'Aprobado') return -1;
         if (b.estado === 'Aprobado' && a.estado !== 'Aprobado') return 1;
@@ -283,14 +276,13 @@ export default function App() {
       dataOrdenada.forEach(prov => {
         const key = `${prov.rut}_${prov.categoria}_${prov.subcategoria}`;
         if (uniqueMap.has(key)) {
-          idsToDelete.push(prov.id); // Es un duplicado
+          idsToDelete.push(prov.id); 
         } else {
           uniqueMap.set(key, true);
-          dataLimpia.push(prov); // Es único
+          dataLimpia.push(prov); 
         }
       });
 
-      // Ejecutamos limpieza automática silenciosa
       if (idsToDelete.length > 0) {
         for (let i = 0; i < idsToDelete.length; i += 100) {
           const chunk = idsToDelete.slice(i, i + 100);
@@ -298,7 +290,6 @@ export default function App() {
         }
       }
 
-      // Devolvemos el orden cronológico para visualización
       dataLimpia.sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro));
       setProveedores(dataLimpia);
     }
@@ -366,6 +357,46 @@ export default function App() {
     else { alert("✅ Proveedor actualizado."); setProveedorEditando(null); cargarProveedores(); }
   };
 
+  const descargarPlantillaCSV = () => {
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += "Razon Social,Nombre de Fantasia,RUT,Domicilio Comercial,Categoria,Subcategoria,Zonas de Cobertura (Separadas por guion -),Email Principal,Email Secundario,Nombre Contacto,Cargo,Telefono\n";
+    csvContent += "Empresa Ejemplo SpA,Ejemplo,12345678-9,Av. Siempre Viva 123,Seguridad,Barreras De Seguridad,Metropolitana de Santiago - Valparaíso,contacto@ejemplo.cl,,Juan Perez,Gerente General,+56912345678\n";
+    const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "Plantilla_Carga_Masiva_Sodimac.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  const manejarCargaMasiva = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const lines = event.target.result.split(/\r?\n/).filter(line => line.trim() !== "");
+      if (lines.length <= 1) return alert("El archivo está vacío.");
+      const proveedoresNuevos = [];
+      for (let i = 1; i < lines.length; i++) {
+        const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
+        if (currentLine.length < 12) continue;
+        const rutLimpio = formatearRUT(currentLine[2].replace(/[<>]/g, ''));
+        if (!rutLimpio) continue;
+
+        let zonasArr = currentLine[6].split('-').map(z => sanitizarYCapitalizar(z.trim())).filter(z => z !== '');
+        if (zonasArr.includes("Todo El Pais") || zonasArr.includes("Todo el País")) zonasArr = ["Todo el País"];
+
+        proveedoresNuevos.push({
+          razon_social: sanitizarYCapitalizar(currentLine[0]), nombre_fantasia: sanitizarYCapitalizar(currentLine[1]), rut: rutLimpio,
+          domicilio_comercial: sanitizarYCapitalizar(currentLine[3]), categoria: sanitizarYCapitalizar(currentLine[4]), subcategoria: sanitizarYCapitalizar(currentLine[5]),
+          zonas_cobertura: zonasArr.join(', '), email_principal: currentLine[7].replace(/[<>]/g, '').toLowerCase(), email_secundario: currentLine[8] ? currentLine[8].replace(/[<>]/g, '').toLowerCase() : '',
+          nombre_contacto: sanitizarYCapitalizar(currentLine[9]), cargo: sanitizarYCapitalizar(currentLine[10]), telefono: currentLine[11].replace(/[<>]/g, ''), estado: 'Pendiente', terminos_aceptados: true
+        });
+      }
+      if (proveedoresNuevos.length > 0) {
+        const { error } = await supabase.from('proveedores').insert(proveedoresNuevos);
+        if (error) alert("⚠️ Error de seguridad en base."); else { alert(`✅ ${proveedoresNuevos.length} proveedores agregados.`); cargarProveedores(); setTabAdmin('pendientes'); }
+      }
+    };
+    reader.readAsText(file, 'UTF-8'); e.target.value = null; 
+  };
+
   const crearAdministrador = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from('administradores').insert([{
@@ -424,20 +455,22 @@ export default function App() {
   const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
   const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
   const proveedoresFiltrados = proveedoresAprobados.filter(p => p.rut.toLowerCase().includes(filtroRut.toLowerCase()) && p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) && (filtroCategoria === '' || p.categoria === filtroCategoria) && (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria));
-  
   const toggleSeleccion = (id) => setSeleccionados(seleccionados.includes(id) ? seleccionados.filter(i => i !== id) : [...seleccionados, id]);
   const toggleSeleccionarTodo = (e) => setSeleccionados(e.target.checked ? proveedoresFiltrados.map(p => p.id) : []);
   
+  // --- ACTUALIZACIÓN DE EXPORTAR CSV SEGÚN SOLICITUD ---
   const exportarCSV = () => {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor.");
     const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
-    let csvC = "data:text/csv;charset=utf-8,\uFEFFId,Nombre de la empresa*,Nombre del contacto,Correo electrónico*,Código del idioma,Código de Región,Website\n";
-    dataAExportar.forEach(p => { csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,,${p.website || 'No posee'}\n`; });
-    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores_aprobados.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    let csvC = "data:text/csv;charset=utf-8,\uFEFFId,Nombre de la empresa*,Nombre del contacto,Correo electrónico*,Código del idioma,Código de Región\n";
+    dataAExportar.forEach(p => { 
+      csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,\n`; 
+    });
+    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
   const exportarExcel = () => {
-    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor.");
+    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor para exportar.");
     const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
     let excelHtml = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -488,6 +521,7 @@ export default function App() {
   const statsDashboard = () => {
     const total = proveedores.length; let fechasOrdenadas = []; const fechasRaw = {}; const renovaciones = [];
     const hace90Dias = new Date(); hace90Dias.setDate(hace90Dias.getDate() - 90);
+
     let fechaLimite = new Date();
     if (filtroTendenciaTiempo !== 'all') {
       const dias = parseInt(filtroTendenciaTiempo);
@@ -498,18 +532,22 @@ export default function App() {
       }
       fechaLimite.setDate(fechaLimite.getDate() - dias);
     }
+
     const proveedoresTendencia = proveedores.filter(p => {
       return (filtroTendenciaCat === '' || p.categoria === filtroTendenciaCat) && 
              (filtroTendenciaSub === '' || p.subcategoria === filtroTendenciaSub) && 
              (filtroTendenciaTiempo === 'all' || new Date(p.fecha_registro) >= fechaLimite);
     });
+
     proveedoresTendencia.forEach(p => {
       const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
       if (filtroTendenciaTiempo !== 'all') { if (fechasRaw[fechaCorta] !== undefined) fechasRaw[fechaCorta]++; } 
       else { fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1; }
     });
+
     if (filtroTendenciaTiempo === 'all') fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => new Date(`${a.split('-')[2]}-${a.split('-')[1]}-${a.split('-')[0]}`) - new Date(`${b.split('-')[2]}-${b.split('-')[1]}-${b.split('-')[0]}`));
     proveedores.forEach(p => { if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p); });
+
     return { total, fechasRaw, fechasOrdenadas, renovaciones };
   };
   const stats = statsDashboard();
@@ -665,7 +703,6 @@ export default function App() {
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required placeholder="12345678-9" value={formData.rut} style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, rut: formatearRUT(e.target.value)})} /></div>
               <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, domicilio: e.target.value})} /></div>
               
-              {/* WEBSITE PROVEEDOR */}
               <div style={{ gridColumn: '1 / -1', padding: '15px', backgroundColor: '#f0f8ff', border: '1px solid #cce5ff', borderRadius: '4px' }}>
                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#004A99' }}>Website Proveedor</label>
                 <div style={{ display: 'flex', gap: '20px', marginTop: '8px' }}>
@@ -732,7 +769,6 @@ export default function App() {
               <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Teléfono *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, telefono: e.target.value})} /></div>
             </div>
             
-            {/* T&C CON STOP PROPAGATION */}
             <div style={{ marginTop: '25px', padding: '15px', backgroundColor: '#f9f9f9', border: '1px solid #ddd', borderRadius: '4px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', cursor: 'pointer' }}>
                 <input type="checkbox" required onChange={e => setFormData({...formData, terminos: e.target.checked})} style={{ width: '18px', height: '18px' }} />
@@ -860,7 +896,7 @@ export default function App() {
                     </select>
                     
                     <div style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '55px', overflowY: 'auto', backgroundColor: '#fff', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                      {filtroTortaCat === '' ? <span style={{ fontSize: '11px', color: '#999', padding: '2px' }}>Seleccione una categoría para filtrar...</span> : 
+                      {filtroTortaCat === '' ? <span style={{ fontSize: '11px', color: '#999', padding: '2px' }}>Seleccione una categoría para filtrar subcategorías...</span> : 
                         categoriasDinamicas[filtroTortaCat]?.map(sub => (
                           <label key={sub} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', backgroundColor: '#f0f0f0', padding: '2px 6px', border: '1px solid #ccc', borderRadius: '12px' }}>
                             <input type="checkbox" checked={filtroTortaSub.includes(sub)} onChange={(e) => {
@@ -970,6 +1006,19 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              {stats.renovaciones.length > 0 && (
+                <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffeeba', padding: '20px', borderRadius: '8px' }}>
+                  <h3 style={{ margin: '0 0 15px 0', color: '#856404' }}>Acción Requerida: Envío de Recordatorios</h3>
+                  <p style={{ fontSize: '13px', color: '#856404', marginBottom: '15px' }}>Los siguientes proveedores llevan más de 90 días en la base y necesitan actualizar su información.</p>
+                  {stats.renovaciones.map(prov => (
+                    <div key={prov.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '10px', borderRadius: '4px', marginBottom: '8px', border: '1px solid #ddd' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{prov.razon_social} <span style={{ color: '#666', fontWeight: 'normal' }}>({prov.rut})</span></span>
+                      <button onClick={() => enviarRecordatorio(prov)} style={{ backgroundColor: '#004A99', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Enviar Correo de Actualización</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1028,6 +1077,7 @@ export default function App() {
             </div>
           )}
 
+          {/* TAB GESTIÓN CON ENCABEZADOS COMPACTOS */}
           {tabAdmin === 'gestion' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -1038,22 +1088,24 @@ export default function App() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>
-                        Razón Social / RUT <br />
-                        <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '90%', padding: '4px', marginTop: '6px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', outline: 'none' }} />
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                        <div style={{ marginBottom: '4px' }}>Razón Social / RUT</div>
+                        <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>
-                        Categoría / Subcategoría <br />
-                        <input type="text" placeholder="Filtrar Categoria..." value={filtroGestionCat} onChange={e => setFiltroGestionCat(e.target.value)} style={{ width: '90%', padding: '4px', marginTop: '6px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', display: 'block', marginBottom: '4px', outline: 'none' }} />
-                        <input type="text" placeholder="Filtrar Subcategoria..." value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '90%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', display: 'block', outline: 'none' }} />
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                        <div style={{ marginBottom: '4px' }}>Categoría / Subcategoría</div>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <input type="text" placeholder="Categoría..." value={filtroGestionCat} onChange={e => setFiltroGestionCat(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
+                          <input type="text" placeholder="Subcat..." value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
+                        </div>
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>
-                        Cobertura <br />
-                        <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '90%', padding: '4px', marginTop: '6px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', outline: 'none' }} />
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                        <div style={{ marginBottom: '4px' }}>Cobertura</div>
+                        <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', paddingTop: '15px' }}>Contacto</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', paddingTop: '15px' }}>Auditoría</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', paddingTop: '15px' }}>Acciones</th>
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>Contacto</th>
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>Auditoría</th>
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1126,6 +1178,7 @@ export default function App() {
             </div>
           )}
 
+          {/* TAB EXPORTAR CON FORMATO CSV MODIFICADO Y EXCEL TRADICIONAL */}
           {tabAdmin === 'exportar' && (
             <div>
               <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo compatible con los sistemas internos.</p>
@@ -1245,6 +1298,7 @@ export default function App() {
             </div>
           )}
 
+          {/* 🛡️ PESTAÑA DE AUDITORÍA SOLO PARA MMAQUIEIRA */}
           {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>
