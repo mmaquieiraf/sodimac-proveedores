@@ -1084,11 +1084,12 @@ export default function App() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '22%', minWidth: '160px' }}>
+                      {/* Se eliminó width y minWidth para permitir ajuste automático */}
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
                         <div style={{ marginBottom: '6px', fontWeight: 'bold' }}>Razón Social / RUT</div>
                         <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '100%', padding: '6px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '28%', minWidth: '220px' }}>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
                         <div style={{ marginBottom: '6px', fontWeight: 'bold' }}>Categoría / Subcategoría</div>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <select value={filtroGestionCat} onChange={e => {setFiltroGestionCat(e.target.value); setFiltroGestionSub('');}} style={{ width: '50%', padding: '6px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
@@ -1101,17 +1102,17 @@ export default function App() {
                           </select>
                         </div>
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '15%', minWidth: '130px' }}>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
                         <div style={{ marginBottom: '6px', fontWeight: 'bold' }}>Cobertura</div>
                         <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '100%', padding: '6px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '20%', minWidth: '180px' }}>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
                         <div style={{ fontWeight: 'bold' }}>Contacto</div>
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center', width: '7%', minWidth: '90px' }}>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center' }}>
                         <div style={{ fontWeight: 'bold' }}>Auditoría</div>
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center', width: '8%', minWidth: '100px' }}>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center' }}>
                         <div style={{ fontWeight: 'bold' }}>Acciones</div>
                       </th>
                     </tr>
