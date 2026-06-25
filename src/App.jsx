@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { categoriasSodimac as catSodimacOriginal, formatearRUT, validarRUT } from './datosSodimac';
 
+// --- INYECCIÓN DINÁMICA DE NUEVAS SUBCATEGORÍAS ---
 const categoriasSodimac = JSON.parse(JSON.stringify(catSodimacOriginal));
 
 const nuevasSubcategorias = {
@@ -17,6 +18,7 @@ Object.keys(nuevasSubcategorias).forEach(cat => {
   });
 });
 
+// --- LISTA DE ZONAS Y MACROZONAS ---
 const zonasOpciones = [
   "Todo el País", "Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", 
   "Coquimbo", "Valparaíso", "Metropolitana de Santiago", "O'Higgins", "Maule", 
@@ -31,6 +33,7 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
+// SANITIZACIÓN Y CAPITALIZACIÓN
 const sanitizarYCapitalizar = (texto) => {
   if (!texto) return '';
   const textoSeguro = texto.replace(/[<>]/g, '').toLowerCase().trim();
@@ -59,11 +62,13 @@ export default function App() {
     localStorage.setItem('sodimac_categorias_dinamicas', JSON.stringify(categoriasDinamicas));
   }, [categoriasDinamicas]);
 
+  // --- FILTROS DE GESTIÓN ---
   const [filtroGestionNombre, setFiltroGestionNombre] = useState('');
   const [filtroGestionCat, setFiltroGestionCat] = useState('');
   const [filtroGestionSub, setFiltroGestionSub] = useState('');
   const [filtroGestionZona, setFiltroGestionZona] = useState('');
 
+  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA CON MEMORIA (24 HORAS) ---
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
 
@@ -112,7 +117,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira') cargarLogsAuditoria();
+    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira') {
+      cargarLogsAuditoria();
+    }
   }, [tabAdmin, usuarioActual]);
 
   const [formData, setFormData] = useState({
@@ -157,7 +164,7 @@ export default function App() {
 
   const manejarEnvioRegistro = async (e) => {
     e.preventDefault();
-    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido.");
+    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido. Por favor revise.");
     if (formData.categoria.length === 0) return alert("Debe seleccionar al menos una Categoría.");
     if (formData.subcategoria.length === 0) return alert("Debe seleccionar al menos una Subcategoría.");
     if (formData.zonasCobertura.length === 0) return alert("Debe seleccionar al menos una Zona de Cobertura.");
@@ -222,6 +229,7 @@ export default function App() {
   const manejarPreLogin = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado por 24 horas.");
+    
     if (preLoginPin === '171819') { 
       await registrarAuditoria('Anónimo', 'Éxito', 'Acceso a PIN Público');
       setVista('login'); setPreLoginPin(''); setIntentosFallidos(0); 
@@ -242,12 +250,14 @@ export default function App() {
   const manejarLogin = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado temporalmente por 24 horas.");
+
     const intentoUsuario = credenciales.usuario.replace(/[<>]/g, '').trim();
     const { data, error } = await supabase.from('administradores').select('*')
       .eq('usuario', intentoUsuario).eq('password', credenciales.password.replace(/[<>]/g, ''))
       .eq('pin', credenciales.pin.replace(/[<>]/g, '')).maybeSingle();
 
     if (error) return alert("⚠️ Error de conexión seguro.");
+    
     if (!data) {
       await registrarAuditoria(intentoUsuario || 'Desconocido', 'Fallido', 'Login Panel Admin');
       const fueBloqueado = registrarIntentoFallido();
@@ -371,7 +381,7 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = async (event) => {
       const lines = event.target.result.split(/\r?\n/).filter(line => line.trim() !== "");
-      if (lines.length <= 1) return alert("El archivo está vacío.");
+      if (lines.length <= 1) return alert("El archivo está vacío o solo contiene encabezados.");
       const proveedoresNuevos = [];
       for (let i = 1; i < lines.length; i++) {
         const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
@@ -452,13 +462,13 @@ export default function App() {
     if(!window.confirm(`¿Seguro de eliminar la subcategoría "${sub}"?`)) return;
     setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: categoriasDinamicas[cat].filter(s => s !== sub) });
   };
-const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
+  const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
   const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
   const proveedoresFiltrados = proveedoresAprobados.filter(p => p.rut.toLowerCase().includes(filtroRut.toLowerCase()) && p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) && (filtroCategoria === '' || p.categoria === filtroCategoria) && (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria));
   const toggleSeleccion = (id) => setSeleccionados(seleccionados.includes(id) ? seleccionados.filter(i => i !== id) : [...seleccionados, id]);
   const toggleSeleccionarTodo = (e) => setSeleccionados(e.target.checked ? proveedoresFiltrados.map(p => p.id) : []);
   
-  // --- ACTUALIZACIÓN DE EXPORTAR CSV SEGÚN SOLICITUD ---
+  // --- EXPORTACIÓN CSV (ESTRUCTURA ORIGINAL, SIN WEBSITE) ---
   const exportarCSV = () => {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor.");
     const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
@@ -469,6 +479,7 @@ const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNo
     const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
+  // --- EXPORTACIÓN EXCEL (CON WEBSITE Y DATOS COMPLETOS) ---
   const exportarExcel = () => {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor para exportar.");
     const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
@@ -505,8 +516,8 @@ const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNo
   const proveedoresGestionFiltrados = proveedores.filter(p => {
     if (p.estado !== 'Aprobado') return false;
     const matchNombre = p.nombre_fantasia.toLowerCase().includes(filtroGestionNombre.toLowerCase()) || p.razon_social.toLowerCase().includes(filtroGestionNombre.toLowerCase());
-    const matchCat = p.categoria.toLowerCase().includes(filtroGestionCat.toLowerCase());
-    const matchSub = p.subcategoria.toLowerCase().includes(filtroGestionSub.toLowerCase());
+    const matchCat = filtroGestionCat === '' || p.categoria === filtroGestionCat;
+    const matchSub = filtroGestionSub === '' || p.subcategoria === filtroGestionSub;
     const matchZona = p.zonas_cobertura ? p.zonas_cobertura.toLowerCase().includes(filtroGestionZona.toLowerCase()) : true;
     return matchNombre && matchCat && matchSub && matchZona;
   });
@@ -964,6 +975,7 @@ const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNo
                 </div>
               </div>
 
+              {/* MAPA DE CALOR */}
               <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', marginBottom: '30px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                   <div>
@@ -1077,7 +1089,7 @@ const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNo
             </div>
           )}
 
-          {/* TAB GESTIÓN CON ENCABEZADOS COMPACTOS */}
+          {/* TAB GESTIÓN CON VISUAL COMPACTA */}
           {tabAdmin === 'gestion' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -1088,34 +1100,40 @@ const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNo
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                      <th style={{ padding: '8px 10px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
                         <div style={{ marginBottom: '4px' }}>Razón Social / RUT</div>
                         <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                      <th style={{ padding: '8px 10px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
                         <div style={{ marginBottom: '4px' }}>Categoría / Subcategoría</div>
                         <div style={{ display: 'flex', gap: '4px' }}>
-                          <input type="text" placeholder="Categoría..." value={filtroGestionCat} onChange={e => setFiltroGestionCat(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
-                          <input type="text" placeholder="Subcat..." value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
+                          <select value={filtroGestionCat} onChange={e => {setFiltroGestionCat(e.target.value); setFiltroGestionSub('');}} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
+                            <option value="">Todas</option>
+                            {Object.keys(categoriasDinamicas).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                          </select>
+                          <select disabled={!filtroGestionCat} value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
+                            <option value="">Todas</option>
+                            {filtroGestionCat && categoriasDinamicas[filtroGestionCat]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                          </select>
                         </div>
                       </th>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                      <th style={{ padding: '8px 10px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
                         <div style={{ marginBottom: '4px' }}>Cobertura</div>
                         <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>Contacto</th>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>Auditoría</th>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>Acciones</th>
+                      <th style={{ padding: '8px 10px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>Contacto</th>
+                      <th style={{ padding: '8px 10px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom', textAlign: 'center' }}>Auditoría</th>
+                      <th style={{ padding: '8px 10px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom', textAlign: 'center' }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {proveedoresGestionFiltrados.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se encontraron proveedores con los filtros aplicados.</td></tr> : 
                     proveedoresGestionFiltrados.map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '12px' }}><strong>{prov.razon_social}</strong><br /><span style={{ color: '#666' }}>{prov.rut}</span></td>
-                        <td style={{ padding: '12px' }}>{prov.categoria}<br /><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
-                        <td style={{ padding: '12px', maxWidth: '150px' }}><span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>{prov.zonas_cobertura || 'No especificada'}</span></td>
-                        <td style={{ padding: '12px' }}>
+                        <td style={{ padding: '10px' }}><strong>{prov.razon_social}</strong><br /><span style={{ color: '#666' }}>{prov.rut}</span></td>
+                        <td style={{ padding: '10px' }}>{prov.categoria}<br /><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
+                        <td style={{ padding: '10px', maxWidth: '150px' }}><span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>{prov.zonas_cobertura || 'No especificada'}</span></td>
+                        <td style={{ padding: '10px' }}>
                           {prov.nombre_contacto}<br />
                           <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a><br />
                           <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span><br />
@@ -1123,11 +1141,11 @@ const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNo
                             <a href={prov.website.startsWith('http') ? prov.website : `https://${prov.website}`} target="_blank" rel="noopener noreferrer" style={{ color: '#17a2b8', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>🌐 {prov.website}</a>
                           )}
                         </td>
-                        <td style={{ padding: '12px' }}>{prov.aprobado_por ? <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold' }}>✓ Por: {prov.aprobado_por}</div> : <span style={{ color: '#999', fontSize: '11px' }}>No registrado</span>}</td>
-                        <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                          <button onClick={() => abrirEditorProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Editar</button>
-                          <button onClick={() => revocarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#ffc107', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>A Pendiente</button>
-                          <button onClick={() => rechazarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Eliminar</button>
+                        <td style={{ padding: '10px', textAlign: 'center' }}>{prov.aprobado_por ? <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold' }}>✓ Por:<br/>{prov.aprobado_por}</div> : <span style={{ color: '#999', fontSize: '11px', display: 'block', textAlign: 'center' }}>No registrado</span>}</td>
+                        <td style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'center' }}>
+                          <button onClick={() => abrirEditorProveedor(prov)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Editar</button>
+                          <button onClick={() => revocarProveedor(prov.id)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#ffc107', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>A Pendiente</button>
+                          <button onClick={() => rechazarProveedor(prov.id)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>
                         </td>
                       </tr>
                     ))}
@@ -1178,7 +1196,6 @@ const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNo
             </div>
           )}
 
-          {/* TAB EXPORTAR CON FORMATO CSV MODIFICADO Y EXCEL TRADICIONAL */}
           {tabAdmin === 'exportar' && (
             <div>
               <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo compatible con los sistemas internos.</p>
@@ -1342,4 +1359,4 @@ const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNo
 
     </div>
   );
-}
+} 
