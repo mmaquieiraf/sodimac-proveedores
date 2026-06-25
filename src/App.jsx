@@ -455,10 +455,11 @@ export default function App() {
   const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
   const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
   const proveedoresFiltrados = proveedoresAprobados.filter(p => p.rut.toLowerCase().includes(filtroRut.toLowerCase()) && p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) && (filtroCategoria === '' || p.categoria === filtroCategoria) && (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria));
+  
   const toggleSeleccion = (id) => setSeleccionados(seleccionados.includes(id) ? seleccionados.filter(i => i !== id) : [...seleccionados, id]);
   const toggleSeleccionarTodo = (e) => setSeleccionados(e.target.checked ? proveedoresFiltrados.map(p => p.id) : []);
   
-  // --- ACTUALIZACIÓN DE EXPORTAR CSV SEGÚN SOLICITUD ---
+  // --- EXPORTACIÓN CSV SIN WEBSITE ---
   const exportarCSV = () => {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor.");
     const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
@@ -469,6 +470,7 @@ export default function App() {
     const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
+  // --- EXPORTACIÓN EXCEL CON DATA COMPLETA ---
   const exportarExcel = () => {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor para exportar.");
     const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
@@ -850,6 +852,7 @@ export default function App() {
       {vista === 'panel' && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           
+          {/* BARRA DE NAVEGACIÓN DEL PANEL */}
           <div style={{ display: 'flex', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px', gap: '20px', overflowX: 'auto' }}>
             <h2 onClick={() => setTabAdmin('dashboard')} style={{ color: tabAdmin === 'dashboard' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Dashboard</h2>
             <h2 onClick={() => setTabAdmin('pendientes')} style={{ color: tabAdmin === 'pendientes' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Pendientes</h2>
@@ -857,6 +860,7 @@ export default function App() {
             <h2 onClick={() => setTabAdmin('actualizacion_form')} style={{ color: tabAdmin === 'actualizacion_form' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Actualización Formulario</h2>
             <h2 onClick={() => {setTabAdmin('exportar'); setSeleccionados([]);}} style={{ color: tabAdmin === 'exportar' ? '#28a745' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Exportar Aprobados</h2>
             <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Admin / Roles</h2>
+            {/* 🛡️ PESTAÑA DE AUDITORÍA EXCLUSIVA PARA MMAQUIEIRA */}
             {usuarioActual?.usuario === 'mmaquieira' && (
               <h2 onClick={() => { setTabAdmin('auditoria'); cargarLogsAuditoria(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>🛡️ Auditoría</h2>
             )}
@@ -896,7 +900,7 @@ export default function App() {
                     </select>
                     
                     <div style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '55px', overflowY: 'auto', backgroundColor: '#fff', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                      {filtroTortaCat === '' ? <span style={{ fontSize: '11px', color: '#999', padding: '2px' }}>Seleccione una categoría para filtrar subcategorías...</span> : 
+                      {filtroTortaCat === '' ? <span style={{ fontSize: '11px', color: '#999', padding: '2px' }}>Seleccione una categoría para filtrar...</span> : 
                         categoriasDinamicas[filtroTortaCat]?.map(sub => (
                           <label key={sub} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', backgroundColor: '#f0f0f0', padding: '2px 6px', border: '1px solid #ccc', borderRadius: '12px' }}>
                             <input type="checkbox" checked={filtroTortaSub.includes(sub)} onChange={(e) => {
@@ -964,6 +968,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* MAPA DE CALOR */}
               <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', marginBottom: '30px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                   <div>
@@ -1006,22 +1011,10 @@ export default function App() {
                   ))}
                 </div>
               </div>
-
-              {stats.renovaciones.length > 0 && (
-                <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffeeba', padding: '20px', borderRadius: '8px' }}>
-                  <h3 style={{ margin: '0 0 15px 0', color: '#856404' }}>Acción Requerida: Envío de Recordatorios</h3>
-                  <p style={{ fontSize: '13px', color: '#856404', marginBottom: '15px' }}>Los siguientes proveedores llevan más de 90 días en la base y necesitan actualizar su información.</p>
-                  {stats.renovaciones.map(prov => (
-                    <div key={prov.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '10px', borderRadius: '4px', marginBottom: '8px', border: '1px solid #ddd' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{prov.razon_social} <span style={{ color: '#666', fontWeight: 'normal' }}>({prov.rut})</span></span>
-                      <button onClick={() => enviarRecordatorio(prov)} style={{ backgroundColor: '#004A99', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Enviar Correo de Actualización</button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
+          {/* PESTAÑA: PENDIENTES */}
           {tabAdmin === 'pendientes' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -1077,7 +1070,7 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB GESTIÓN CON ENCABEZADOS COMPACTOS */}
+          {/* PESTAÑA: GESTIÓN CON ENCABEZADOS COMPACTOS */}
           {tabAdmin === 'gestion' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -1088,28 +1081,29 @@ export default function App() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom', width: '220px', minWidth: '220px' }}>
                         <div style={{ marginBottom: '4px' }}>Razón Social / RUT</div>
                         <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom', width: '250px', minWidth: '250px' }}>
                         <div style={{ marginBottom: '4px' }}>Categoría / Subcategoría</div>
                         <div style={{ display: 'flex', gap: '4px' }}>
                           <input type="text" placeholder="Categoría..." value={filtroGestionCat} onChange={e => setFiltroGestionCat(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                           <input type="text" placeholder="Subcat..." value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                         </div>
                       </th>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom', width: '150px', minWidth: '150px' }}>
                         <div style={{ marginBottom: '4px' }}>Cobertura</div>
                         <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '100%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>Contacto</th>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>Auditoría</th>
-                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>Acciones</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom', width: '200px', minWidth: '200px' }}>Contacto</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom', width: '100px', textAlign: 'center' }}>Auditoría</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom', width: '100px', textAlign: 'center' }}>Acciones</th>
+                      <th style={{ borderBottom: '2px solid #ccc', width: '100%' }}></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {proveedoresGestionFiltrados.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se encontraron proveedores con los filtros aplicados.</td></tr> : 
+                    {proveedoresGestionFiltrados.length === 0 ? <tr><td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se encontraron proveedores con los filtros aplicados.</td></tr> : 
                     proveedoresGestionFiltrados.map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
                         <td style={{ padding: '12px' }}><strong>{prov.razon_social}</strong><br /><span style={{ color: '#666' }}>{prov.rut}</span></td>
@@ -1123,12 +1117,13 @@ export default function App() {
                             <a href={prov.website.startsWith('http') ? prov.website : `https://${prov.website}`} target="_blank" rel="noopener noreferrer" style={{ color: '#17a2b8', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>🌐 {prov.website}</a>
                           )}
                         </td>
-                        <td style={{ padding: '12px' }}>{prov.aprobado_por ? <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold' }}>✓ Por: {prov.aprobado_por}</div> : <span style={{ color: '#999', fontSize: '11px' }}>No registrado</span>}</td>
-                        <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                          <button onClick={() => abrirEditorProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Editar</button>
-                          <button onClick={() => revocarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#ffc107', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>A Pendiente</button>
-                          <button onClick={() => rechazarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Eliminar</button>
+                        <td style={{ padding: '12px', textAlign: 'center' }}>{prov.aprobado_por ? <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold' }}>✓ Por:<br/>{prov.aprobado_por}</div> : <span style={{ color: '#999', fontSize: '11px', display: 'block', textAlign: 'center' }}>No registrado</span>}</td>
+                        <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'center' }}>
+                          <button onClick={() => abrirEditorProveedor(prov)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Editar</button>
+                          <button onClick={() => revocarProveedor(prov.id)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#ffc107', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>A Pendiente</button>
+                          <button onClick={() => rechazarProveedor(prov.id)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>
                         </td>
+                        <td style={{ padding: '12px' }}></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1178,7 +1173,6 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB EXPORTAR CON FORMATO CSV MODIFICADO Y EXCEL TRADICIONAL */}
           {tabAdmin === 'exportar' && (
             <div>
               <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo compatible con los sistemas internos.</p>
@@ -1342,4 +1336,4 @@ export default function App() {
 
     </div>
   );
-}
+} 
