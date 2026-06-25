@@ -462,7 +462,7 @@ export default function App() {
     if(!window.confirm(`¿Seguro de eliminar la subcategoría "${sub}"?`)) return;
     setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: categoriasDinamicas[cat].filter(s => s !== sub) });
   };
-  nst [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
+  const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
   const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
   const proveedoresFiltrados = proveedoresAprobados.filter(p => p.rut.toLowerCase().includes(filtroRut.toLowerCase()) && p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) && (filtroCategoria === '' || p.categoria === filtroCategoria) && (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria));
   const toggleSeleccion = (id) => setSeleccionados(seleccionados.includes(id) ? seleccionados.filter(i => i !== id) : [...seleccionados, id]);
@@ -1348,3 +1348,5 @@ export default function App() {
       )}
 
     </div>
+  );
+}
