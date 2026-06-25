@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { categoriasSodimac as catSodimacOriginal, formatearRUT, validarRUT } from './datosSodimac';
 
-// --- INYECCIÓN DINÁMICA DE NUEVAS SUBCATEGORÍAS ---
 const categoriasSodimac = JSON.parse(JSON.stringify(catSodimacOriginal));
 
 const nuevasSubcategorias = {
@@ -18,7 +17,6 @@ Object.keys(nuevasSubcategorias).forEach(cat => {
   });
 });
 
-// --- LISTA DE ZONAS Y MACROZONAS ---
 const zonasOpciones = [
   "Todo el País", "Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", 
   "Coquimbo", "Valparaíso", "Metropolitana de Santiago", "O'Higgins", "Maule", 
@@ -33,7 +31,6 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
-// SANITIZACIÓN Y CAPITALIZACIÓN
 const sanitizarYCapitalizar = (texto) => {
   if (!texto) return '';
   const textoSeguro = texto.replace(/[<>]/g, '').toLowerCase().trim();
@@ -62,13 +59,11 @@ export default function App() {
     localStorage.setItem('sodimac_categorias_dinamicas', JSON.stringify(categoriasDinamicas));
   }, [categoriasDinamicas]);
 
-  // --- FILTROS DE GESTIÓN ---
   const [filtroGestionNombre, setFiltroGestionNombre] = useState('');
   const [filtroGestionCat, setFiltroGestionCat] = useState('');
   const [filtroGestionSub, setFiltroGestionSub] = useState('');
   const [filtroGestionZona, setFiltroGestionZona] = useState('');
 
-  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA CON MEMORIA (24 HORAS) ---
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
 
@@ -117,9 +112,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira') {
-      cargarLogsAuditoria();
-    }
+    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira') cargarLogsAuditoria();
   }, [tabAdmin, usuarioActual]);
 
   const [formData, setFormData] = useState({
@@ -250,14 +243,12 @@ export default function App() {
   const manejarLogin = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado temporalmente por 24 horas.");
-
     const intentoUsuario = credenciales.usuario.replace(/[<>]/g, '').trim();
     const { data, error } = await supabase.from('administradores').select('*')
       .eq('usuario', intentoUsuario).eq('password', credenciales.password.replace(/[<>]/g, ''))
       .eq('pin', credenciales.pin.replace(/[<>]/g, '')).maybeSingle();
 
     if (error) return alert("⚠️ Error de conexión seguro.");
-    
     if (!data) {
       await registrarAuditoria(intentoUsuario || 'Desconocido', 'Fallido', 'Login Panel Admin');
       const fueBloqueado = registrarIntentoFallido();
@@ -462,7 +453,7 @@ export default function App() {
     if(!window.confirm(`¿Seguro de eliminar la subcategoría "${sub}"?`)) return;
     setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: categoriasDinamicas[cat].filter(s => s !== sub) });
   };
-onst [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
+const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
   const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
   const proveedoresFiltrados = proveedoresAprobados.filter(p => p.rut.toLowerCase().includes(filtroRut.toLowerCase()) && p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) && (filtroCategoria === '' || p.categoria === filtroCategoria) && (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria));
   const toggleSeleccion = (id) => setSeleccionados(seleccionados.includes(id) ? seleccionados.filter(i => i !== id) : [...seleccionados, id]);
@@ -475,7 +466,7 @@ onst [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNom
     dataAExportar.forEach(p => { 
       csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,\n`; 
     });
-    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores_clean.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
   const exportarExcel = () => {
@@ -514,8 +505,8 @@ onst [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNom
   const proveedoresGestionFiltrados = proveedores.filter(p => {
     if (p.estado !== 'Aprobado') return false;
     const matchNombre = p.nombre_fantasia.toLowerCase().includes(filtroGestionNombre.toLowerCase()) || p.razon_social.toLowerCase().includes(filtroGestionNombre.toLowerCase());
-    const matchCat = filtroGestionCat === '' || p.categoria === filtroGestionCat;
-    const matchSub = filtroGestionSub === '' || p.subcategoria === filtroGestionSub;
+    const matchCat = p.categoria.toLowerCase().includes(filtroGestionCat.toLowerCase());
+    const matchSub = p.subcategoria.toLowerCase().includes(filtroGestionSub.toLowerCase());
     const matchZona = p.zonas_cobertura ? p.zonas_cobertura.toLowerCase().includes(filtroGestionZona.toLowerCase()) : true;
     return matchNombre && matchCat && matchSub && matchZona;
   });
@@ -905,7 +896,7 @@ onst [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNom
                     </select>
                     
                     <div style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '55px', overflowY: 'auto', backgroundColor: '#fff', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                      {filtroTortaCat === '' ? <span style={{ fontSize: '11px', color: '#999', padding: '2px' }}>Seleccione una categoría para filtrar subcategorías...</span> : 
+                      {filtroTortaCat === '' ? <span style={{ fontSize: '11px', color: '#999', padding: '2px' }}>Seleccione una categoría para filtrar...</span> : 
                         categoriasDinamicas[filtroTortaCat]?.map(sub => (
                           <label key={sub} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', backgroundColor: '#f0f0f0', padding: '2px 6px', border: '1px solid #ccc', borderRadius: '12px' }}>
                             <input type="checkbox" checked={filtroTortaSub.includes(sub)} onChange={(e) => {
@@ -973,6 +964,7 @@ onst [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNom
                 </div>
               </div>
 
+              {/* MAPA DE CALOR */}
               <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', marginBottom: '30px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                   <div>
@@ -1018,6 +1010,7 @@ onst [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNom
             </div>
           )}
 
+          {/* PESTAÑA: PENDIENTES */}
           {tabAdmin === 'pendientes' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -1073,7 +1066,7 @@ onst [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNom
             </div>
           )}
 
-          {/* TAB GESTIÓN CON VISUAL COMPACTA MEJORADA */}
+          {/* TAB GESTIÓN CON ENCABEZADOS COMPACTOS */}
           {tabAdmin === 'gestion' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -1084,36 +1077,24 @@ onst [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNom
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '25%', minWidth: '220px' }}>
-                        <div style={{ marginBottom: '6px', fontWeight: 'bold' }}>Razón Social / RUT</div>
-                        <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '100%', padding: '6px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                        <div style={{ marginBottom: '4px' }}>Razón Social / RUT</div>
+                        <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '100%', maxWidth: '180px', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '25%', minWidth: '260px' }}>
-                        <div style={{ marginBottom: '6px', fontWeight: 'bold' }}>Categoría / Subcategoría</div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <select value={filtroGestionCat} onChange={e => {setFiltroGestionCat(e.target.value); setFiltroGestionSub('');}} style={{ width: '50%', padding: '6px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
-                            <option value="">Categoría...</option>
-                            {Object.keys(categoriasDinamicas).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                          </select>
-                          <select disabled={!filtroGestionCat} value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '50%', padding: '6px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
-                            <option value="">Subcat...</option>
-                            {filtroGestionCat && categoriasDinamicas[filtroGestionCat]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
-                          </select>
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                        <div style={{ marginBottom: '4px' }}>Categoría / Subcategoría</div>
+                        <div style={{ display: 'flex', gap: '4px', maxWidth: '200px' }}>
+                          <input type="text" placeholder="Categoría..." value={filtroGestionCat} onChange={e => setFiltroGestionCat(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
+                          <input type="text" placeholder="Subcat..." value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                         </div>
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '15%', minWidth: '130px' }}>
-                        <div style={{ marginBottom: '6px', fontWeight: 'bold' }}>Cobertura</div>
-                        <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '100%', padding: '6px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
+                      <th style={{ padding: '8px 12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>
+                        <div style={{ marginBottom: '4px' }}>Cobertura</div>
+                        <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '100%', maxWidth: '120px', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: 'auto' }}>
-                        <div style={{ fontWeight: 'bold' }}>Contacto</div>
-                      </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center', width: '100px', minWidth: '100px' }}>
-                        <div style={{ fontWeight: 'bold' }}>Auditoría</div>
-                      </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center', width: '100px', minWidth: '100px' }}>
-                        <div style={{ fontWeight: 'bold' }}>Acciones</div>
-                      </th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom' }}>Contacto</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom', textAlign: 'center' }}>Auditoría</th>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'bottom', textAlign: 'center' }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1186,6 +1167,7 @@ onst [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNom
             </div>
           )}
 
+          {/* TAB EXPORTAR CON FORMATO CSV MODIFICADO Y EXCEL TRADICIONAL */}
           {tabAdmin === 'exportar' && (
             <div>
               <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo compatible con los sistemas internos.</p>
@@ -1349,3 +1331,4 @@ onst [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNom
 
     </div>
   );
+}
