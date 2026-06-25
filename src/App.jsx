@@ -164,7 +164,7 @@ export default function App() {
 
   const manejarEnvioRegistro = async (e) => {
     e.preventDefault();
-    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido. Por favor revise.");
+    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido.");
     if (formData.categoria.length === 0) return alert("Debe seleccionar al menos una Categoría.");
     if (formData.subcategoria.length === 0) return alert("Debe seleccionar al menos una Subcategoría.");
     if (formData.zonasCobertura.length === 0) return alert("Debe seleccionar al menos una Zona de Cobertura.");
@@ -381,7 +381,7 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = async (event) => {
       const lines = event.target.result.split(/\r?\n/).filter(line => line.trim() !== "");
-      if (lines.length <= 1) return alert("El archivo está vacío o solo contiene encabezados.");
+      if (lines.length <= 1) return alert("El archivo está vacío.");
       const proveedoresNuevos = [];
       for (let i = 1; i < lines.length; i++) {
         const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
@@ -462,7 +462,7 @@ export default function App() {
     if(!window.confirm(`¿Seguro de eliminar la subcategoría "${sub}"?`)) return;
     setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: categoriasDinamicas[cat].filter(s => s !== sub) });
   };
-  const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
+const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
   const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
   const proveedoresFiltrados = proveedoresAprobados.filter(p => p.rut.toLowerCase().includes(filtroRut.toLowerCase()) && p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) && (filtroCategoria === '' || p.categoria === filtroCategoria) && (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria));
   const toggleSeleccion = (id) => setSeleccionados(seleccionados.includes(id) ? seleccionados.filter(i => i !== id) : [...seleccionados, id]);
@@ -1359,4 +1359,4 @@ export default function App() {
 
     </div>
   );
-} 
+}
