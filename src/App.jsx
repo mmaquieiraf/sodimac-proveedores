@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { categoriasSodimac as catSodimacOriginal, formatearRUT, validarRUT } from './datosSodimac';
 
-// --- INYECCIÓN DINÁMICA DE NUEVAS SUBCATEGORÍAS ---
 const categoriasSodimac = JSON.parse(JSON.stringify(catSodimacOriginal));
 
 const nuevasSubcategorias = {
@@ -18,7 +17,6 @@ Object.keys(nuevasSubcategorias).forEach(cat => {
   });
 });
 
-// --- LISTA DE ZONAS Y MACROZONAS ---
 const zonasOpciones = [
   "Todo el País", "Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", 
   "Coquimbo", "Valparaíso", "Metropolitana de Santiago", "O'Higgins", "Maule", 
@@ -33,7 +31,6 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
-// SANITIZACIÓN Y CAPITALIZACIÓN
 const sanitizarYCapitalizar = (texto) => {
   if (!texto) return '';
   const textoSeguro = texto.replace(/[<>]/g, '').toLowerCase().trim();
@@ -62,13 +59,11 @@ export default function App() {
     localStorage.setItem('sodimac_categorias_dinamicas', JSON.stringify(categoriasDinamicas));
   }, [categoriasDinamicas]);
 
-  // --- FILTROS DE GESTIÓN ---
   const [filtroGestionNombre, setFiltroGestionNombre] = useState('');
   const [filtroGestionCat, setFiltroGestionCat] = useState('');
   const [filtroGestionSub, setFiltroGestionSub] = useState('');
   const [filtroGestionZona, setFiltroGestionZona] = useState('');
 
-  // --- BARRERA DE SEGURIDAD 2: ANTI-FUERZA BRUTA CON MEMORIA (24 HORAS) ---
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
 
@@ -164,7 +159,7 @@ export default function App() {
 
   const manejarEnvioRegistro = async (e) => {
     e.preventDefault();
-    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido.");
+    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido. Por favor revise.");
     if (formData.categoria.length === 0) return alert("Debe seleccionar al menos una Categoría.");
     if (formData.subcategoria.length === 0) return alert("Debe seleccionar al menos una Subcategoría.");
     if (formData.zonasCobertura.length === 0) return alert("Debe seleccionar al menos una Zona de Cobertura.");
@@ -462,9 +457,31 @@ export default function App() {
     if(!window.confirm(`¿Seguro de eliminar la subcategoría "${sub}"?`)) return;
     setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: categoriasDinamicas[cat].filter(s => s !== sub) });
   };
-  const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [seleccionados, setSeleccionados] = useState([]);
+  // --- NUEVO ESTADO: FILTRO MÚLTIPLE DE ZONA PARA EXPORTAR ---
+  const [filtroRut, setFiltroRut] = useState(''); 
+  const [filtroNombre, setFiltroNombre] = useState(''); 
+  const [filtroCategoria, setFiltroCategoria] = useState(''); 
+  const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); 
+  const [filtroExportarZona, setFiltroExportarZona] = useState([]);
+  const [seleccionados, setSeleccionados] = useState([]);
+
   const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
-  const proveedoresFiltrados = proveedoresAprobados.filter(p => p.rut.toLowerCase().includes(filtroRut.toLowerCase()) && p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase()) && (filtroCategoria === '' || p.categoria === filtroCategoria) && (filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria));
+  
+  const proveedoresFiltrados = proveedoresAprobados.filter(p => {
+    const matchRut = p.rut.toLowerCase().includes(filtroRut.toLowerCase());
+    const matchNombre = p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase());
+    const matchCat = filtroCategoria === '' || p.categoria === filtroCategoria;
+    const matchSub = filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria;
+    
+    let matchZona = true;
+    if (filtroExportarZona.length > 0) {
+      const zProv = p.zonas_cobertura ? p.zonas_cobertura.split(',').map(z => z.trim()) : [];
+      matchZona = filtroExportarZona.some(fz => zProv.includes(fz) || zProv.includes('Todo el País'));
+    }
+
+    return matchRut && matchNombre && matchCat && matchSub && matchZona;
+  });
+
   const toggleSeleccion = (id) => setSeleccionados(seleccionados.includes(id) ? seleccionados.filter(i => i !== id) : [...seleccionados, id]);
   const toggleSeleccionarTodo = (e) => setSeleccionados(e.target.checked ? proveedoresFiltrados.map(p => p.id) : []);
   
@@ -611,6 +628,7 @@ export default function App() {
     return { conteo, maxMapa: Math.max(...Object.values(conteo), 1), totalMapeados: filtradosMapa.length };
   };
   const mapStats = statsMapa();
+
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
       
@@ -1072,7 +1090,6 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB GESTIÓN CON VISUAL COMPACTA MEJORADA */}
           {tabAdmin === 'gestion' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -1080,44 +1097,38 @@ export default function App() {
                 <button onClick={cargarProveedores} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>🔄 Actualizar Registros</button>
               </div>
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '25%', minWidth: '220px' }}>
-                        <div style={{ marginBottom: '6px', fontWeight: 'bold' }}>Razón Social / RUT</div>
-                        <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '100%', padding: '6px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
+                        <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Razón Social / RUT</div>
+                        <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '100%', maxWidth: '160px', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '25%', minWidth: '260px' }}>
-                        <div style={{ marginBottom: '6px', fontWeight: 'bold' }}>Categoría / Subcategoría</div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <select value={filtroGestionCat} onChange={e => {setFiltroGestionCat(e.target.value); setFiltroGestionSub('');}} style={{ width: '50%', padding: '6px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
+                        <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Categoría / Subcategoría</div>
+                        <div style={{ display: 'flex', gap: '4px', maxWidth: '200px' }}>
+                          <select value={filtroGestionCat} onChange={e => {setFiltroGestionCat(e.target.value); setFiltroGestionSub('');}} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
                             <option value="">Categoría...</option>
                             {Object.keys(categoriasDinamicas).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                           </select>
-                          <select disabled={!filtroGestionCat} value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '50%', padding: '6px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
+                          <select disabled={!filtroGestionCat} value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
                             <option value="">Subcat...</option>
                             {filtroGestionCat && categoriasDinamicas[filtroGestionCat]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
                           </select>
                         </div>
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '15%', minWidth: '130px' }}>
-                        <div style={{ marginBottom: '6px', fontWeight: 'bold' }}>Cobertura</div>
-                        <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '100%', padding: '6px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
+                        <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Cobertura</div>
+                        <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '100%', maxWidth: '110px', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
                       </th>
-                      <th style={{
-                        padding: '12px',
-                        borderBottom: '2px solid #ccc',
-                        verticalAlign: 'top',
-                        width: '25%',
-                        minWidth: '250px'
-                      }}>
-                        <div style={{ fontWeight: 'bold' }}>Contacto</div>
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
+                        <div style={{ fontWeight: 'bold', marginTop: '1px' }}>Contacto</div>
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center', width: '100px', minWidth: '100px' }}>
-                        <div style={{ fontWeight: 'bold' }}>Auditoría</div>
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center' }}>
+                        <div style={{ fontWeight: 'bold', marginTop: '1px' }}>Auditoría</div>
                       </th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center', width: '100px', minWidth: '100px' }}>
-                        <div style={{ fontWeight: 'bold' }}>Acciones</div>
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center' }}>
+                        <div style={{ fontWeight: 'bold', marginTop: '1px' }}>Acciones</div>
                       </th>
                     </tr>
                   </thead>
@@ -1125,14 +1136,10 @@ export default function App() {
                     {proveedoresGestionFiltrados.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se encontraron proveedores con los filtros aplicados.</td></tr> : 
                     proveedoresGestionFiltrados.map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '12px' }}><strong>{prov.razon_social}</strong><br /><span style={{ color: '#666' }}>{prov.rut}</span></td>
-                        <td style={{ padding: '12px' }}>{prov.categoria}<br /><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
-                        <td style={{ padding: '12px', maxWidth: '150px' }}><span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>{prov.zonas_cobertura || 'No especificada'}</span></td>
-                        <td style={{
-                          padding: '12px',
-                          width: '25%',
-                          minWidth: '250px'
-                        }}>
+                        <td style={{ padding: '8px' }}><strong>{prov.razon_social}</strong><br /><span style={{ color: '#666' }}>{prov.rut}</span></td>
+                        <td style={{ padding: '8px' }}>{prov.categoria}<br /><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
+                        <td style={{ padding: '8px', maxWidth: '140px' }}><span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>{prov.zonas_cobertura || 'No especificada'}</span></td>
+                        <td style={{ padding: '8px' }}>
                           {prov.nombre_contacto}<br />
                           <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a><br />
                           <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span><br />
@@ -1140,8 +1147,8 @@ export default function App() {
                             <a href={prov.website.startsWith('http') ? prov.website : `https://${prov.website}`} target="_blank" rel="noopener noreferrer" style={{ color: '#17a2b8', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>🌐 {prov.website}</a>
                           )}
                         </td>
-                        <td style={{ padding: '12px', textAlign: 'center' }}>{prov.aprobado_por ? <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold' }}>✓ Por:<br/>{prov.aprobado_por}</div> : <span style={{ color: '#999', fontSize: '11px', display: 'block', textAlign: 'center' }}>No registrado</span>}</td>
-                        <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'center' }}>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>{prov.aprobado_por ? <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold' }}>✓ Por:<br/>{prov.aprobado_por}</div> : <span style={{ color: '#999', fontSize: '11px', display: 'block', textAlign: 'center' }}>No registrado</span>}</td>
+                        <td style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'center' }}>
                           <button onClick={() => abrirEditorProveedor(prov)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Editar</button>
                           <button onClick={() => revocarProveedor(prov.id)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#ffc107', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>A Pendiente</button>
                           <button onClick={() => rechazarProveedor(prov.id)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>
@@ -1195,25 +1202,53 @@ export default function App() {
             </div>
           )}
 
+          {/* TAB EXPORTAR CON FORMATO CSV MODIFICADO Y EXCEL TRADICIONAL + NUEVO FILTRO ZONAS */}
           {tabAdmin === 'exportar' && (
             <div>
               <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo compatible con los sistemas internos.</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', marginBottom: '20px', backgroundColor: '#f9f9f9', padding: '15px', borderRadius: '8px', border: '1px solid #ddd' }}>
-                <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Buscar por RUT</label><input placeholder="Ej: 12345678-9" style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroRut(e.target.value)} /></div>
-                <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Nombre de Fantasía</label><input placeholder="Buscar empresa..." style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroNombre(e.target.value)} /></div>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Categoría</label>
-                  <select style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => {setFiltroCategoria(e.target.value); setFiltroSubcategoria('');}}>
-                    <option value="">Todas</option>
-                    {Object.keys(categoriasDinamicas).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
+              
+              <div style={{ backgroundColor: '#f9f9f9', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                  <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Buscar por RUT</label><input placeholder="Ej: 12345678-9" style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroRut(e.target.value)} /></div>
+                  <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Nombre de Fantasía</label><input placeholder="Buscar empresa..." style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroNombre(e.target.value)} /></div>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Categoría</label>
+                    <select style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => {setFiltroCategoria(e.target.value); setFiltroSubcategoria('');}}>
+                      <option value="">Todas</option>
+                      {Object.keys(categoriasDinamicas).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Subcategoría</label>
+                    <select disabled={!filtroCategoria} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroSubcategoria(e.target.value)}>
+                      <option value="">Todas</option>
+                      {filtroCategoria && categoriasDinamicas[filtroCategoria]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                    </select>
+                  </div>
                 </div>
+
                 <div>
-                  <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Subcategoría</label>
-                  <select disabled={!filtroCategoria} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFiltroSubcategoria(e.target.value)}>
-                    <option value="">Todas</option>
-                    {filtroCategoria && categoriasDinamicas[filtroCategoria]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
-                  </select>
+                  <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Zonas de Cobertura</label>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginTop: '5px' }}>
+                    <select style={{ padding: '8px', fontSize: '12px', border: '1px solid #ccc', borderRadius: '4px', minWidth: '180px', outline: 'none' }} onChange={e => {
+                      const val = e.target.value;
+                      if (val && !filtroExportarZona.includes(val)) setFiltroExportarZona([...filtroExportarZona, val]);
+                      e.target.value = ""; 
+                    }}>
+                      <option value="">Seleccionar zona...</option>
+                      {zonasOpciones.map(zona => <option key={zona} value={zona}>{zona}</option>)}
+                    </select>
+                    
+                    <div style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px', minHeight: '33px', maxHeight: '60px', overflowY: 'auto', backgroundColor: '#fff', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                      {filtroExportarZona.length === 0 ? <span style={{ fontSize: '12px', color: '#999', padding: '2px' }}>Todas las zonas...</span> : 
+                        filtroExportarZona.map(z => (
+                          <label key={z} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', backgroundColor: '#f0f0f0', padding: '2px 6px', border: '1px solid #ccc', borderRadius: '12px' }}>
+                            <input type="checkbox" checked={true} onChange={() => setFiltroExportarZona(filtroExportarZona.filter(s => s !== z))} style={{ margin: 0, cursor: 'pointer' }} /> {z}
+                          </label>
+                        ))
+                      }
+                    </div>
+                  </div>
                 </div>
               </div>
 
