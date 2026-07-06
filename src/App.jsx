@@ -55,6 +55,10 @@ export default function App() {
   const [nuevaCatInput, setNuevaCatInput] = useState('');
   const [nuevasSubInputs, setNuevasSubInputs] = useState({});
 
+  // --- NUEVO ESTADO PARA AUDITORÍA DE PROVEEDORES ---
+  const [mostrarModalAuditoria, setMostrarModalAuditoria] = useState(false);
+  const [logsAuditoriaProv, setLogsAuditoriaProv] = useState([]);
+
   useEffect(() => {
     localStorage.setItem('sodimac_categorias_dinamicas', JSON.stringify(categoriasDinamicas));
   }, [categoriasDinamicas]);
@@ -109,6 +113,24 @@ export default function App() {
       }]);
       if (error) console.error("Error de auditoría:", error);
     } catch (err) { console.error(err); }
+  };
+
+  // --- FUNCIÓN HELPER: REGISTRAR CAMBIOS EN PROVEEDORES ---
+  const registrarAuditoriaProv = async (rut, nombre, accion, detalles, usuario) => {
+    try {
+      await supabase.from('auditoria_proveedores').insert([{
+        proveedor_rut: rut,
+        proveedor_nombre: nombre,
+        accion: accion,
+        detalles: detalles,
+        usuario: usuario || 'Sistema'
+      }]);
+    } catch (err) { console.error("Error guardando auditoria prov:", err); }
+  };
+
+  const cargarLogsAuditoriaProv = async () => {
+    const { data, error } = await supabase.from('auditoria_proveedores').select('*').order('created_at', { ascending: false }).limit(200);
+    if (!error && data) setLogsAuditoriaProv(data);
   };
 
   useEffect(() => {
@@ -279,7 +301,7 @@ export default function App() {
       });
 
       dataOrdenada.forEach(prov => {
-        const key = `${prov.rut}_${prov.categoria}_${prov.subcategoria}`;
+        const key = `${(prov.rut||'').trim().toLowerCase()}_${(prov.categoria||'').trim().toLowerCase()}_${(prov.subcategoria||'').trim().toLowerCase()}`;
         if (uniqueMap.has(key)) {
           idsToDelete.push(prov.id); 
         } else {
@@ -288,7 +310,12 @@ export default function App() {
         }
       });
 
+      // Lógica de eliminación con AUDITORÍA (Aquí podrás ver por qué se borró)
       if (idsToDelete.length > 0) {
+        const provsToDelete = dataOrdenada.filter(p => idsToDelete.includes(p.id));
+        for (const p of provsToDelete) {
+          await registrarAuditoriaProv(p.rut, p.razon_social, 'Limpieza Automática (Duplicidad)', `RUT, Categoría y Subcat idénticos. Se limpió basura.`, 'Sistema');
+        }
         for (let i = 0; i < idsToDelete.length; i += 100) {
           const chunk = idsToDelete.slice(i, i + 100);
           await supabase.from('proveedores').delete().in('id', chunk);
@@ -310,22 +337,35 @@ export default function App() {
     if (!error && data) setLogsAuditoria(data);
   };
 
-  const aprobarProveedor = async (id) => {
+  const aprobarProveedor = async (prov) => {
     if(!window.confirm("¿Aprobar este proveedor?")) return;
-    const { error } = await supabase.from('proveedores').update({ estado: 'Aprobado', aprobado_por: usuarioActual.usuario }).eq('id', id);
-    if (!error) cargarProveedores();
+    const { error } = await supabase.from('proveedores').update({ 
+      estado: 'Aprobado', 
+      aprobado_por: usuarioActual.usuario,
+      fecha_aprobacion: new Date().toISOString()
+    }).eq('id', prov.id);
+    if (!error) {
+      await registrarAuditoriaProv(prov.rut, prov.razon_social, 'Aprobación', `Aprobado para ${prov.categoria} -> ${prov.subcategoria}`, usuarioActual.usuario);
+      cargarProveedores();
+    }
   };
 
-  const revocarProveedor = async (id) => {
+  const revocarProveedor = async (prov) => {
     if(!window.confirm("¿Cambiar el estado de este proveedor a Pendiente?")) return;
-    const { error } = await supabase.from('proveedores').update({ estado: 'Pendiente', aprobado_por: null }).eq('id', id);
-    if (!error) cargarProveedores();
+    const { error } = await supabase.from('proveedores').update({ estado: 'Pendiente', aprobado_por: null }).eq('id', prov.id);
+    if (!error) {
+      await registrarAuditoriaProv(prov.rut, prov.razon_social, 'Revocación a Pendiente', `Devuelto a bandeja de pendientes`, usuarioActual.usuario);
+      cargarProveedores();
+    }
   };
 
-  const rechazarProveedor = async (id) => {
+  const rechazarProveedor = async (prov) => {
     if(!window.confirm("¿Rechazar y ELIMINAR definitivamente a este proveedor?")) return;
-    const { error } = await supabase.from('proveedores').delete().eq('id', id);
-    if (!error) cargarProveedores();
+    const { error } = await supabase.from('proveedores').delete().eq('id', prov.id);
+    if (!error) {
+      await registrarAuditoriaProv(prov.rut, prov.razon_social, 'Eliminación Manual', `Proveedor eliminado definitivamente del sistema`, usuarioActual.usuario);
+      cargarProveedores();
+    }
   };
 
   const [proveedorEditando, setProveedorEditando] = useState(null);
@@ -359,10 +399,14 @@ export default function App() {
     }).eq('id', proveedorEditando.id);
 
     if (error) { console.error(error); alert("⚠️ Error al actualizar."); }
-    else { alert("✅ Proveedor actualizado."); setProveedorEditando(null); cargarProveedores(); }
+    else { 
+      await registrarAuditoriaProv(proveedorEditando.rut, proveedorEditando.razon_social, 'Edición de Datos', `Información de ficha editada por Administrador`, usuarioActual.usuario);
+      alert("✅ Proveedor actualizado."); 
+      setProveedorEditando(null); 
+      cargarProveedores(); 
+    }
   };
-
-  const descargarPlantillaCSV = () => {
+const descargarPlantillaCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
     csvContent += "Razon Social,Nombre de Fantasia,RUT,Domicilio Comercial,Categoria,Subcategoria,Zonas de Cobertura (Separadas por guion -),Email Principal,Email Secundario,Nombre Contacto,Cargo,Telefono\n";
     csvContent += "Empresa Ejemplo SpA,Ejemplo,12345678-9,Av. Siempre Viva 123,Seguridad,Barreras De Seguridad,Metropolitana de Santiago - Valparaíso,contacto@ejemplo.cl,,Juan Perez,Gerente General,+56912345678\n";
@@ -457,7 +501,7 @@ export default function App() {
     if(!window.confirm(`¿Seguro de eliminar la subcategoría "${sub}"?`)) return;
     setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: categoriasDinamicas[cat].filter(s => s !== sub) });
   };
-  // --- NUEVO ESTADO: FILTRO MÚLTIPLE DE ZONA PARA EXPORTAR ---
+
   const [filtroRut, setFiltroRut] = useState(''); 
   const [filtroNombre, setFiltroNombre] = useState(''); 
   const [filtroCategoria, setFiltroCategoria] = useState(''); 
@@ -645,6 +689,48 @@ export default function App() {
           {vista === 'panel' && <button onClick={() => {setUsuarioActual(null); setVista('registro'); setTabAdmin('dashboard');}} style={{ background: '#EE2D24', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Cerrar Sesión</button>}
         </div>
       </div>
+
+      {/* MODAL AUDITORÍA PROVEEDORES (NUEVO) */}
+      {mostrarModalAuditoria && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
+          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '900px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+            <button onClick={() => setMostrarModalAuditoria(false)} style={{ position: 'absolute', top: '15px', right: '20px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#EE2D24', fontWeight: 'bold' }}>&times;</button>
+            <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>Auditoría de Cambios en Proveedores</h2>
+            <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>Historial cronológico de aprobaciones, ediciones y eliminaciones (manuales y automáticas por duplicidad).</p>
+            
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
+                  <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Fecha y Hora</th>
+                  <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Usuario</th>
+                  <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Acción</th>
+                  <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>RUT / Empresa</th>
+                  <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logsAuditoriaProv.length === 0 ? <tr><td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay registros de auditoría de proveedores aún.</td></tr> : 
+                logsAuditoriaProv.map(log => (
+                  <tr key={log.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '10px' }}>{new Date(log.created_at).toLocaleString('es-CL')}</td>
+                    <td style={{ padding: '10px', fontWeight: 'bold' }}>{log.usuario}</td>
+                    <td style={{ padding: '10px' }}>
+                      <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold', 
+                        backgroundColor: log.accion.includes('Aprob') ? '#d4edda' : log.accion.includes('Elimin') ? '#f8d7da' : '#e2e3e5',
+                        color: log.accion.includes('Aprob') ? '#155724' : log.accion.includes('Elimin') ? '#721c24' : '#383d41'
+                      }}>
+                        {log.accion}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px' }}><strong>{log.proveedor_nombre}</strong><br/><span style={{color:'#666'}}>{log.proveedor_rut}</span></td>
+                    <td style={{ padding: '10px', color: '#555' }}>{log.detalles}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* MODAL EDICIÓN PROVEEDOR */}
       {proveedorEditando && (
@@ -1045,6 +1131,7 @@ export default function App() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
+                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Fecha Registro</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Razón Social / RUT</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th>
                       <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Cobertura</th>
@@ -1053,9 +1140,12 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {proveedores.filter(p => p.estado === 'Pendiente').length === 0 ? <tr><td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay proveedores pendientes.</td></tr> : 
+                    {proveedores.filter(p => p.estado === 'Pendiente').length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay proveedores pendientes.</td></tr> : 
                     proveedores.filter(p => p.estado === 'Pendiente').map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '12px', color: '#666' }}>
+                          {new Date(prov.fecha_registro).toLocaleDateString('es-CL')}
+                        </td>
                         <td style={{ padding: '12px' }}>
                           <strong>{prov.razon_social}</strong><br />
                           <span style={{ color: '#666' }}>{prov.rut}</span>
@@ -1078,9 +1168,9 @@ export default function App() {
                           )}
                         </td>
                         <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                          <button onClick={() => aprobarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>
+                          <button onClick={() => aprobarProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>
                           <button onClick={() => abrirEditorProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Editar</button>
-                          <button onClick={() => rechazarProveedor(prov.id)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Eliminar</button>
+                          <button onClick={() => rechazarProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Eliminar</button>
                         </td>
                       </tr>
                     ))}
@@ -1093,13 +1183,19 @@ export default function App() {
           {tabAdmin === 'gestion' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Gestión de Proveedores Aprobados</h3>
-                <button onClick={cargarProveedores} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>🔄 Actualizar Registros</button>
+                <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Gestión de Proveedores Aprobados</h3>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={() => {cargarLogsAuditoriaProv(); setMostrarModalAuditoria(true);}} style={{ padding: '6px 15px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>🔍 Auditoría de Cambios</button>
+                  <button onClick={cargarProveedores} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>🔄 Actualizar Registros</button>
+                </div>
               </div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
+                        <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Fecha Aprobación</div>
+                      </th>
                       <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
                         <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Razón Social / RUT</div>
                         <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '100%', maxWidth: '160px', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
@@ -1133,9 +1229,12 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {proveedoresGestionFiltrados.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se encontraron proveedores con los filtros aplicados.</td></tr> : 
+                    {proveedoresGestionFiltrados.length === 0 ? <tr><td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se encontraron proveedores con los filtros aplicados.</td></tr> : 
                     proveedoresGestionFiltrados.map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '8px', color: '#666', fontSize: '11px' }}>
+                          {prov.fecha_aprobacion ? new Date(prov.fecha_aprobacion).toLocaleDateString('es-CL') : 'Antiguo'}
+                        </td>
                         <td style={{ padding: '8px' }}><strong>{prov.razon_social}</strong><br /><span style={{ color: '#666' }}>{prov.rut}</span></td>
                         <td style={{ padding: '8px' }}>{prov.categoria}<br /><span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span></td>
                         <td style={{ padding: '8px', maxWidth: '140px' }}><span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>{prov.zonas_cobertura || 'No especificada'}</span></td>
@@ -1150,8 +1249,8 @@ export default function App() {
                         <td style={{ padding: '8px', textAlign: 'center' }}>{prov.aprobado_por ? <div style={{ fontSize: '11px', color: '#004A99', fontWeight: 'bold' }}>✓ Por:<br/>{prov.aprobado_por}</div> : <span style={{ color: '#999', fontSize: '11px', display: 'block', textAlign: 'center' }}>No registrado</span>}</td>
                         <td style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'center' }}>
                           <button onClick={() => abrirEditorProveedor(prov)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Editar</button>
-                          <button onClick={() => revocarProveedor(prov.id)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#ffc107', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>A Pendiente</button>
-                          <button onClick={() => rechazarProveedor(prov.id)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>
+                          <button onClick={() => revocarProveedor(prov)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#ffc107', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>A Pendiente</button>
+                          <button onClick={() => rechazarProveedor(prov)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>
                         </td>
                       </tr>
                     ))}
@@ -1202,7 +1301,6 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB EXPORTAR CON FORMATO CSV MODIFICADO Y EXCEL TRADICIONAL + NUEVO FILTRO ZONAS */}
           {tabAdmin === 'exportar' && (
             <div>
               <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo compatible con los sistemas internos.</p>
