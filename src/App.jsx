@@ -31,6 +31,21 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
+// OPCIONES NUEVAS PARA PROCESOS
+const subgerenciasOpciones = ["Sistemas", "Prevención", "Recursos humanos", "Operaciones", "Logistica", "Administración", "Comercial"];
+
+const estadosProcesoOpciones = [
+  "No Iniciado",
+  "Estableciendo alcance, equipo y objetivos", 
+  "Desarrollando Bases", 
+  "En Negociación y analisis de ofertas", 
+  "En Aprobación y Adjudicación",
+  "Gestión Contractual y/o Implementación", 
+  "Adjudicado",
+  "Cancelado",
+  "Desierto"
+];
+
 const sanitizarYCapitalizar = (texto) => {
   if (!texto) return '';
   const textoSeguro = texto.replace(/[<>]/g, '').toLowerCase().trim();
@@ -45,7 +60,6 @@ const cargarCategoriasDinamicas = () => {
   return categoriasSodimac;
 };
 
-// HELPER NUEVO: Formateo de contabilidad (EJ: $5.555.555)
 const formatearMoneda = (val) => {
   if (val === '' || val === null || val === undefined) return '';
   const num = val.toString().replace(/\D/g, '');
@@ -66,13 +80,15 @@ export default function App() {
   const [mostrarModalAuditoria, setMostrarModalAuditoria] = useState(false);
   const [logsAuditoriaProv, setLogsAuditoriaProv] = useState([]);
 
-  // --- NUEVOS ESTADOS PARA REGISTRO DE PROCESOS ---
+  // --- ESTADOS PARA REGISTRO DE PROCESOS ---
   const [procesos, setProcesos] = useState([]);
   const [modalProceso, setModalProceso] = useState(false);
   const [procesoActual, setProcesoActual] = useState({
     id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '',
     proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: '',
-    baseline: '', monto_adjudicado: '', controller: ''
+    baseline: '', monto_adjudicado: '', controller: '',
+    subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos',
+    carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: ''
   });
 
   useEffect(() => {
@@ -134,11 +150,8 @@ export default function App() {
   const registrarAuditoriaProv = async (rut, nombre, accion, detalles, usuario) => {
     try {
       await supabase.from('auditoria_proveedores').insert([{
-        proveedor_rut: rut,
-        proveedor_nombre: nombre,
-        accion: accion,
-        detalles: detalles,
-        usuario: usuario || 'Sistema'
+        proveedor_rut: rut, proveedor_nombre: nombre, accion: accion,
+        detalles: detalles, usuario: usuario || 'Sistema'
       }]);
     } catch (err) { console.error("Error guardando auditoria prov:", err); }
   };
@@ -149,9 +162,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira') {
-      cargarLogsAuditoria();
-    }
+    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira') cargarLogsAuditoria();
   }, [tabAdmin, usuarioActual]);
 
   const [formData, setFormData] = useState({
@@ -164,20 +175,17 @@ export default function App() {
   const manejarCambioZona = (zona, checked, isEdit = false) => {
     if (isEdit) {
       let nuevasZonas = [...proveedorEditando.zonas_cobertura_arr];
-      if (checked) nuevasZonas.push(zona);
-      else nuevasZonas = nuevasZonas.filter(z => z !== zona);
+      if (checked) nuevasZonas.push(zona); else nuevasZonas = nuevasZonas.filter(z => z !== zona);
       setProveedorEditando({ ...proveedorEditando, zonas_cobertura_arr: nuevasZonas });
     } else {
       let nuevasZonas = [...formData.zonasCobertura];
-      if (checked) nuevasZonas.push(zona);
-      else nuevasZonas = nuevasZonas.filter(z => z !== zona);
+      if (checked) nuevasZonas.push(zona); else nuevasZonas = nuevasZonas.filter(z => z !== zona);
       setFormData({ ...formData, zonasCobertura: nuevasZonas });
     }
   };
 
   const manejarCambioCategoria = (cat, checked) => {
-    let nuevasCat = [...formData.categoria];
-    let nuevasSub = [...formData.subcategoria];
+    let nuevasCat = [...formData.categoria]; let nuevasSub = [...formData.subcategoria];
     if (checked) nuevasCat.push(cat);
     else {
       nuevasCat = nuevasCat.filter(c => c !== cat);
@@ -189,14 +197,13 @@ export default function App() {
 
   const manejarCambioSubcategoria = (sub, checked) => {
     let nuevasSub = [...formData.subcategoria];
-    if (checked) nuevasSub.push(sub);
-    else nuevasSub = nuevasSub.filter(s => s !== sub);
+    if (checked) nuevasSub.push(sub); else nuevasSub = nuevasSub.filter(s => s !== sub);
     setFormData({ ...formData, subcategoria: nuevasSub });
   };
 
   const manejarEnvioRegistro = async (e) => {
     e.preventDefault();
-    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido. Por favor revise.");
+    if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido.");
     if (formData.categoria.length === 0) return alert("Debe seleccionar al menos una Categoría.");
     if (formData.subcategoria.length === 0) return alert("Debe seleccionar al menos una Subcategoría.");
     if (formData.zonasCobertura.length === 0) return alert("Debe seleccionar al menos una Zona de Cobertura.");
@@ -205,15 +212,10 @@ export default function App() {
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
 
     const rutLimpio = formData.rut.replace(/[<>]/g, '');
-
-    const { data: existentes, error: errExistentes } = await supabase
-      .from('proveedores')
-      .select('categoria, subcategoria')
-      .eq('rut', rutLimpio);
+    const { data: existentes } = await supabase.from('proveedores').select('categoria, subcategoria').eq('rut', rutLimpio);
 
     const websiteFinal = formData.poseeWebsite === 'si' && formData.websiteUrl.trim() !== '' 
-      ? formData.websiteUrl.replace(/[<>]/g, '').trim().toLowerCase() 
-      : 'No posee';
+      ? formData.websiteUrl.replace(/[<>]/g, '').trim().toLowerCase() : 'No posee';
 
     const registrosAInsertar = [];
     const duplicadosEncontrados = [];
@@ -222,38 +224,29 @@ export default function App() {
       const catAsociada = Object.keys(categoriasDinamicas).find(key => categoriasDinamicas[key].includes(sub));
       const yaExiste = existentes?.some(ex => ex.categoria === catAsociada && ex.subcategoria === sub);
       
-      if (yaExiste) {
-        duplicadosEncontrados.push(`${catAsociada} -> ${sub}`);
-      } else {
+      if (yaExiste) duplicadosEncontrados.push(`${catAsociada} -> ${sub}`);
+      else {
         registrosAInsertar.push({
-          razon_social: sanitizarYCapitalizar(formData.razonSocial), 
-          nombre_fantasia: sanitizarYCapitalizar(formData.nombreFantasia),
-          rut: rutLimpio, 
-          domicilio_comercial: sanitizarYCapitalizar(formData.domicilio),
-          categoria: catAsociada, 
-          subcategoria: sub,      
+          razon_social: sanitizarYCapitalizar(formData.razonSocial), nombre_fantasia: sanitizarYCapitalizar(formData.nombreFantasia),
+          rut: rutLimpio, domicilio_comercial: sanitizarYCapitalizar(formData.domicilio),
+          categoria: catAsociada, subcategoria: sub,      
           email_principal: formData.emailPrincipal.replace(/[<>]/g, '').toLowerCase().trim(), 
           email_secundario: formData.emailSecundario ? formData.emailSecundario.replace(/[<>]/g, '').toLowerCase().trim() : '',
-          nombre_contacto: sanitizarYCapitalizar(formData.contacto), 
-          cargo: sanitizarYCapitalizar(formData.cargo),
-          telefono: formData.telefono.replace(/[<>]/g, '').trim(), 
-          zonas_cobertura: zonasFinales.join(', '), 
-          website: websiteFinal,
-          terminos_aceptados: formData.terminos,
-          estado: 'Pendiente'
+          nombre_contacto: sanitizarYCapitalizar(formData.contacto), cargo: sanitizarYCapitalizar(formData.cargo),
+          telefono: formData.telefono.replace(/[<>]/g, '').trim(), zonas_cobertura: zonasFinales.join(', '), 
+          website: websiteFinal, terminos_aceptados: formData.terminos, estado: 'Pendiente'
         });
       }
     });
 
     if (duplicadosEncontrados.length > 0) {
-      alert(`❌ ATENCIÓN: El RUT ${rutLimpio} ya se encuentra registrado en el sistema para:\n\n${duplicadosEncontrados.join('\n')}\n\nPor favor, desmárquelas para continuar.`);
+      alert(`❌ ATENCIÓN: El RUT ya se encuentra registrado para:\n\n${duplicadosEncontrados.join('\n')}`);
       return; 
     }
 
     if (registrosAInsertar.length > 0) {
       const { error } = await supabase.from('proveedores').insert(registrosAInsertar);
-      if (error) { console.error(error); alert("⚠️ Error de sistema. Posible falla de conexión."); }
-      else { alert(`✅ Registro enviado con éxito. Se generaron ${registrosAInsertar.length} postulaciones.`); window.location.reload(); }
+      if (error) alert("⚠️ Error de sistema."); else { alert(`✅ Registro enviado con éxito.`); window.location.reload(); }
     }
   };
 
@@ -261,7 +254,6 @@ export default function App() {
   const manejarPreLogin = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado por 24 horas.");
-    
     if (preLoginPin === '171819') { 
       await registrarAuditoria('Anónimo', 'Éxito', 'Acceso a PIN Público');
       setVista('login'); setPreLoginPin(''); setIntentosFallidos(0); 
@@ -281,15 +273,12 @@ export default function App() {
 
   const manejarLogin = async (e) => {
     e.preventDefault();
-    if (bloqueoSeguridad) return alert("❌ Sistema bloqueado temporalmente por 24 horas.");
-
+    if (bloqueoSeguridad) return alert("❌ Sistema bloqueado.");
     const intentoUsuario = credenciales.usuario.replace(/[<>]/g, '').trim();
     const { data, error } = await supabase.from('administradores').select('*')
       .eq('usuario', intentoUsuario).eq('password', credenciales.password.replace(/[<>]/g, ''))
       .eq('pin', credenciales.pin.replace(/[<>]/g, '')).maybeSingle();
 
-    if (error) return alert("⚠️ Error de conexión seguro.");
-    
     if (!data) {
       await registrarAuditoria(intentoUsuario || 'Desconocido', 'Fallido', 'Login Panel Admin');
       const fueBloqueado = registrarIntentoFallido();
@@ -305,37 +294,22 @@ export default function App() {
   const cargarProveedores = async () => {
     const { data, error } = await supabase.from('proveedores').select('*').order('fecha_registro', { ascending: false });
     if (!error && data) {
-      const uniqueMap = new Map();
-      const idsToDelete = [];
-      const dataLimpia = [];
-
+      const uniqueMap = new Map(); const idsToDelete = []; const dataLimpia = [];
       const dataOrdenada = [...data].sort((a, b) => {
         if (a.estado === 'Aprobado' && b.estado !== 'Aprobado') return -1;
-        if (b.estado === 'Aprobado' && a.estado !== 'Aprobado') return 1;
-        return 0; 
+        if (b.estado === 'Aprobado' && a.estado !== 'Aprobado') return 1; return 0; 
       });
 
       dataOrdenada.forEach(prov => {
         const key = `${(prov.rut||'').trim().toLowerCase()}_${(prov.categoria||'').trim().toLowerCase()}_${(prov.subcategoria||'').trim().toLowerCase()}`;
-        if (uniqueMap.has(key)) {
-          idsToDelete.push(prov.id); 
-        } else {
-          uniqueMap.set(key, true);
-          dataLimpia.push(prov); 
-        }
+        if (uniqueMap.has(key)) idsToDelete.push(prov.id); else { uniqueMap.set(key, true); dataLimpia.push(prov); }
       });
 
       if (idsToDelete.length > 0) {
         const provsToDelete = dataOrdenada.filter(p => idsToDelete.includes(p.id));
-        for (const p of provsToDelete) {
-          await registrarAuditoriaProv(p.rut, p.razon_social, 'Limpieza Automática (Duplicidad)', `RUT, Categoría y Subcat idénticos. Se limpió basura.`, 'Sistema');
-        }
-        for (let i = 0; i < idsToDelete.length; i += 100) {
-          const chunk = idsToDelete.slice(i, i + 100);
-          await supabase.from('proveedores').delete().in('id', chunk);
-        }
+        for (const p of provsToDelete) await registrarAuditoriaProv(p.rut, p.razon_social, 'Limpieza Automática (Duplicidad)', `RUT, Categoría y Subcat idénticos.`, 'Sistema');
+        for (let i = 0; i < idsToDelete.length; i += 100) await supabase.from('proveedores').delete().in('id', idsToDelete.slice(i, i + 100));
       }
-
       dataLimpia.sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro));
       setProveedores(dataLimpia);
     }
@@ -350,7 +324,7 @@ export default function App() {
   const guardarProceso = async (e) => {
     e.preventDefault();
     const payload = {
-      nombre: sanitizarYCapitalizar(procesoActual.nombre),
+      nombre: procesoActual.nombre.trim(),
       tipo: procesoActual.tipo,
       fecha_inicio: procesoActual.fecha_inicio,
       fecha_termino: procesoActual.fecha_termino,
@@ -359,71 +333,56 @@ export default function App() {
       proveedor_adjudicado: procesoActual.proveedor_adjudicado || null,
       baseline: procesoActual.baseline ? parseInt(procesoActual.baseline.toString().replace(/\D/g, '')) : null,
       monto_adjudicado: procesoActual.monto_adjudicado ? parseInt(procesoActual.monto_adjudicado.toString().replace(/\D/g, '')) : null,
-      controller: procesoActual.controller
+      controller: procesoActual.controller,
+      subgerencia: procesoActual.subgerencia,
+      estado_proceso: procesoActual.estado_proceso,
+      carta_adjudicacion: procesoActual.carta_adjudicacion || '',
+      aplica_contrato: procesoActual.aplica_contrato,
+      numero_contrato: procesoActual.aplica_contrato === 'si' ? procesoActual.numero_contrato : null
     };
 
     if (procesoActual.id) {
       const { error } = await supabase.from('procesos').update(payload).eq('id', procesoActual.id);
-      if(error) alert("⚠️ Error al actualizar el proceso."); 
-      else { alert("✅ Proceso actualizado."); setModalProceso(false); cargarProcesos(); }
+      if(error) alert("⚠️ Error al actualizar el proceso."); else { alert("✅ Proceso actualizado."); setModalProceso(false); cargarProcesos(); }
     } else {
       const { error } = await supabase.from('procesos').insert([payload]);
-      if(error) alert("⚠️ Error al crear el proceso."); 
-      else { alert("✅ Proceso creado."); setModalProceso(false); cargarProcesos(); }
+      if(error) alert("⚠️ Error al crear el proceso."); else { alert("✅ Proceso creado."); setModalProceso(false); cargarProcesos(); }
     }
   };
 
   const eliminarProceso = async (id) => {
     if(!window.confirm("¿Estás seguro de eliminar permanentemente este registro de proceso?")) return;
     const { error } = await supabase.from('procesos').delete().eq('id', id);
-    if (!error) {
-      alert("✅ Proceso eliminado.");
-      cargarProcesos();
-    } else {
-      alert("⚠️ Error al eliminar.");
-    }
+    if (!error) { alert("✅ Proceso eliminado."); cargarProcesos(); }
   };
   // ----------------------------------------
 
   const cargarAdministradores = async () => {
-    const { data, error } = await supabase.from('administradores').select('*').order('id', { ascending: true });
-    if (!error && data) setAdministradoresDb(data);
+    const { data } = await supabase.from('administradores').select('*').order('id', { ascending: true });
+    if (data) setAdministradoresDb(data);
   };
 
   const cargarLogsAuditoria = async () => {
-    const { data, error } = await supabase.from('auditoria_logins').select('*').order('created_at', { ascending: false }).limit(300);
-    if (!error && data) setLogsAuditoria(data);
+    const { data } = await supabase.from('auditoria_logins').select('*').order('created_at', { ascending: false }).limit(300);
+    if (data) setLogsAuditoria(data);
   };
 
   const aprobarProveedor = async (prov) => {
     if(!window.confirm("¿Aprobar este proveedor?")) return;
-    const { error } = await supabase.from('proveedores').update({ 
-      estado: 'Aprobado', 
-      aprobado_por: usuarioActual.usuario,
-      fecha_aprobacion: new Date().toISOString()
-    }).eq('id', prov.id);
-    if (!error) {
-      await registrarAuditoriaProv(prov.rut, prov.razon_social, 'Aprobación', `Aprobado para ${prov.categoria} -> ${prov.subcategoria}`, usuarioActual.usuario);
-      cargarProveedores();
-    }
+    const { error } = await supabase.from('proveedores').update({ estado: 'Aprobado', aprobado_por: usuarioActual.usuario, fecha_aprobacion: new Date().toISOString()}).eq('id', prov.id);
+    if (!error) { await registrarAuditoriaProv(prov.rut, prov.razon_social, 'Aprobación', `Aprobado para ${prov.categoria} -> ${prov.subcategoria}`, usuarioActual.usuario); cargarProveedores(); }
   };
 
   const revocarProveedor = async (prov) => {
     if(!window.confirm("¿Cambiar el estado de este proveedor a Pendiente?")) return;
     const { error } = await supabase.from('proveedores').update({ estado: 'Pendiente', aprobado_por: null }).eq('id', prov.id);
-    if (!error) {
-      await registrarAuditoriaProv(prov.rut, prov.razon_social, 'Revocación a Pendiente', `Devuelto a bandeja de pendientes`, usuarioActual.usuario);
-      cargarProveedores();
-    }
+    if (!error) { await registrarAuditoriaProv(prov.rut, prov.razon_social, 'Revocación', `Devuelto a pendientes`, usuarioActual.usuario); cargarProveedores(); }
   };
 
   const rechazarProveedor = async (prov) => {
-    if(!window.confirm("¿Rechazar y ELIMINAR definitivamente a este proveedor?")) return;
+    if(!window.confirm("¿Rechazar y ELIMINAR a este proveedor?")) return;
     const { error } = await supabase.from('proveedores').delete().eq('id', prov.id);
-    if (!error) {
-      await registrarAuditoriaProv(prov.rut, prov.razon_social, 'Eliminación Manual', `Proveedor eliminado definitivamente del sistema`, usuarioActual.usuario);
-      cargarProveedores();
-    }
+    if (!error) { await registrarAuditoriaProv(prov.rut, prov.razon_social, 'Eliminación', `Proveedor eliminado del sistema`, usuarioActual.usuario); cargarProveedores(); }
   };
 
   const [proveedorEditando, setProveedorEditando] = useState(null);
@@ -441,55 +400,35 @@ export default function App() {
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
 
     const { error } = await supabase.from('proveedores').update({
-      razon_social: sanitizarYCapitalizar(proveedorEditando.razon_social),
-      nombre_fantasia: sanitizarYCapitalizar(proveedorEditando.nombre_fantasia),
-      rut: proveedorEditando.rut.replace(/[<>]/g, ''),
-      domicilio_comercial: sanitizarYCapitalizar(proveedorEditando.domicilio_comercial),
-      categoria: proveedorEditando.categoria,
-      subcategoria: proveedorEditando.subcategoria,
-      email_principal: proveedorEditando.email_principal.replace(/[<>]/g, '').toLowerCase().trim(),
-      email_secundario: proveedorEditando.email_secundario ? proveedorEditando.email_secundario.replace(/[<>]/g, '').toLowerCase().trim() : '',
-      nombre_contacto: sanitizarYCapitalizar(proveedorEditando.nombre_contacto),
-      cargo: sanitizarYCapitalizar(proveedorEditando.cargo),
-      telefono: proveedorEditando.telefono.replace(/[<>]/g, '').trim(),
-      zonas_cobertura: zonasFinales.join(', '),
-      website: proveedorEditando.website.replace(/[<>]/g, '').trim()
+      razon_social: sanitizarYCapitalizar(proveedorEditando.razon_social), nombre_fantasia: sanitizarYCapitalizar(proveedorEditando.nombre_fantasia),
+      rut: proveedorEditando.rut.replace(/[<>]/g, ''), domicilio_comercial: sanitizarYCapitalizar(proveedorEditando.domicilio_comercial),
+      categoria: proveedorEditando.categoria, subcategoria: proveedorEditando.subcategoria,
+      email_principal: proveedorEditando.email_principal.replace(/[<>]/g, '').toLowerCase().trim(), email_secundario: proveedorEditando.email_secundario ? proveedorEditando.email_secundario.replace(/[<>]/g, '').toLowerCase().trim() : '',
+      nombre_contacto: sanitizarYCapitalizar(proveedorEditando.nombre_contacto), cargo: sanitizarYCapitalizar(proveedorEditando.cargo),
+      telefono: proveedorEditando.telefono.replace(/[<>]/g, '').trim(), zonas_cobertura: zonasFinales.join(', '), website: proveedorEditando.website.replace(/[<>]/g, '').trim()
     }).eq('id', proveedorEditando.id);
 
-    if (error) { console.error(error); alert("⚠️ Error al actualizar."); }
-    else { 
-      await registrarAuditoriaProv(proveedorEditando.rut, proveedorEditando.razon_social, 'Edición de Datos', `Información de ficha editada por Administrador`, usuarioActual.usuario);
-      alert("✅ Proveedor actualizado."); 
-      setProveedorEditando(null); 
-      cargarProveedores(); 
-    }
+    if (!error) { await registrarAuditoriaProv(proveedorEditando.rut, proveedorEditando.razon_social, 'Edición', `Ficha editada`, usuarioActual.usuario); alert("✅ Actualizado."); setProveedorEditando(null); cargarProveedores(); }
   };
 
   const descargarPlantillaCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "Razon Social,Nombre de Fantasia,RUT,Domicilio Comercial,Categoria,Subcategoria,Zonas de Cobertura (Separadas por guion -),Email Principal,Email Secundario,Nombre Contacto,Cargo,Telefono\n";
-    csvContent += "Empresa Ejemplo SpA,Ejemplo,12345678-9,Av. Siempre Viva 123,Seguridad,Barreras De Seguridad,Metropolitana de Santiago - Valparaíso,contacto@ejemplo.cl,,Juan Perez,Gerente General,+56912345678\n";
-    const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "Plantilla_Carga_Masiva_Sodimac.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFFRazon Social,Nombre de Fantasia,RUT,Domicilio Comercial,Categoria,Subcategoria,Zonas de Cobertura,Email Principal,Email Secundario,Nombre Contacto,Cargo,Telefono\n";
+    const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", "Plantilla_Carga.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
   const manejarCargaMasiva = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = async (event) => {
       const lines = event.target.result.split(/\r?\n/).filter(line => line.trim() !== "");
-      if (lines.length <= 1) return alert("El archivo está vacío.");
+      if (lines.length <= 1) return;
       const proveedoresNuevos = [];
       for (let i = 1; i < lines.length; i++) {
         const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
         if (currentLine.length < 12) continue;
-        const rutLimpio = formatearRUT(currentLine[2].replace(/[<>]/g, ''));
-        if (!rutLimpio) continue;
-
+        const rutLimpio = formatearRUT(currentLine[2].replace(/[<>]/g, '')); if (!rutLimpio) continue;
         let zonasArr = currentLine[6].split('-').map(z => sanitizarYCapitalizar(z.trim())).filter(z => z !== '');
         if (zonasArr.includes("Todo El Pais") || zonasArr.includes("Todo el País")) zonasArr = ["Todo el País"];
-
         proveedoresNuevos.push({
           razon_social: sanitizarYCapitalizar(currentLine[0]), nombre_fantasia: sanitizarYCapitalizar(currentLine[1]), rut: rutLimpio,
           domicilio_comercial: sanitizarYCapitalizar(currentLine[3]), categoria: sanitizarYCapitalizar(currentLine[4]), subcategoria: sanitizarYCapitalizar(currentLine[5]),
@@ -497,10 +436,7 @@ export default function App() {
           nombre_contacto: sanitizarYCapitalizar(currentLine[9]), cargo: sanitizarYCapitalizar(currentLine[10]), telefono: currentLine[11].replace(/[<>]/g, ''), estado: 'Pendiente', terminos_aceptados: true
         });
       }
-      if (proveedoresNuevos.length > 0) {
-        const { error } = await supabase.from('proveedores').insert(proveedoresNuevos);
-        if (error) alert("⚠️ Error de seguridad en base."); else { alert(`✅ ${proveedoresNuevos.length} proveedores agregados.`); cargarProveedores(); setTabAdmin('pendientes'); }
-      }
+      if (proveedoresNuevos.length > 0) { const { error } = await supabase.from('proveedores').insert(proveedoresNuevos); if (!error) { alert(`✅ ${proveedoresNuevos.length} proveedores agregados.`); cargarProveedores(); setTabAdmin('pendientes'); } }
     };
     reader.readAsText(file, 'UTF-8'); e.target.value = null; 
   };
@@ -511,14 +447,12 @@ export default function App() {
       usuario: nuevoAdmin.usuario.replace(/[<>]/g, '').trim(), password: nuevoAdmin.password.replace(/[<>]/g, ''), pin: nuevoAdmin.pin.replace(/[<>]/g, ''),
       nombre_completo: sanitizarYCapitalizar(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`), correo: nuevoAdmin.correo.replace(/[<>]/g, '').toLowerCase().trim()
     }]);
-    if (error) alert("⚠️ Error. Verifique que el correo o usuario no existan ya."); else { alert("✅ Usuario creado."); setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' }); cargarAdministradores(); }
+    if (!error) { alert("✅ Creado."); setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' }); cargarAdministradores(); }
   };
 
   const eliminarAdmin = async (id, usuario) => {
-    if(usuarioActual.usuario !== 'mmaquieira') return alert("No tienes permisos.");
-    if(usuario === 'mmaquieira') return alert("No puedes eliminar al usuario principal.");
-    if(!window.confirm(`¿Seguro de eliminar a ${usuario}?`)) return;
-    const { error } = await supabase.from('administradores').delete().eq('id', id); if (!error) cargarAdministradores();
+    if(usuarioActual.usuario !== 'mmaquieira' || usuario === 'mmaquieira') return;
+    if(window.confirm(`¿Eliminar a ${usuario}?`)) { await supabase.from('administradores').delete().eq('id', id); cargarAdministradores(); }
   };
 
   const [adminEditando, setAdminEditando] = useState(null);
@@ -528,46 +462,15 @@ export default function App() {
       nombre_completo: sanitizarYCapitalizar(adminEditando.nombre_completo), usuario: adminEditando.usuario.replace(/[<>]/g, '').trim(),
       correo: adminEditando.correo.replace(/[<>]/g, '').toLowerCase().trim(), password: adminEditando.password.replace(/[<>]/g, ''), pin: adminEditando.pin.replace(/[<>]/g, '')
     }).eq('id', adminEditando.id);
-    if (error) alert("⚠️ Error al actualizar."); else { alert("✅ Usuario actualizado."); setAdminEditando(null); cargarAdministradores(); }
+    if (!error) { alert("✅ Actualizado."); setAdminEditando(null); cargarAdministradores(); }
   };
 
-  const handleAgregarCategoria = (e) => {
-    e.preventDefault();
-    const cat = sanitizarYCapitalizar(nuevaCatInput);
-    if(!cat) return;
-    if(categoriasDinamicas[cat]) return alert("La categoría ya existe");
-    setCategoriasDinamicas({...categoriasDinamicas, [cat]: []});
-    setNuevaCatInput('');
-  };
+  const handleAgregarCategoria = (e) => { e.preventDefault(); const cat = sanitizarYCapitalizar(nuevaCatInput); if(cat && !categoriasDinamicas[cat]) { setCategoriasDinamicas({...categoriasDinamicas, [cat]: []}); setNuevaCatInput(''); } };
+  const handleEliminarCategoria = (cat) => { if(window.confirm(`¿Eliminar "${cat}"?`)) { const copia = {...categoriasDinamicas}; delete copia[cat]; setCategoriasDinamicas(copia); } };
+  const handleAgregarSubcategoria = (e, cat) => { e.preventDefault(); const sub = sanitizarYCapitalizar(nuevasSubInputs[cat]); if(sub && !categoriasDinamicas[cat].includes(sub)) { setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: [...categoriasDinamicas[cat], sub] }); setNuevasSubInputs({...nuevasSubInputs, [cat]: ''}); } };
+  const handleEliminarSubcategoria = (cat, sub) => { if(window.confirm(`¿Eliminar "${sub}"?`)) setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: categoriasDinamicas[cat].filter(s => s !== sub) }); };
 
-  const handleEliminarCategoria = (cat) => {
-    if(!window.confirm(`¿Seguro de eliminar la categoría "${cat}" y todas sus subcategorías?`)) return;
-    const copia = {...categoriasDinamicas};
-    delete copia[cat];
-    setCategoriasDinamicas(copia);
-  };
-
-  const handleAgregarSubcategoria = (e, cat) => {
-    e.preventDefault();
-    const sub = sanitizarYCapitalizar(nuevasSubInputs[cat]);
-    if(!sub) return;
-    if(categoriasDinamicas[cat].includes(sub)) return alert("La subcategoría ya existe");
-    setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: [...categoriasDinamicas[cat], sub] });
-    setNuevasSubInputs({...nuevasSubInputs, [cat]: ''});
-  };
-
-  const handleEliminarSubcategoria = (cat, sub) => {
-    if(!window.confirm(`¿Seguro de eliminar la subcategoría "${sub}"?`)) return;
-    setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: categoriasDinamicas[cat].filter(s => s !== sub) });
-  };
-
-  const [filtroRut, setFiltroRut] = useState(''); 
-  const [filtroNombre, setFiltroNombre] = useState(''); 
-  const [filtroCategoria, setFiltroCategoria] = useState(''); 
-  const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); 
-  const [filtroExportarZona, setFiltroExportarZona] = useState([]);
-  const [seleccionados, setSeleccionados] = useState([]);
-
+  const [filtroRut, setFiltroRut] = useState(''); const [filtroNombre, setFiltroNombre] = useState(''); const [filtroCategoria, setFiltroCategoria] = useState(''); const [filtroSubcategoria, setFiltroSubcategoria] = useState(''); const [filtroExportarZona, setFiltroExportarZona] = useState([]); const [seleccionados, setSeleccionados] = useState([]);
   const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
   
   const proveedoresFiltrados = proveedoresAprobados.filter(p => {
@@ -575,13 +478,11 @@ export default function App() {
     const matchNombre = p.nombre_fantasia.toLowerCase().includes(filtroNombre.toLowerCase());
     const matchCat = filtroCategoria === '' || p.categoria === filtroCategoria;
     const matchSub = filtroSubcategoria === '' || p.subcategoria === filtroSubcategoria;
-    
     let matchZona = true;
     if (filtroExportarZona.length > 0) {
       const zProv = p.zonas_cobertura ? p.zonas_cobertura.split(',').map(z => z.trim()) : [];
       matchZona = filtroExportarZona.some(fz => zProv.includes(fz) || zProv.includes('Todo el País'));
     }
-
     return matchRut && matchNombre && matchCat && matchSub && matchZona;
   });
 
@@ -592,43 +493,31 @@ export default function App() {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor.");
     const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
     let csvC = "data:text/csv;charset=utf-8,\uFEFFId,Nombre de la empresa*,Nombre del contacto,Correo electrónico*,Código del idioma,Código de Región\n";
-    dataAExportar.forEach(p => { 
-      csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,\n`; 
-    });
+    dataAExportar.forEach(p => { csvC += `,${p.nombre_fantasia.replace(/"/g, '').replace(/,/g, ' ')},${p.nombre_contacto.replace(/"/g, '').replace(/,/g, ' ')},${p.email_principal.replace(/"/g, '').replace(/,/g, ' ')},,\n`; });
     const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvC)); link.setAttribute("download", "proveedores_clean.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
   const exportarExcel = () => {
-    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor para exportar.");
+    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor.");
     const dataAExportar = proveedoresFiltrados.filter(p => seleccionados.includes(p.id));
-    let excelHtml = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head><meta charset="utf-8" /><style>table { border-collapse: collapse; font-family: Arial, sans-serif; } th { background-color: #004A99; color: white; font-weight: bold; border: 1px solid #cccccc; padding: 10px; text-align: left; } td { border: 1px solid #cccccc; padding: 8px; font-size: 13px; } .title { font-size: 18px; font-weight: bold; color: #004A99; padding-bottom: 15px; }</style></head>
-      <body><div class="title">Base Oficial de Proveedores Aprobados - Sodimac S.A.</div><table><thead><tr><th>RUT Empresa</th><th>Razón Social</th><th>Nombre Fantasía</th><th>Categoría</th><th>Subcategoría</th><th>Zonas de Cobertura</th><th>Email Principal</th><th>Nombre de Contacto</th><th>Cargo</th><th>Teléfono</th><th>Website</th><th>Fecha Registro</th><th>Aprobado Por</th></tr></thead><tbody>
-    `;
-    dataAExportar.forEach(p => {
-      excelHtml += `<tr><td>${p.rut || ''}</td><td>${p.razon_social || ''}</td><td>${p.nombre_fantasia || ''}</td><td>${p.categoria || ''}</td><td>${p.subcategoria || ''}</td><td>${p.zonas_cobertura || ''}</td><td>${p.email_principal || ''}</td><td>${p.nombre_contacto || ''}</td><td>${p.cargo || ''}</td><td>${p.telefono || ''}</td><td>${p.website || ''}</td><td>${p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString('es-CL') : ''}</td><td>${p.aprobado_por || ''}</td></tr>`;
-    });
+    let excelHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8" /><style>table { border-collapse: collapse; font-family: Arial, sans-serif; } th { background-color: #004A99; color: white; font-weight: bold; border: 1px solid #cccccc; padding: 10px; text-align: left; } td { border: 1px solid #cccccc; padding: 8px; font-size: 13px; } .title { font-size: 18px; font-weight: bold; color: #004A99; padding-bottom: 15px; }</style></head><body><div class="title">Base Oficial de Proveedores Aprobados - Sodimac S.A.</div><table><thead><tr><th>RUT Empresa</th><th>Razón Social</th><th>Nombre Fantasía</th><th>Categoría</th><th>Subcategoría</th><th>Zonas de Cobertura</th><th>Email Principal</th><th>Nombre de Contacto</th><th>Cargo</th><th>Teléfono</th><th>Website</th><th>Fecha Registro</th><th>Aprobado Por</th></tr></thead><tbody>`;
+    dataAExportar.forEach(p => { excelHtml += `<tr><td>${p.rut || ''}</td><td>${p.razon_social || ''}</td><td>${p.nombre_fantasia || ''}</td><td>${p.categoria || ''}</td><td>${p.subcategoria || ''}</td><td>${p.zonas_cobertura || ''}</td><td>${p.email_principal || ''}</td><td>${p.nombre_contacto || ''}</td><td>${p.cargo || ''}</td><td>${p.telefono || ''}</td><td>${p.website || ''}</td><td>${p.fecha_registro ? new Date(p.fecha_registro).toLocaleDateString('es-CL') : ''}</td><td>${p.aprobado_por || ''}</td></tr>`; });
     excelHtml += `</tbody></table></body></html>`;
     const blob = new Blob([excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' }); const url = URL.createObjectURL(blob);
-    const link = document.createElement("a"); link.href = url; link.setAttribute("download", "proveedores_aprobados_sodimac.xls"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    const link = document.createElement("a"); link.href = url; link.setAttribute("download", "proveedores_aprobados.xls"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
   const [resetStep, setResetStep] = useState(1); const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
   const buscarCorreo = async (e) => {
     e.preventDefault();
-    if (bloqueoSeguridad) return alert("Sistema bloqueado.");
     const { data, error } = await supabase.from('administradores').select('id').eq('correo', resetData.correo.replace(/[<>]/g, '').toLowerCase().trim()).maybeSingle();
-    if (error || !data) {
-      await registrarAuditoria(resetData.correo, 'Fallido', 'Recuperar Pass');
-      const fueBloqueado = registrarIntentoFallido();
-      if (!fueBloqueado) alert("No se encontró administrador con este correo.");
-    } else { setResetData({ ...resetData, idUsuario: data.id }); setResetStep(2); setIntentosFallidos(0); }
+    if (error || !data) { await registrarAuditoria(resetData.correo, 'Fallido', 'Recuperar Pass'); registrarIntentoFallido(); alert("No encontrado."); } 
+    else { setResetData({ ...resetData, idUsuario: data.id }); setResetStep(2); setIntentosFallidos(0); }
   };
   const actualizarPassword = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from('administradores').update({ password: resetData.nuevaPass.replace(/[<>]/g, ''), pin: resetData.nuevoPin.replace(/[<>]/g, '') }).eq('id', resetData.idUsuario);
-    if (error) alert("⚠️ Error."); else { alert("✅ Actualizado."); setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null }); }
+    if (!error) { alert("✅ Actualizado."); setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null }); }
   };
 
   const proveedoresGestionFiltrados = proveedores.filter(p => {
@@ -640,17 +529,11 @@ export default function App() {
     return matchNombre && matchCat && matchSub && matchZona;
   });
 
-  const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria');
-  const [filtroTortaCat, setFiltroTortaCat] = useState('');
-  const [filtroTortaSub, setFiltroTortaSub] = useState([]);
-  const [filtroTendenciaCat, setFiltroTendenciaCat] = useState('');
-  const [filtroTendenciaSub, setFiltroTendenciaSub] = useState('');
-  const [filtroTendenciaTiempo, setFiltroTendenciaTiempo] = useState('30'); 
+  const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria'); const [filtroTortaCat, setFiltroTortaCat] = useState(''); const [filtroTortaSub, setFiltroTortaSub] = useState([]); const [filtroTendenciaCat, setFiltroTendenciaCat] = useState(''); const [filtroTendenciaSub, setFiltroTendenciaSub] = useState(''); const [filtroTendenciaTiempo, setFiltroTendenciaTiempo] = useState('30'); 
 
   const statsDashboard = () => {
     const total = proveedores.length; let fechasOrdenadas = []; const fechasRaw = {}; const renovaciones = [];
     const hace90Dias = new Date(); hace90Dias.setDate(hace90Dias.getDate() - 90);
-
     let fechaLimite = new Date();
     if (filtroTendenciaTiempo !== 'all') {
       const dias = parseInt(filtroTendenciaTiempo);
@@ -661,22 +544,14 @@ export default function App() {
       }
       fechaLimite.setDate(fechaLimite.getDate() - dias);
     }
-
-    const proveedoresTendencia = proveedores.filter(p => {
-      return (filtroTendenciaCat === '' || p.categoria === filtroTendenciaCat) && 
-             (filtroTendenciaSub === '' || p.subcategoria === filtroTendenciaSub) && 
-             (filtroTendenciaTiempo === 'all' || new Date(p.fecha_registro) >= fechaLimite);
-    });
-
+    const proveedoresTendencia = proveedores.filter(p => (filtroTendenciaCat === '' || p.categoria === filtroTendenciaCat) && (filtroTendenciaSub === '' || p.subcategoria === filtroTendenciaSub) && (filtroTendenciaTiempo === 'all' || new Date(p.fecha_registro) >= fechaLimite));
     proveedoresTendencia.forEach(p => {
       const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
       if (filtroTendenciaTiempo !== 'all') { if (fechasRaw[fechaCorta] !== undefined) fechasRaw[fechaCorta]++; } 
       else { fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1; }
     });
-
     if (filtroTendenciaTiempo === 'all') fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => new Date(`${a.split('-')[2]}-${a.split('-')[1]}-${a.split('-')[0]}`) - new Date(`${b.split('-')[2]}-${b.split('-')[1]}-${b.split('-')[0]}`));
     proveedores.forEach(p => { if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p); });
-
     return { total, fechasRaw, fechasOrdenadas, renovaciones };
   };
   const stats = statsDashboard();
@@ -686,23 +561,10 @@ export default function App() {
   const stepX = stats.fechasOrdenadas.length > 1 ? (chartWidth - 2 * padX) / (stats.fechasOrdenadas.length - 1) : 0;
   const puntosLinea = stats.fechasOrdenadas.map((f, i) => `${padX + i * stepX},${chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY))}`).join(' ');
 
-  const enviarRecordatorio = (prov) => {
-    const destinatarios = prov.email_secundario ? `${prov.email_principal},${prov.email_secundario}` : prov.email_principal;
-    const asunto = encodeURIComponent("Actualización de Datos - Portal Proveedores Sodimac");
-    const cuerpo = encodeURIComponent(`Estimado(a) proveedor ${prov.razon_social},\n\nPor favor actualizar sus datos de contacto en el portal.\n\nSaludos cordiales,\nSodimac S.A.`);
-    window.location.href = `mailto:${destinatarios}?subject=${asunto}&body=${cuerpo}`;
-  };
-
   const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
-  const proveedoresParaTorta = proveedoresAprobados.filter(p => {
-    return (filtroTortaCat === '' || p.categoria === filtroTortaCat) && (filtroTortaSub.length === 0 || filtroTortaSub.includes(p.subcategoria));
-  });
-
+  const proveedoresParaTorta = proveedoresAprobados.filter(p => (filtroTortaCat === '' || p.categoria === filtroTortaCat) && (filtroTortaSub.length === 0 || filtroTortaSub.includes(p.subcategoria)));
   const tortaData = {};
-  proveedoresParaTorta.forEach(p => {
-    const clave = tipoGraficoTorta === 'categoria' ? p.categoria : p.subcategoria;
-    tortaData[clave] = (tortaData[clave] || 0) + 1;
-  });
+  proveedoresParaTorta.forEach(p => { const clave = tipoGraficoTorta === 'categoria' ? p.categoria : p.subcategoria; tortaData[clave] = (tortaData[clave] || 0) + 1; });
   let cumulativePercent = 0;
   const pieSlices = Object.entries(tortaData).map(([key, val], i) => {
     const percent = proveedoresParaTorta.length > 0 ? (val / proveedoresParaTorta.length) * 100 : 0;
@@ -738,7 +600,9 @@ export default function App() {
     setProcesoActual({
       id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '',
       proveedores_invitados: provsNombres, cantidad_ofertas: '', proveedor_adjudicado: '',
-      baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || ''
+      baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '',
+      subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos',
+      carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: ''
     });
     setModalProceso(true);
     setTabAdmin('procesos');
@@ -761,47 +625,62 @@ export default function App() {
     return `${partes[2]}-${partes[1]}-${partes[0]}`; 
   };
 
-  // --- AGREGAR Y ELIMINAR PROVEEDORES DEL PROCESO EN CURSO ---
+  const obtenerMesAno = (fechaString) => {
+    if (!fechaString) return 'Sin Fecha';
+    const partes = fechaString.split('-');
+    if (partes.length !== 3) return 'Sin Fecha';
+    const meses = { '01':'Enero', '02':'Febrero', '03':'Marzo', '04':'Abril', '05':'Mayo', '06':'Junio', '07':'Julio', '08':'Agosto', '09':'Septiembre', '10':'Octubre', '11':'Noviembre', '12':'Diciembre' };
+    return `${meses[partes[1]]} ${partes[0]}`;
+  };
+
   const removerProveedorInvitado = (nombreProv) => {
     const nuevosInvitados = procesoActual.proveedores_invitados.filter(p => p !== nombreProv);
-    // Si eliminamos al proveedor que estaba adjudicado, limpiamos el campo de adjudicación
     const adjudicado = procesoActual.proveedor_adjudicado === nombreProv ? '' : procesoActual.proveedor_adjudicado;
     setProcesoActual({ ...procesoActual, proveedores_invitados: nuevosInvitados, proveedor_adjudicado: adjudicado });
   };
 
   const agregarProveedorInvitado = (nombreProv) => {
     if (!nombreProv) return;
-    setProcesoActual({ 
-      ...procesoActual, 
-      proveedores_invitados: [...procesoActual.proveedores_invitados, nombreProv] 
-    });
+    setProcesoActual({ ...procesoActual, proveedores_invitados: [...procesoActual.proveedores_invitados, nombreProv] });
   };
 
   // --- FILTROS Y DASHBOARD DE PROCESOS ---
   const [filtroProcesosController, setFiltroProcesosController] = useState([]);
-  const [filtroProcesosEstado, setFiltroProcesosEstado] = useState('Todos');
+  const [filtroProcesosEstado, setFiltroProcesosEstado] = useState([]);
+  const [filtroProcesosMesAno, setFiltroProcesosMesAno] = useState([]);
 
   const controllersUnicos = [...new Set(procesos.map(p => p.controller).filter(Boolean))];
+  const mesesAnosUnicos = [...new Set(procesos.map(p => obtenerMesAno(p.fecha_inicio)).filter(f => f !== 'Sin Fecha'))];
+
+  // Regla de Exclusión de Negocio: No considerar estos estados en tarjetas de sumatoria (Baseline, Ahorro, etc.) a menos que se filtren explícitamente.
+  const estadosExcluidosGlobal = ['Cancelado', 'Desierto', 'No Iniciado'];
 
   const procesosFiltradosDashboard = procesos.filter(p => {
+    const estado = p.estado_proceso || '';
+    
+    // Si el estado es uno de los excluidos, no lo pasamos al dashboard a menos que el usuario lo seleccione manualmente en el filtro
+    if (estadosExcluidosGlobal.includes(estado) && !filtroProcesosEstado.includes(estado)) return false;
+
     const matchController = filtroProcesosController.length === 0 || filtroProcesosController.includes(p.controller);
-    const enCurso = !p.proveedor_adjudicado || p.proveedor_adjudicado === 'Pendiente' || p.proveedor_adjudicado === '';
-    const matchEstado = filtroProcesosEstado === 'Todos' ? true :
-                        filtroProcesosEstado === 'En Curso' ? enCurso :
-                        !enCurso; // Adjudicado
-    return matchController && matchEstado;
+    const matchEstado = filtroProcesosEstado.length === 0 || filtroProcesosEstado.includes(estado);
+    const matchMesAno = filtroProcesosMesAno.length === 0 || filtroProcesosMesAno.includes(obtenerMesAno(p.fecha_inicio));
+
+    return matchController && matchEstado && matchMesAno;
   });
 
   const totalBaselineProcesos = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.baseline || 0), 0);
   const totalAdjudicadoProcesos = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.monto_adjudicado || 0), 0);
   const ahorroTotalProcesos = totalBaselineProcesos - totalAdjudicadoProcesos;
   const ahorroPorcentajeProcesos = totalBaselineProcesos > 0 ? ((ahorroTotalProcesos / totalBaselineProcesos) * 100).toFixed(1) : 0;
-  const procesosEnCursoCount = procesosFiltradosDashboard.filter(p => !p.proveedor_adjudicado || p.proveedor_adjudicado === 'Pendiente' || p.proveedor_adjudicado === '').length;
+  const procesosRecuentoCount = procesosFiltradosDashboard.length; // Reemplaza a "En curso" para hacerlo 100% dinámico con los filtros
+
+  // Recuentos Documentales
+  const totalCartas = procesosFiltradosDashboard.filter(p => p.carta_adjudicacion && p.carta_adjudicacion.trim() !== '').length;
+  const totalContratos = procesosFiltradosDashboard.filter(p => p.aplica_contrato === 'si' && p.numero_contrato && p.numero_contrato.trim() !== '').length;
   
-  // Datos para gráfico de tendencia de participación (se basa en todo, sin filtros)
+  // Gráfico de Tendencia
   const procesosOrdenados = [...procesos].filter(p => p.cantidad_ofertas !== null && p.proveedores_invitados).sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
-  const chartWidthProc = 350; const chartHeightProc = 120;
-  const maxPart = 100; // Porcentaje máximo 100%
+  const chartWidthProc = 350; const chartHeightProc = 120; const maxPart = 100;
   const stepXProc = procesosOrdenados.length > 1 ? (chartWidthProc - 40) / (procesosOrdenados.length - 1) : 0;
   const puntosTendencia = procesosOrdenados.map((p, i) => {
     const invitados = p.proveedores_invitados.split(',').length;
@@ -809,6 +688,18 @@ export default function App() {
     const porcentaje = invitados > 0 ? (ofertas / invitados) * 100 : 0;
     return `${20 + i * stepXProc},${chartHeightProc - 20 - ((Math.min(porcentaje, 100) / maxPart) * (chartHeightProc - 40))}`;
   }).join(' ');
+
+  // Gráfico Torta Subgerencias
+  const subgerenciasData = {};
+  procesosFiltradosDashboard.forEach(p => { const sg = p.subgerencia || 'No Asignada'; subgerenciasData[sg] = (subgerenciasData[sg] || 0) + 1; });
+  let cumPercentSg = 0;
+  const pieSlicesSg = Object.entries(subgerenciasData).map(([key, val], i) => {
+    const percent = procesosFiltradosDashboard.length > 0 ? (val / procesosFiltradosDashboard.length) * 100 : 0;
+    const slice = `${coloresGrafico[i % coloresGrafico.length]} ${cumPercentSg}% ${cumPercentSg + percent}%`;
+    cumPercentSg += percent;
+    return { key, val, percent, color: coloresGrafico[i % coloresGrafico.length], slice };
+  });
+  const tortaGradientSg = procesosFiltradosDashboard.length > 0 ? `conic-gradient(${pieSlicesSg.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
@@ -871,16 +762,24 @@ export default function App() {
       {/* MODAL REGISTRO DE PROCESOS */}
       {modalProceso && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
-          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '800px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '900px', width: '100%', maxHeight: '95vh', overflowY: 'auto', position: 'relative' }}>
             <button onClick={() => setModalProceso(false)} style={{ position: 'absolute', top: '15px', right: '20px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#EE2D24', fontWeight: 'bold' }}>&times;</button>
             <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>{procesoActual.id ? 'Editar Proceso' : 'Nuevo Proceso'}</h2>
             
-            <form onSubmit={guardarProceso} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <form onSubmit={guardarProceso} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nombre del Proceso *</label>
                 <input required value={procesoActual.nombre} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, nombre: e.target.value})} />
               </div>
               
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Subgerencia *</label>
+                <select required value={procesoActual.subgerencia} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, subgerencia: e.target.value})}>
+                  <option value="">Seleccione...</option>
+                  {subgerenciasOpciones.map(sg => <option key={sg} value={sg}>{sg}</option>)}
+                </select>
+              </div>
+
               <div>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Tipo de Proceso *</label>
                 <select required value={procesoActual.tipo} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, tipo: e.target.value})}>
@@ -895,6 +794,39 @@ export default function App() {
                 <input required readOnly value={procesoActual.controller} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#e9ecef', color: '#495057' }} />
               </div>
 
+              <div style={{ gridColumn: '1 / span 2' }}>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Estado del Proceso *</label>
+                <select required value={procesoActual.estado_proceso} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', fontWeight: 'bold', color: '#004A99' }} onChange={e => setProcesoActual({...procesoActual, estado_proceso: e.target.value})}>
+                  <optgroup label="No Iniciado">
+                    <option value="No Iniciado">No Iniciado</option>
+                  </optgroup>
+                  <optgroup label="En Curso">
+                    <option value="Estableciendo alcance, equipo y objetivos">Estableciendo alcance, equipo y objetivos</option>
+                    <option value="Desarrollando Bases">Desarrollando Bases</option>
+                    <option value="En Negociación y analisis de ofertas">En Negociación y análisis de ofertas</option>
+                    <option value="En Aprobación y Adjudicación">En Aprobación y Adjudicación</option>
+                  </optgroup>
+                  <optgroup label="Adjudicados">
+                    <option value="Gestión Contractual y/o Implementación">Gestión Contractual y/o Implementación</option>
+                    <option value="Adjudicado">Adjudicado</option>
+                  </optgroup>
+                  <optgroup label="Ignorados / Anulados">
+                    <option value="Cancelado">Cancelado</option>
+                    <option value="Desierto">Desierto</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedor Adjudicado</label>
+                <select value={procesoActual.proveedor_adjudicado || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: procesoActual.proveedor_adjudicado ? '#d4edda' : 'white' }} onChange={e => setProcesoActual({...procesoActual, proveedor_adjudicado: e.target.value})}>
+                  <option value="">Pendiente de resolución...</option>
+                  {procesoActual.proveedores_invitados && procesoActual.proveedores_invitados.map(prov => (
+                    <option key={prov} value={prov}>{prov}</option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Fecha de Inicio *</label>
                 <input type="date" required value={procesoActual.fecha_inicio} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, fecha_inicio: e.target.value})} />
@@ -905,22 +837,26 @@ export default function App() {
                 <input type="date" required value={procesoActual.fecha_termino} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, fecha_termino: e.target.value})} />
               </div>
 
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Cantidad de Ofertas Recibidas</label>
+                <input type="number" min="0" value={procesoActual.cantidad_ofertas} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, cantidad_ofertas: e.target.value})} placeholder="Se recibe al final" />
+              </div>
+
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedores Invitados al Proceso</label>
                 <div style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#f8f9fa', minHeight: '45px', fontSize: '12px' }}>
                   {procesoActual.proveedores_invitados.length > 0 ? procesoActual.proveedores_invitados.map(p => (
-                    <span key={p} style={{display: 'inline-flex', alignItems: 'center', backgroundColor: '#004A99', color: 'white', padding: '3px 8px', borderRadius: '12px', marginRight: '5px', marginBottom: '5px'}}>
+                    <span key={p} style={{display: 'inline-flex', alignItems: 'center', backgroundColor: '#004A99', color: 'white', padding: '4px 10px', borderRadius: '15px', marginRight: '8px', marginBottom: '8px'}}>
                       {p}
-                      <button type="button" onClick={() => removerProveedorInvitado(p)} style={{ marginLeft: '6px', background: 'none', border: 'none', color: '#ffb3b3', cursor: 'pointer', fontSize: '11px', padding: 0, fontWeight: 'bold' }}>✖</button>
+                      <button type="button" onClick={() => removerProveedorInvitado(p)} style={{ marginLeft: '8px', background: 'none', border: 'none', color: '#ffb3b3', cursor: 'pointer', fontSize: '12px', padding: 0, fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✖</button>
                     </span>
-                  )) : <span style={{ color: '#999', display: 'block', padding: '5px 0' }}>Ninguno seleccionado</span>}
+                  )) : <span style={{ color: '#999', display: 'block', padding: '5px 0' }}>Ningún proveedor seleccionado todavía.</span>}
                 </div>
                 <select 
-                  onChange={(e) => agregarProveedorInvitado(e.target.value)}
-                  value=""
-                  style={{ width: '100%', padding: '6px', marginTop: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #28a745', color: '#28a745', fontWeight: 'bold', cursor: 'pointer' }}
+                  onChange={(e) => agregarProveedorInvitado(e.target.value)} value=""
+                  style={{ width: '100%', padding: '8px', marginTop: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #28a745', color: '#28a745', fontWeight: 'bold', cursor: 'pointer', outline: 'none' }}
                 >
-                  <option value="">+ Añadir otro proveedor aprobado al proceso...</option>
+                  <option value="">+ Añadir otro proveedor de la base aprobada al proceso...</option>
                   {proveedoresAprobados
                     .filter(p => !procesoActual.proveedores_invitados.includes(p.nombre_fantasia))
                     .map(p => (
@@ -929,32 +865,41 @@ export default function App() {
                 </select>
               </div>
 
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Cantidad de Ofertas Recibidas</label>
-                <input type="number" min="0" value={procesoActual.cantidad_ofertas} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, cantidad_ofertas: e.target.value})} placeholder="Se recibe al final" />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedor Adjudicado</label>
-                <select value={procesoActual.proveedor_adjudicado || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, proveedor_adjudicado: e.target.value})}>
-                  <option value="">Pendiente...</option>
-                  {procesoActual.proveedores_invitados && procesoActual.proveedores_invitados.map(prov => (
-                    <option key={prov} value={prov}>{prov}</option>
-                  ))}
-                </select>
-              </div>
+              <div style={{ gridColumn: '1 / span 3', borderTop: '2px dashed #eee', margin: '10px 0' }}></div>
 
               <div>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Baseline ($)</label>
-                <input type="text" required value={procesoActual.baseline} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, baseline: formatearMoneda(e.target.value)})} placeholder="Ej: $5.555.555" />
+                <input type="text" value={procesoActual.baseline} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, baseline: formatearMoneda(e.target.value)})} placeholder="Ej: $5.555.555" />
               </div>
 
               <div>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Monto Adjudicado ($)</label>
                 <input type="text" value={procesoActual.monto_adjudicado} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, monto_adjudicado: formatearMoneda(e.target.value)})} placeholder="Ej: $5.555.555" />
               </div>
+              
+              <div></div> {/* Espaciador */}
 
-              <button type="submit" style={{ gridColumn: '1 / -1', padding: '12px', marginTop: '10px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>GUARDAR PROCESO</button>
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nº Carta de Adjudicación</label>
+                <input type="text" value={procesoActual.carta_adjudicacion} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, carta_adjudicacion: e.target.value})} placeholder="Opcional..." />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>¿Aplica Contrato?</label>
+                <select value={procesoActual.aplica_contrato} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, aplica_contrato: e.target.value, numero_contrato: e.target.value === 'no' ? '' : procesoActual.numero_contrato})}>
+                  <option value="no">No Aplica</option>
+                  <option value="si">Sí Aplica</option>
+                </select>
+              </div>
+
+              {procesoActual.aplica_contrato === 'si' ? (
+                <div>
+                  <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nº de Contrato</label>
+                  <input type="text" value={procesoActual.numero_contrato || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, numero_contrato: e.target.value})} placeholder="Ingrese Número..." />
+                </div>
+              ) : <div></div>}
+
+              <button type="submit" style={{ gridColumn: '1 / -1', padding: '15px', marginTop: '15px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer', fontSize: '15px' }}>GUARDAR CAMBIOS DEL PROCESO</button>
             </form>
           </div>
         </div>
@@ -972,12 +917,10 @@ export default function App() {
                 <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nombre de Fantasía *</label><input required value={proveedorEditando.nombre_fantasia} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, nombre_fantasia: e.target.value})} /></div>
                 <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required value={proveedorEditando.rut} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, rut: formatearRUT(e.target.value)})} /></div>
                 <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required value={proveedorEditando.domicilio_comercial} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, domicilio_comercial: e.target.value})} /></div>
-                
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Website Proveedor</label>
                   <input type="text" value={proveedorEditando.website || ''} placeholder="Ej: https://www.tuempresa.cl (Dejar en 'No posee' si no tiene)" style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, website: e.target.value})} />
                 </div>
-
                 <div>
                   <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Categoría *</label>
                   <select required value={proveedorEditando.categoria} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, categoria: e.target.value, subcategoria: ''})}>
@@ -1624,60 +1567,81 @@ export default function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Registro de Procesos y Adjudicaciones</h3>
                 <button onClick={() => {
-                  setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: '', baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '' });
+                  setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: '', baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: '' });
                   setModalProceso(true);
                 }} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>+ Crear Proceso Manual</button>
               </div>
 
               {/* PANEL DE FILTROS PARA DASHBOARD DE PROCESOS */}
-              <div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '20px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <h4 style={{ margin: 0, fontSize: '14px', color: '#555' }}>Filtros de Dashboard:</h4>
+              <div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '20px', display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <h4 style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#555' }}>Filtros Globales:</h4>
                 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Controller:</label>
-                  <select style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '12px' }} onChange={e => {
-                    const val = e.target.value;
-                    if (val && !filtroProcesosController.includes(val)) setFiltroProcesosController([...filtroProcesosController, val]);
-                    e.target.value = "";
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#666' }}>Controller:</label>
+                  <select style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '12px', minWidth: '150px' }} onChange={e => {
+                    const val = e.target.value; if (val && !filtroProcesosController.includes(val)) setFiltroProcesosController([...filtroProcesosController, val]); e.target.value = "";
                   }}>
                     <option value="">Añadir Controller...</option>
                     {controllersUnicos.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', maxWidth: '200px' }}>
                     {filtroProcesosController.map(c => (
-                      <span key={c} style={{ backgroundColor: '#e2e8f0', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span key={c} style={{ backgroundColor: '#e2e8f0', padding: '2px 6px', borderRadius: '12px', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                         {c} <button onClick={() => setFiltroProcesosController(filtroProcesosController.filter(x => x !== c))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc3545', padding: 0 }}>x</button>
                       </span>
                     ))}
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: 'auto' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Estado del Evento:</label>
-                  <select value={filtroProcesosEstado} onChange={e => setFiltroProcesosEstado(e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '12px' }}>
-                    <option value="Todos">Todos</option>
-                    <option value="En Curso">En Curso</option>
-                    <option value="Adjudicado">Adjudicado</option>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#666' }}>Estado del Evento:</label>
+                  <select style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '12px', minWidth: '150px' }} onChange={e => {
+                    const val = e.target.value; if (val && !filtroProcesosEstado.includes(val)) setFiltroProcesosEstado([...filtroProcesosEstado, val]); e.target.value = "";
+                  }}>
+                    <option value="">Añadir Estado...</option>
+                    {estadosProcesoOpciones.map(est => <option key={est} value={est}>{est}</option>)}
                   </select>
+                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', maxWidth: '250px' }}>
+                    {filtroProcesosEstado.map(e => (
+                      <span key={e} style={{ backgroundColor: '#e2e8f0', padding: '2px 6px', borderRadius: '12px', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        {e} <button onClick={() => setFiltroProcesosEstado(filtroProcesosEstado.filter(x => x !== e))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc3545', padding: 0 }}>x</button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#666' }}>Mes y Año (Inicio):</label>
+                  <select style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '12px', minWidth: '150px' }} onChange={e => {
+                    const val = e.target.value; if (val && !filtroProcesosMesAno.includes(val)) setFiltroProcesosMesAno([...filtroProcesosMesAno, val]); e.target.value = "";
+                  }}>
+                    <option value="">Añadir Mes...</option>
+                    {mesesAnosUnicos.map(ma => <option key={ma} value={ma}>{ma}</option>)}
+                  </select>
+                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', maxWidth: '200px' }}>
+                    {filtroProcesosMesAno.map(ma => (
+                      <span key={ma} style={{ backgroundColor: '#e2e8f0', padding: '2px 6px', borderRadius: '12px', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        {ma} <button onClick={() => setFiltroProcesosMesAno(filtroProcesosMesAno.filter(x => x !== ma))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc3545', padding: 0 }}>x</button>
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {/* DASHBOARD DE PROCESOS */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: '15px', marginBottom: '30px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
                 <div style={{ border: '1px solid #eee', padding: '15px', borderRadius: '8px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                   <h4 style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#555', textTransform: 'uppercase' }}>Participación Proveedores (%)</h4>
-                  {procesosOrdenados.length === 0 ? <p style={{ fontSize: '11px', color: '#999', textAlign: 'center', marginTop: '30px' }}>No hay datos suficientes para graficar</p> : (
+                  {procesosOrdenados.length === 0 ? <p style={{ fontSize: '11px', color: '#999', textAlign: 'center', marginTop: '30px' }}>Sin datos suficientes</p> : (
                     <div style={{ position: 'relative', width: '100%', height: `${chartHeightProc}px` }}>
                       <svg width="100%" height="100%" viewBox={`0 0 ${chartWidthProc} ${chartHeightProc}`} preserveAspectRatio="none">
                         <line x1="20" y1={chartHeightProc - 20} x2={chartWidthProc} y2={chartHeightProc - 20} stroke="#ccc" strokeWidth="1" />
                         <line x1="20" y1="0" x2="20" y2={chartHeightProc - 20} stroke="#ccc" strokeWidth="1" />
                         {procesosOrdenados.length > 1 && <polyline points={puntosTendencia} fill="none" stroke="#28a745" strokeWidth="2" />}
                         {procesosOrdenados.map((p, i) => {
-                          const invitados = p.proveedores_invitados.split(',').length;
-                          const ofertas = parseInt(p.cantidad_ofertas) || 0;
+                          const invitados = p.proveedores_invitados.split(',').length; const ofertas = parseInt(p.cantidad_ofertas) || 0;
                           const porcentaje = invitados > 0 ? (ofertas / invitados) * 100 : 0;
-                          const cx = 20 + i * stepXProc; 
-                          const cy = chartHeightProc - 20 - ((Math.min(porcentaje, 100) / maxPart) * (chartHeightProc - 40));
+                          const cx = 20 + i * stepXProc; const cy = chartHeightProc - 20 - ((Math.min(porcentaje, 100) / maxPart) * (chartHeightProc - 40));
                           return (
                             <g key={p.id}>
                               <circle cx={cx} cy={cy} r="4" fill="#004A99" />
@@ -1691,8 +1655,9 @@ export default function App() {
                 </div>
 
                 <div style={{ backgroundColor: '#17a2b8', color: 'white', padding: '15px', borderRadius: '8px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                  <h4 style={{ margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase', opacity: 0.9 }}>En Curso / Pendiente</h4>
-                  <p style={{ margin: 0, fontSize: '26px', fontWeight: 'bold' }}>{procesosEnCursoCount}</p>
+                  <h4 style={{ margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase', opacity: 0.9 }}>Recuento de Procesos</h4>
+                  <p style={{ margin: 0, fontSize: '26px', fontWeight: 'bold' }}>{procesosRecuentoCount}</p>
+                  <span style={{ fontSize: '11px', backgroundColor: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px', marginTop: '5px' }}>Según filtros activos</span>
                 </div>
 
                 <div style={{ backgroundColor: '#004A99', color: 'white', padding: '15px', borderRadius: '8px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
@@ -1701,9 +1666,46 @@ export default function App() {
                 </div>
 
                 <div style={{ backgroundColor: '#28a745', color: 'white', padding: '15px', borderRadius: '8px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                  <h4 style={{ margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase', opacity: 0.9 }}>Total Ahorro</h4>
+                  <h4 style={{ margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase', opacity: 0.9 }}>Total Ahorro (CLP)</h4>
                   <p style={{ margin: 0, fontSize: '22px', fontWeight: 'bold' }}>{formatearMoneda(ahorroTotalProcesos)}</p>
                   <span style={{ fontSize: '11px', backgroundColor: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px', marginTop: '5px' }}>{ahorroPorcentajeProcesos}% de ahorro global</span>
+                </div>
+              </div>
+
+              {/* SEGUNDA FILA DASHBOARD: Contratos/Cartas y Gráfico de Torta */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '30px' }}>
+                <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                  <h4 style={{ margin: '0 0 15px 0', fontSize: '14px', color: '#555', textTransform: 'uppercase' }}>Gestión Documental (Emitidos)</h4>
+                  <div style={{ display: 'flex', width: '100%', gap: '15px', justifyContent: 'space-around' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <p style={{ margin: '0', fontSize: '32px', fontWeight: 'bold', color: '#6f42c1' }}>{totalCartas}</p>
+                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Cartas de Adjudicación</p>
+                    </div>
+                    <div style={{ borderLeft: '1px solid #ddd' }}></div>
+                    <div style={{ textAlign: 'center' }}>
+                      <p style={{ margin: '0', fontSize: '32px', fontWeight: 'bold', color: '#e83e8c' }}>{totalContratos}</p>
+                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Contratos Firmados</p>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#999', marginTop: '15px' }}>*Se actualiza según los filtros superiores aplicados</span>
+                </div>
+
+                <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                  <h4 style={{ margin: '0 0 15px 0', fontSize: '14px', color: '#555', textTransform: 'uppercase' }}>Procesos por Subgerencia</h4>
+                  {procesosFiltradosDashboard.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '20px' }}>Sin datos con los filtros actuales</p> : (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '30px' }}>
+                      <div style={{ width: '120px', height: '120px', borderRadius: '50%', background: tortaGradientSg, boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}></div>
+                      <div style={{ maxHeight: '120px', overflowY: 'auto', flex: 1 }}>
+                        {pieSlicesSg.map(s => (
+                          <div key={s.key} style={{ display: 'flex', alignItems: 'center', marginBottom: '6px', fontSize: '12px' }}>
+                            <div style={{ width: '10px', height: '10px', backgroundColor: s.color, marginRight: '8px', borderRadius: '2px' }}></div>
+                            <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.key}</span>
+                            <span style={{ fontWeight: 'bold' }}>{s.val} ({Math.round(s.percent)}%)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1711,26 +1713,28 @@ export default function App() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Proceso</th>
-                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Fechas</th>
+                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Proceso / Subgerencia</th>
+                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Estatus / Fechas</th>
                       <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Participación</th>
                       <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Montos</th>
-                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Adjudicado A</th>
+                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Resolución y Docs</th>
                       <th style={{ padding: '10px', borderBottom: '2px solid #ccc', textAlign: 'center' }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {procesos.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se han registrado procesos aún.</td></tr> : 
-                    procesos.map(proc => {
+                    {procesosFiltradosDashboard.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay resultados con los filtros activos.</td></tr> : 
+                    procesosFiltradosDashboard.map(proc => {
                       const ahorro = (proc.baseline || 0) - (proc.monto_adjudicado || 0);
                       const inv = proc.proveedores_invitados ? proc.proveedores_invitados.split(',').length : 0;
                       return (
                         <tr key={proc.id} style={{ borderBottom: '1px solid #eee' }}>
                           <td style={{ padding: '10px' }}>
                             <strong style={{ fontSize: '14px', color: '#004A99' }}>{proc.nombre}</strong><br/>
-                            <span style={{ backgroundColor: '#ffc107', color: '#333', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{proc.tipo}</span> • <span style={{ color: '#666' }}>{proc.controller}</span>
+                            <span style={{ backgroundColor: '#ffc107', color: '#333', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{proc.tipo}</span> • <span style={{ color: '#666', fontWeight: 'bold' }}>{proc.subgerencia || 'S/A'}</span><br/>
+                            <span style={{ color: '#888', fontSize: '10px' }}>👤 {proc.controller}</span>
                           </td>
                           <td style={{ padding: '10px', color: '#555' }}>
+                            <span style={{ color: '#004A99', fontWeight: 'bold' }}>{proc.estado_proceso}</span><br/>
                             <strong>Inicio:</strong> {formatearFechaLocal(proc.fecha_inicio)}<br/>
                             <strong>Fin:</strong> {formatearFechaLocal(proc.fecha_termino)}
                           </td>
@@ -1743,8 +1747,10 @@ export default function App() {
                             <span style={{ color: '#555' }}>Adj: {formatearMoneda(proc.monto_adjudicado)}</span><br/>
                             <strong style={{ color: ahorro > 0 ? '#28a745' : (ahorro < 0 ? '#dc3545' : '#666') }}>Ahorro: {formatearMoneda(ahorro)}</strong>
                           </td>
-                          <td style={{ padding: '10px', fontWeight: 'bold', color: proc.proveedor_adjudicado ? '#333' : '#999' }}>
-                            {proc.proveedor_adjudicado || 'Pendiente'}
+                          <td style={{ padding: '10px' }}>
+                            <span style={{ fontWeight: 'bold', color: proc.proveedor_adjudicado ? '#333' : '#999' }}>{proc.proveedor_adjudicado || 'Pendiente'}</span><br/>
+                            {proc.carta_adjudicacion && <span style={{ fontSize: '10px', color: '#6f42c1', display: 'block' }}>✉️ C.Adj: {proc.carta_adjudicacion}</span>}
+                            {proc.aplica_contrato === 'si' && proc.numero_contrato && <span style={{ fontSize: '10px', color: '#e83e8c', display: 'block' }}>📝 Contrato: {proc.numero_contrato}</span>}
                           </td>
                           <td style={{ padding: '10px', textAlign: 'center' }}>
                             <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
