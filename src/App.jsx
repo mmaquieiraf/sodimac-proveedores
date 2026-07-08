@@ -1292,35 +1292,35 @@ export default function App() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Fecha Registro</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Razón Social / RUT</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Categoría</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Cobertura</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Contacto</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Acciones</th>
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>Fecha Registro</th>
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>Razón Social / RUT</th>
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>Categoría / Subcategoría</th>
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>Cobertura</th>
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>Contacto</th>
+                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center' }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {proveedores.filter(p => p.estado === 'Pendiente').length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay proveedores pendientes.</td></tr> : 
                     proveedores.filter(p => p.estado === 'Pendiente').map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '12px', color: '#666' }}>
+                        <td style={{ padding: '8px', color: '#666', fontSize: '11px' }}>
                           {new Date(prov.fecha_registro).toLocaleDateString('es-CL')}
                         </td>
-                        <td style={{ padding: '12px' }}>
+                        <td style={{ padding: '8px' }}>
                           <strong>{prov.razon_social}</strong><br />
                           <span style={{ color: '#666' }}>{prov.rut}</span>
                         </td>
-                        <td style={{ padding: '12px' }}>
+                        <td style={{ padding: '8px' }}>
                           {prov.categoria}<br />
                           <span style={{ color: '#666', fontSize: '11px' }}>{prov.subcategoria}</span>
                         </td>
-                        <td style={{ padding: '12px', maxWidth: '150px' }}>
+                        <td style={{ padding: '8px', maxWidth: '140px' }}>
                           <span style={{ fontSize: '11px', color: '#555', display: 'block', maxHeight: '40px', overflowY: 'auto' }}>
                             {prov.zonas_cobertura || 'No especificada'}
                           </span>
                         </td>
-                        <td style={{ padding: '12px' }}>
+                        <td style={{ padding: '8px' }}>
                           {prov.nombre_contacto}<br />
                           <a href={`mailto:${prov.email_principal}`} style={{ color: '#004A99', textDecoration: 'none' }}>{prov.email_principal}</a><br />
                           <span style={{ color: '#666', fontSize: '11px' }}>Tel: {prov.telefono || 'N/A'}</span><br />
@@ -1328,10 +1328,10 @@ export default function App() {
                             <a href={prov.website.startsWith('http') ? prov.website : `https://${prov.website}`} target="_blank" rel="noopener noreferrer" style={{ color: '#17a2b8', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>🌐 {prov.website}</a>
                           )}
                         </td>
-                        <td style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                          <button onClick={() => aprobarProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Aprobar</button>
-                          <button onClick={() => abrirEditorProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Editar</button>
-                          <button onClick={() => rechazarProveedor(prov)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Eliminar</button>
+                        <td style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'center' }}>
+                          <button onClick={() => aprobarProveedor(prov)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>Aprobar</button>
+                          <button onClick={() => abrirEditorProveedor(prov)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Editar</button>
+                          <button onClick={() => rechazarProveedor(prov)} style={{ width: '80px', padding: '6px 0', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>
                         </td>
                       </tr>
                     ))}
