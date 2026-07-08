@@ -31,7 +31,6 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
-// OPCIONES NUEVAS PARA PROCESOS
 const subgerenciasOpciones = ["Sistemas", "Prevención", "Recursos humanos", "Operaciones", "Logistica", "Administración", "Comercial"];
 
 const estadosProcesoOpciones = [
@@ -80,7 +79,6 @@ export default function App() {
   const [mostrarModalAuditoria, setMostrarModalAuditoria] = useState(false);
   const [logsAuditoriaProv, setLogsAuditoriaProv] = useState([]);
 
-  // --- ESTADOS PARA REGISTRO DE PROCESOS ---
   const [procesos, setProcesos] = useState([]);
   const [modalProceso, setModalProceso] = useState(false);
   const [procesoActual, setProcesoActual] = useState({
@@ -212,6 +210,8 @@ export default function App() {
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
 
     const rutLimpio = formData.rut.replace(/[<>]/g, '');
+    
+    // Validación única de base de datos: Verifica si existe RUT + Categoría + Subcategoría
     const { data: existentes } = await supabase.from('proveedores').select('categoria, subcategoria').eq('rut', rutLimpio);
 
     const websiteFinal = formData.poseeWebsite === 'si' && formData.websiteUrl.trim() !== '' 
@@ -240,7 +240,7 @@ export default function App() {
     });
 
     if (duplicadosEncontrados.length > 0) {
-      alert(`❌ ATENCIÓN: El RUT ya se encuentra registrado para:\n\n${duplicadosEncontrados.join('\n')}`);
+      alert(`❌ ATENCIÓN: El RUT ya se encuentra registrado para las siguientes subcategorías:\n\n${duplicadosEncontrados.join('\n')}\n\nPor favor, desmárquelas para poder continuar.`);
       return; 
     }
 
@@ -292,30 +292,13 @@ export default function App() {
   };
 
   const cargarProveedores = async () => {
+    // MODIFICACIÓN: Se removió la limpieza automática de registros para evitar que se depuren solos.
     const { data, error } = await supabase.from('proveedores').select('*').order('fecha_registro', { ascending: false });
     if (!error && data) {
-      const uniqueMap = new Map(); const idsToDelete = []; const dataLimpia = [];
-      const dataOrdenada = [...data].sort((a, b) => {
-        if (a.estado === 'Aprobado' && b.estado !== 'Aprobado') return -1;
-        if (b.estado === 'Aprobado' && a.estado !== 'Aprobado') return 1; return 0; 
-      });
-
-      dataOrdenada.forEach(prov => {
-        const key = `${(prov.rut||'').trim().toLowerCase()}_${(prov.categoria||'').trim().toLowerCase()}_${(prov.subcategoria||'').trim().toLowerCase()}`;
-        if (uniqueMap.has(key)) idsToDelete.push(prov.id); else { uniqueMap.set(key, true); dataLimpia.push(prov); }
-      });
-
-      if (idsToDelete.length > 0) {
-        const provsToDelete = dataOrdenada.filter(p => idsToDelete.includes(p.id));
-        for (const p of provsToDelete) await registrarAuditoriaProv(p.rut, p.razon_social, 'Limpieza Automática (Duplicidad)', `RUT, Categoría y Subcat idénticos.`, 'Sistema');
-        for (let i = 0; i < idsToDelete.length; i += 100) await supabase.from('proveedores').delete().in('id', idsToDelete.slice(i, i + 100));
-      }
-      dataLimpia.sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro));
-      setProveedores(dataLimpia);
+      setProveedores(data);
     }
   };
 
-  // --- FUNCIONES DE REGISTRO DE PROCESOS ---
   const cargarProcesos = async () => {
     const { data, error } = await supabase.from('procesos').select('*').order('created_at', { ascending: false });
     if (!error && data) setProcesos(data);
@@ -355,7 +338,6 @@ export default function App() {
     const { error } = await supabase.from('procesos').delete().eq('id', id);
     if (!error) { alert("✅ Proceso eliminado."); cargarProcesos(); }
   };
-  // ----------------------------------------
 
   const cargarAdministradores = async () => {
     const { data } = await supabase.from('administradores').select('*').order('id', { ascending: true });
@@ -593,7 +575,7 @@ export default function App() {
     return { conteo, maxMapa: Math.max(...Object.values(conteo), 1), totalMapeados: filtradosMapa.length };
   };
   const mapStats = statsMapa();
-  // --- FUNCIONES Y CÁLCULOS PARA EL MÓDULO DE PROCESOS ---
+// --- FUNCIONES Y CÁLCULOS PARA EL MÓDULO DE PROCESOS ---
   const abrirNuevoProcesoConSeleccionados = () => {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor de la tabla para invitarlo al proceso.");
     const provsNombres = proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).map(p => p.nombre_fantasia);
@@ -652,13 +634,10 @@ export default function App() {
   const controllersUnicos = [...new Set(procesos.map(p => p.controller).filter(Boolean))];
   const mesesAnosUnicos = [...new Set(procesos.map(p => obtenerMesAno(p.fecha_inicio)).filter(f => f !== 'Sin Fecha'))];
 
-  // Regla de Exclusión de Negocio: No considerar estos estados en tarjetas de sumatoria (Baseline, Ahorro, etc.) a menos que se filtren explícitamente.
   const estadosExcluidosGlobal = ['Cancelado', 'Desierto', 'No Iniciado'];
 
   const procesosFiltradosDashboard = procesos.filter(p => {
     const estado = p.estado_proceso || '';
-    
-    // Si el estado es uno de los excluidos, no lo pasamos al dashboard a menos que el usuario lo seleccione manualmente en el filtro
     if (estadosExcluidosGlobal.includes(estado) && !filtroProcesosEstado.includes(estado)) return false;
 
     const matchController = filtroProcesosController.length === 0 || filtroProcesosController.includes(p.controller);
@@ -672,13 +651,11 @@ export default function App() {
   const totalAdjudicadoProcesos = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.monto_adjudicado || 0), 0);
   const ahorroTotalProcesos = totalBaselineProcesos - totalAdjudicadoProcesos;
   const ahorroPorcentajeProcesos = totalBaselineProcesos > 0 ? ((ahorroTotalProcesos / totalBaselineProcesos) * 100).toFixed(1) : 0;
-  const procesosRecuentoCount = procesosFiltradosDashboard.length; // Reemplaza a "En curso" para hacerlo 100% dinámico con los filtros
+  const procesosRecuentoCount = procesosFiltradosDashboard.length; 
 
-  // Recuentos Documentales
   const totalCartas = procesosFiltradosDashboard.filter(p => p.carta_adjudicacion && p.carta_adjudicacion.trim() !== '').length;
   const totalContratos = procesosFiltradosDashboard.filter(p => p.aplica_contrato === 'si' && p.numero_contrato && p.numero_contrato.trim() !== '').length;
   
-  // Gráfico de Tendencia
   const procesosOrdenados = [...procesos].filter(p => p.cantidad_ofertas !== null && p.proveedores_invitados).sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
   const chartWidthProc = 350; const chartHeightProc = 120; const maxPart = 100;
   const stepXProc = procesosOrdenados.length > 1 ? (chartWidthProc - 40) / (procesosOrdenados.length - 1) : 0;
@@ -689,7 +666,6 @@ export default function App() {
     return `${20 + i * stepXProc},${chartHeightProc - 20 - ((Math.min(porcentaje, 100) / maxPart) * (chartHeightProc - 40))}`;
   }).join(' ');
 
-  // Gráfico Torta Subgerencias
   const subgerenciasData = {};
   procesosFiltradosDashboard.forEach(p => { const sg = p.subgerencia || 'No Asignada'; subgerenciasData[sg] = (subgerenciasData[sg] || 0) + 1; });
   let cumPercentSg = 0;
@@ -700,6 +676,18 @@ export default function App() {
     return { key, val, percent, color: coloresGrafico[i % coloresGrafico.length], slice };
   });
   const tortaGradientSg = procesosFiltradosDashboard.length > 0 ? `conic-gradient(${pieSlicesSg.map(s => s.slice).join(', ')})` : '#e0e0e0';
+
+  // --- LÓGICA DE ALERTA DE PROCESOS FINALIZADOS ---
+  const hoyDate = new Date();
+  hoyDate.setHours(0,0,0,0);
+  const procesosConAlertaFinalizacion = procesos.filter(p => {
+    if (!p.fecha_termino) return false;
+    const partes = p.fecha_termino.split('-');
+    if (partes.length !== 3) return false;
+    const fechaT = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+    const estadosCerrados = ['Adjudicado', 'Cancelado', 'Desierto', 'Gestión Contractual y/o Implementación'];
+    return fechaT < hoyDate && !estadosCerrados.includes(p.estado_proceso);
+  });
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
@@ -877,7 +865,7 @@ export default function App() {
                 <input type="text" value={procesoActual.monto_adjudicado} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, monto_adjudicado: formatearMoneda(e.target.value)})} placeholder="Ej: $5.555.555" />
               </div>
               
-              <div></div> {/* Espaciador */}
+              <div></div>
 
               <div>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nº Carta de Adjudicación</label>
@@ -917,6 +905,7 @@ export default function App() {
                 <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nombre de Fantasía *</label><input required value={proveedorEditando.nombre_fantasia} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, nombre_fantasia: e.target.value})} /></div>
                 <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>RUT Empresa *</label><input required value={proveedorEditando.rut} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, rut: formatearRUT(e.target.value)})} /></div>
                 <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Domicilio Comercial *</label><input required value={proveedorEditando.domicilio_comercial} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, domicilio_comercial: e.target.value})} /></div>
+                
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Website Proveedor</label>
                   <input type="text" value={proveedorEditando.website || ''} placeholder="Ej: https://www.tuempresa.cl (Dejar en 'No posee' si no tiene)" style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProveedorEditando({...proveedorEditando, website: e.target.value})} />
@@ -1571,6 +1560,18 @@ export default function App() {
                   setModalProceso(true);
                 }} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>+ Crear Proceso Manual</button>
               </div>
+
+              {/* ALERTAS DE PROCESOS FINALIZADOS */}
+              {procesosConAlertaFinalizacion.length > 0 && (
+                <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {procesosConAlertaFinalizacion.map(proc => (
+                    <div key={`alerta-${proc.id}`} style={{ backgroundColor: '#fff3cd', color: '#856404', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #ffeeba', fontSize: '13px', display: 'flex', alignItems: 'center' }}>
+                      <span style={{ marginRight: '10px', fontSize: '16px' }}>⚠️</span>
+                      <span><strong>Recordatorio:</strong> Proceso "{proc.nombre}" ha finalizado. Actualice el estatus.</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* PANEL DE FILTROS PARA DASHBOARD DE PROCESOS */}
               <div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '20px', display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
