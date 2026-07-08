@@ -761,6 +761,22 @@ export default function App() {
     return `${partes[2]}-${partes[1]}-${partes[0]}`; 
   };
 
+  // --- AGREGAR Y ELIMINAR PROVEEDORES DEL PROCESO EN CURSO ---
+  const removerProveedorInvitado = (nombreProv) => {
+    const nuevosInvitados = procesoActual.proveedores_invitados.filter(p => p !== nombreProv);
+    // Si eliminamos al proveedor que estaba adjudicado, limpiamos el campo de adjudicación
+    const adjudicado = procesoActual.proveedor_adjudicado === nombreProv ? '' : procesoActual.proveedor_adjudicado;
+    setProcesoActual({ ...procesoActual, proveedores_invitados: nuevosInvitados, proveedor_adjudicado: adjudicado });
+  };
+
+  const agregarProveedorInvitado = (nombreProv) => {
+    if (!nombreProv) return;
+    setProcesoActual({ 
+      ...procesoActual, 
+      proveedores_invitados: [...procesoActual.proveedores_invitados, nombreProv] 
+    });
+  };
+
   // --- FILTROS Y DASHBOARD DE PROCESOS ---
   const [filtroProcesosController, setFiltroProcesosController] = useState([]);
   const [filtroProcesosEstado, setFiltroProcesosEstado] = useState('Todos');
@@ -890,10 +906,27 @@ export default function App() {
               </div>
 
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedores Invitados</label>
-                <div style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#f8f9fa', minHeight: '40px', fontSize: '12px' }}>
-                  {procesoActual.proveedores_invitados.length > 0 ? procesoActual.proveedores_invitados.map(p => <span key={p} style={{display: 'inline-block', backgroundColor: '#004A99', color: 'white', padding: '2px 6px', borderRadius: '4px', marginRight: '5px', marginBottom: '5px'}}>{p}</span>) : 'Ninguno seleccionado'}
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedores Invitados al Proceso</label>
+                <div style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#f8f9fa', minHeight: '45px', fontSize: '12px' }}>
+                  {procesoActual.proveedores_invitados.length > 0 ? procesoActual.proveedores_invitados.map(p => (
+                    <span key={p} style={{display: 'inline-flex', alignItems: 'center', backgroundColor: '#004A99', color: 'white', padding: '3px 8px', borderRadius: '12px', marginRight: '5px', marginBottom: '5px'}}>
+                      {p}
+                      <button type="button" onClick={() => removerProveedorInvitado(p)} style={{ marginLeft: '6px', background: 'none', border: 'none', color: '#ffb3b3', cursor: 'pointer', fontSize: '11px', padding: 0, fontWeight: 'bold' }}>✖</button>
+                    </span>
+                  )) : <span style={{ color: '#999', display: 'block', padding: '5px 0' }}>Ninguno seleccionado</span>}
                 </div>
+                <select 
+                  onChange={(e) => agregarProveedorInvitado(e.target.value)}
+                  value=""
+                  style={{ width: '100%', padding: '6px', marginTop: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #28a745', color: '#28a745', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  <option value="">+ Añadir otro proveedor aprobado al proceso...</option>
+                  {proveedoresAprobados
+                    .filter(p => !procesoActual.proveedores_invitados.includes(p.nombre_fantasia))
+                    .map(p => (
+                      <option key={p.id} value={p.nombre_fantasia}>{p.nombre_fantasia} ({p.categoria})</option>
+                  ))}
+                </select>
               </div>
 
               <div>
