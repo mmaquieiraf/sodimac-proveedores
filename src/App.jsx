@@ -31,7 +31,12 @@ const macroZonas = {
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
 
+// OPCIONES PARA PROCESOS
 const subgerenciasOpciones = ["Sistemas", "Prevención", "Recursos humanos", "Operaciones", "Logistica", "Administración", "Comercial"];
+const clasificacionOpciones = ["Capex", "Opex"];
+const tipoCompraOpciones = ["Spot", "Anualizado"];
+const vigenciaOpciones = ["12 meses", "24 meses", "36 meses", "48 meses", "60 meses"];
+const mesesRenovacionOpciones = ["3", "6", "12", "18", "24"];
 
 const estadosProcesoOpciones = [
   "No Iniciado",
@@ -79,13 +84,19 @@ export default function App() {
   const [mostrarModalAuditoria, setMostrarModalAuditoria] = useState(false);
   const [logsAuditoriaProv, setLogsAuditoriaProv] = useState([]);
 
+  // --- ESTADOS PARA REGISTRO DE PROCESOS ---
   const [procesos, setProcesos] = useState([]);
   const [modalProceso, setModalProceso] = useState(false);
+  
+  // Estado base actualizado con los nuevos campos
   const [procesoActual, setProcesoActual] = useState({
     id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '',
     proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: '',
     baseline: '', monto_adjudicado: '', controller: '',
     subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos',
+    clasificacion: '', solicitante: '', tipo_compra: 'Spot',
+    termino_carta: '', termino_contrato: '', vigencia_contrato: '',
+    renovacion_automatica: 'No', meses_renovacion: '',
     carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: ''
   });
 
@@ -138,10 +149,7 @@ export default function App() {
 
   const registrarAuditoria = async (usuario, estado, tipo) => {
     try {
-      const { error } = await supabase.from('auditoria_logins').insert([{
-        usuario_intentado: usuario, estado: estado, tipo: tipo
-      }]);
-      if (error) console.error("Error de auditoría:", error);
+      await supabase.from('auditoria_logins').insert([{ usuario_intentado: usuario, estado: estado, tipo: tipo }]);
     } catch (err) { console.error(err); }
   };
 
@@ -151,7 +159,7 @@ export default function App() {
         proveedor_rut: rut, proveedor_nombre: nombre, accion: accion,
         detalles: detalles, usuario: usuario || 'Sistema'
       }]);
-    } catch (err) { console.error("Error guardando auditoria prov:", err); }
+    } catch (err) { console.error(err); }
   };
 
   const cargarLogsAuditoriaProv = async () => {
@@ -210,8 +218,6 @@ export default function App() {
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
 
     const rutLimpio = formData.rut.replace(/[<>]/g, '');
-    
-    // Validación única de base de datos: Verifica si existe RUT + Categoría + Subcategoría
     const { data: existentes } = await supabase.from('proveedores').select('categoria, subcategoria').eq('rut', rutLimpio);
 
     const websiteFinal = formData.poseeWebsite === 'si' && formData.websiteUrl.trim() !== '' 
@@ -292,11 +298,8 @@ export default function App() {
   };
 
   const cargarProveedores = async () => {
-    // MODIFICACIÓN: Se removió la limpieza automática de registros para evitar que se depuren solos.
     const { data, error } = await supabase.from('proveedores').select('*').order('fecha_registro', { ascending: false });
-    if (!error && data) {
-      setProveedores(data);
-    }
+    if (!error && data) setProveedores(data);
   };
 
   const cargarProcesos = async () => {
@@ -319,6 +322,14 @@ export default function App() {
       controller: procesoActual.controller,
       subgerencia: procesoActual.subgerencia,
       estado_proceso: procesoActual.estado_proceso,
+      clasificacion: procesoActual.clasificacion,
+      solicitante: sanitizarYCapitalizar(procesoActual.solicitante),
+      tipo_compra: procesoActual.tipo_compra,
+      termino_carta: procesoActual.termino_carta || null,
+      termino_contrato: procesoActual.aplica_contrato === 'si' ? (procesoActual.termino_contrato || null) : null,
+      vigencia_contrato: procesoActual.aplica_contrato === 'si' ? procesoActual.vigencia_contrato : null,
+      renovacion_automatica: procesoActual.aplica_contrato === 'si' ? procesoActual.renovacion_automatica : 'No',
+      meses_renovacion: (procesoActual.aplica_contrato === 'si' && procesoActual.renovacion_automatica === 'Si') ? procesoActual.meses_renovacion : null,
       carta_adjudicacion: procesoActual.carta_adjudicacion || '',
       aplica_contrato: procesoActual.aplica_contrato,
       numero_contrato: procesoActual.aplica_contrato === 'si' ? procesoActual.numero_contrato : null
@@ -575,7 +586,7 @@ export default function App() {
     return { conteo, maxMapa: Math.max(...Object.values(conteo), 1), totalMapeados: filtradosMapa.length };
   };
   const mapStats = statsMapa();
-// --- FUNCIONES Y CÁLCULOS PARA EL MÓDULO DE PROCESOS ---
+  // --- FUNCIONES Y CÁLCULOS PARA EL MÓDULO DE PROCESOS ---
   const abrirNuevoProcesoConSeleccionados = () => {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor de la tabla para invitarlo al proceso.");
     const provsNombres = proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).map(p => p.nombre_fantasia);
@@ -584,6 +595,9 @@ export default function App() {
       proveedores_invitados: provsNombres, cantidad_ofertas: '', proveedor_adjudicado: '',
       baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '',
       subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos',
+      clasificacion: '', solicitante: '', tipo_compra: 'Spot',
+      termino_carta: '', termino_contrato: '', vigencia_contrato: '',
+      renovacion_automatica: 'No', meses_renovacion: '',
       carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: ''
     });
     setModalProceso(true);
@@ -630,6 +644,7 @@ export default function App() {
   const [filtroProcesosController, setFiltroProcesosController] = useState([]);
   const [filtroProcesosEstado, setFiltroProcesosEstado] = useState([]);
   const [filtroProcesosMesAno, setFiltroProcesosMesAno] = useState([]);
+  const [filtroDocsEmitidos, setFiltroDocsEmitidos] = useState([]); // Nuevo filtro documental
 
   const controllersUnicos = [...new Set(procesos.map(p => p.controller).filter(Boolean))];
   const mesesAnosUnicos = [...new Set(procesos.map(p => obtenerMesAno(p.fecha_inicio)).filter(f => f !== 'Sin Fecha'))];
@@ -643,15 +658,33 @@ export default function App() {
     const matchController = filtroProcesosController.length === 0 || filtroProcesosController.includes(p.controller);
     const matchEstado = filtroProcesosEstado.length === 0 || filtroProcesosEstado.includes(estado);
     const matchMesAno = filtroProcesosMesAno.length === 0 || filtroProcesosMesAno.includes(obtenerMesAno(p.fecha_inicio));
+    
+    const tieneCarta = p.carta_adjudicacion && p.carta_adjudicacion.trim() !== '';
+    const tieneContrato = p.aplica_contrato === 'si' && p.numero_contrato && p.numero_contrato.trim() !== '';
+    
+    let matchDocs = true;
+    if (filtroDocsEmitidos.length > 0) {
+      const matchC = filtroDocsEmitidos.includes('Carta') ? tieneCarta : false;
+      const matchCont = filtroDocsEmitidos.includes('Contrato') ? tieneContrato : false;
+      matchDocs = matchC || matchCont; // Se muestra si cumple con CUALQUIERA de las selecciones del filtro
+    }
 
-    return matchController && matchEstado && matchMesAno;
+    return matchController && matchEstado && matchMesAno && matchDocs;
   });
 
   const totalBaselineProcesos = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.baseline || 0), 0);
-  const totalAdjudicadoProcesos = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.monto_adjudicado || 0), 0);
-  const ahorroTotalProcesos = totalBaselineProcesos - totalAdjudicadoProcesos;
-  const ahorroPorcentajeProcesos = totalBaselineProcesos > 0 ? ((ahorroTotalProcesos / totalBaselineProcesos) * 100).toFixed(1) : 0;
   const procesosRecuentoCount = procesosFiltradosDashboard.length; 
+  
+  // Relación Spot vs Anualizado
+  const countSpot = procesosFiltradosDashboard.filter(p => p.tipo_compra === 'Spot').length;
+  const countAnualizado = procesosFiltradosDashboard.filter(p => p.tipo_compra === 'Anualizado').length;
+
+  // AHORRO: Exclusivo para procesos adjudicados o en gestión
+  const procesosParaAhorro = procesosFiltradosDashboard.filter(p => ['Gestión Contractual y/o Implementación', 'Adjudicado'].includes(p.estado_proceso));
+  const totalBaselineAhorro = procesosParaAhorro.reduce((acc, p) => acc + (p.baseline || 0), 0);
+  const totalAdjudicadoAhorro = procesosParaAhorro.reduce((acc, p) => acc + (p.monto_adjudicado || 0), 0);
+  const ahorroTotalProcesos = totalBaselineAhorro - totalAdjudicadoAhorro;
+  const ahorroPorcentajeProcesos = totalBaselineAhorro > 0 ? ((ahorroTotalProcesos / totalBaselineAhorro) * 100).toFixed(1) : 0;
 
   const totalCartas = procesosFiltradosDashboard.filter(p => p.carta_adjudicacion && p.carta_adjudicacion.trim() !== '').length;
   const totalContratos = procesosFiltradosDashboard.filter(p => p.aplica_contrato === 'si' && p.numero_contrato && p.numero_contrato.trim() !== '').length;
@@ -677,16 +710,40 @@ export default function App() {
   });
   const tortaGradientSg = procesosFiltradosDashboard.length > 0 ? `conic-gradient(${pieSlicesSg.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
-  // --- LÓGICA DE ALERTA DE PROCESOS FINALIZADOS ---
+  // --- LÓGICA DE ALERTAS ---
   const hoyDate = new Date();
   hoyDate.setHours(0,0,0,0);
+  const limite120Dias = new Date(hoyDate);
+  limite120Dias.setDate(limite120Dias.getDate() + 120);
+
+  // Alertas de Fin de Proceso
   const procesosConAlertaFinalizacion = procesos.filter(p => {
     if (!p.fecha_termino) return false;
-    const partes = p.fecha_termino.split('-');
-    if (partes.length !== 3) return false;
-    const fechaT = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+    const fechaT = new Date(p.fecha_termino + 'T00:00:00');
     const estadosCerrados = ['Adjudicado', 'Cancelado', 'Desierto', 'Gestión Contractual y/o Implementación'];
     return fechaT < hoyDate && !estadosCerrados.includes(p.estado_proceso);
+  });
+
+  // Alertas de Contratos por Vencer (120 días) con Renovación Automática
+  const alertasContratos = [];
+  procesos.forEach(p => {
+    if (p.aplica_contrato === 'si' && p.termino_contrato && p.estado_proceso !== 'Cancelado') {
+      let fechaTerminoContrato = new Date(p.termino_contrato + 'T00:00:00');
+      
+      // Proyectar fecha si tiene renovación automática y la fecha inicial ya pasó
+      if (p.renovacion_automatica === 'Si' && p.meses_renovacion) {
+        const mesesAAgregar = parseInt(p.meses_renovacion);
+        while (fechaTerminoContrato < hoyDate) {
+          fechaTerminoContrato.setMonth(fechaTerminoContrato.getMonth() + mesesAAgregar);
+        }
+      }
+
+      // Evaluar si está dentro de la ventana de 120 días hacia adelante
+      if (fechaTerminoContrato >= hoyDate && fechaTerminoContrato <= limite120Dias) {
+        const diasRestantes = Math.ceil((fechaTerminoContrato - hoyDate) / (1000 * 60 * 60 * 24));
+        alertasContratos.push({ ...p, fecha_vencimiento_real: fechaTerminoContrato, diasRestantes });
+      }
+    }
   });
 
   return (
@@ -747,17 +804,26 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL REGISTRO DE PROCESOS */}
+      {/* MODAL REGISTRO DE PROCESOS ACTUALIZADO */}
       {modalProceso && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
-          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '900px', width: '100%', maxHeight: '95vh', overflowY: 'auto', position: 'relative' }}>
+          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '1000px', width: '100%', maxHeight: '95vh', overflowY: 'auto', position: 'relative' }}>
             <button onClick={() => setModalProceso(false)} style={{ position: 'absolute', top: '15px', right: '20px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#EE2D24', fontWeight: 'bold' }}>&times;</button>
             <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>{procesoActual.id ? 'Editar Proceso' : 'Nuevo Proceso'}</h2>
             
-            <form onSubmit={guardarProceso} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
-              <div style={{ gridColumn: '1 / -1' }}>
+            <form onSubmit={guardarProceso} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px' }}>
+              
+              <div style={{ gridColumn: '1 / span 2' }}>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nombre del Proceso *</label>
                 <input required value={procesoActual.nombre} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, nombre: e.target.value})} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Clasificación *</label>
+                <select required value={procesoActual.clasificacion} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, clasificacion: e.target.value})}>
+                  <option value="">Seleccione...</option>
+                  {clasificacionOpciones.map(op => <option key={op} value={op}>{op}</option>)}
+                </select>
               </div>
               
               <div>
@@ -769,11 +835,21 @@ export default function App() {
               </div>
 
               <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Tipo de Proceso *</label>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Solicitante *</label>
+                <input required value={procesoActual.solicitante} placeholder="Nombre Solicitante" style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, solicitante: e.target.value})} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Tipo de Proceso (RFI/Q/P) *</label>
                 <select required value={procesoActual.tipo} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, tipo: e.target.value})}>
-                  <option value="RFI">RFI</option>
-                  <option value="RFQ">RFQ</option>
-                  <option value="RFP">RFP</option>
+                  <option value="RFI">RFI</option><option value="RFQ">RFQ</option><option value="RFP">RFP</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Tipo de Compra *</label>
+                <select required value={procesoActual.tipo_compra} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, tipo_compra: e.target.value})}>
+                  {tipoCompraOpciones.map(tc => <option key={tc} value={tc}>{tc}</option>)}
                 </select>
               </div>
 
@@ -782,12 +858,12 @@ export default function App() {
                 <input required readOnly value={procesoActual.controller} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#e9ecef', color: '#495057' }} />
               </div>
 
+              <div style={{ gridColumn: '1 / span 4', borderTop: '1px solid #eee', margin: '5px 0' }}></div>
+
               <div style={{ gridColumn: '1 / span 2' }}>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Estado del Proceso *</label>
                 <select required value={procesoActual.estado_proceso} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', fontWeight: 'bold', color: '#004A99' }} onChange={e => setProcesoActual({...procesoActual, estado_proceso: e.target.value})}>
-                  <optgroup label="No Iniciado">
-                    <option value="No Iniciado">No Iniciado</option>
-                  </optgroup>
+                  <optgroup label="No Iniciado"><option value="No Iniciado">No Iniciado</option></optgroup>
                   <optgroup label="En Curso">
                     <option value="Estableciendo alcance, equipo y objetivos">Estableciendo alcance, equipo y objetivos</option>
                     <option value="Desarrollando Bases">Desarrollando Bases</option>
@@ -798,20 +874,7 @@ export default function App() {
                     <option value="Gestión Contractual y/o Implementación">Gestión Contractual y/o Implementación</option>
                     <option value="Adjudicado">Adjudicado</option>
                   </optgroup>
-                  <optgroup label="Ignorados / Anulados">
-                    <option value="Cancelado">Cancelado</option>
-                    <option value="Desierto">Desierto</option>
-                  </optgroup>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedor Adjudicado</label>
-                <select value={procesoActual.proveedor_adjudicado || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: procesoActual.proveedor_adjudicado ? '#d4edda' : 'white' }} onChange={e => setProcesoActual({...procesoActual, proveedor_adjudicado: e.target.value})}>
-                  <option value="">Pendiente de resolución...</option>
-                  {procesoActual.proveedores_invitados && procesoActual.proveedores_invitados.map(prov => (
-                    <option key={prov} value={prov}>{prov}</option>
-                  ))}
+                  <optgroup label="Ignorados / Anulados"><option value="Cancelado">Cancelado</option><option value="Desierto">Desierto</option></optgroup>
                 </select>
               </div>
 
@@ -825,12 +888,7 @@ export default function App() {
                 <input type="date" required value={procesoActual.fecha_termino} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, fecha_termino: e.target.value})} />
               </div>
 
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Cantidad de Ofertas Recibidas</label>
-                <input type="number" min="0" value={procesoActual.cantidad_ofertas} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, cantidad_ofertas: e.target.value})} placeholder="Se recibe al final" />
-              </div>
-
-              <div style={{ gridColumn: '1 / -1' }}>
+              <div style={{ gridColumn: '1 / span 4' }}>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedores Invitados al Proceso</label>
                 <div style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#f8f9fa', minHeight: '45px', fontSize: '12px' }}>
                   {procesoActual.proveedores_invitados.length > 0 ? procesoActual.proveedores_invitados.map(p => (
@@ -840,43 +898,53 @@ export default function App() {
                     </span>
                   )) : <span style={{ color: '#999', display: 'block', padding: '5px 0' }}>Ningún proveedor seleccionado todavía.</span>}
                 </div>
-                <select 
-                  onChange={(e) => agregarProveedorInvitado(e.target.value)} value=""
-                  style={{ width: '100%', padding: '8px', marginTop: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #28a745', color: '#28a745', fontWeight: 'bold', cursor: 'pointer', outline: 'none' }}
-                >
+                <select onChange={(e) => agregarProveedorInvitado(e.target.value)} value="" style={{ width: '100%', padding: '8px', marginTop: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #28a745', color: '#28a745', fontWeight: 'bold', cursor: 'pointer', outline: 'none' }}>
                   <option value="">+ Añadir otro proveedor de la base aprobada al proceso...</option>
-                  {proveedoresAprobados
-                    .filter(p => !procesoActual.proveedores_invitados.includes(p.nombre_fantasia))
-                    .map(p => (
-                      <option key={p.id} value={p.nombre_fantasia}>{p.nombre_fantasia} ({p.categoria})</option>
-                  ))}
+                  {proveedoresAprobados.filter(p => !procesoActual.proveedores_invitados.includes(p.nombre_fantasia)).map(p => <option key={p.id} value={p.nombre_fantasia}>{p.nombre_fantasia} ({p.categoria})</option>)}
                 </select>
               </div>
 
-              <div style={{ gridColumn: '1 / span 3', borderTop: '2px dashed #eee', margin: '10px 0' }}></div>
-
               <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Baseline ($)</label>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Ofertas Recibidas</label>
+                <input type="number" min="0" value={procesoActual.cantidad_ofertas} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, cantidad_ofertas: e.target.value})} placeholder="Se recibe al final" />
+              </div>
+
+              <div style={{ gridColumn: 'span 3' }}>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedor Adjudicado</label>
+                <select value={procesoActual.proveedor_adjudicado || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: procesoActual.proveedor_adjudicado ? '#d4edda' : 'white' }} onChange={e => setProcesoActual({...procesoActual, proveedor_adjudicado: e.target.value})}>
+                  <option value="">Pendiente de resolución...</option>
+                  {procesoActual.proveedores_invitados && procesoActual.proveedores_invitados.map(prov => <option key={prov} value={prov}>{prov}</option>)}
+                </select>
+              </div>
+
+              <div style={{ gridColumn: '1 / span 4', borderTop: '2px dashed #eee', margin: '5px 0' }}></div>
+
+              <div style={{ gridColumn: '1 / span 2' }}>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Baseline (Presupuesto Base $)</label>
                 <input type="text" value={procesoActual.baseline} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, baseline: formatearMoneda(e.target.value)})} placeholder="Ej: $5.555.555" />
               </div>
 
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Monto Adjudicado ($)</label>
+              <div style={{ gridColumn: '3 / span 2' }}>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Monto Final Adjudicado ($)</label>
                 <input type="text" value={procesoActual.monto_adjudicado} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, monto_adjudicado: formatearMoneda(e.target.value)})} placeholder="Ej: $5.555.555" />
               </div>
               
-              <div></div>
+              <div style={{ gridColumn: '1 / span 4', borderTop: '2px dashed #eee', margin: '5px 0' }}></div>
 
               <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nº Carta de Adjudicación</label>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nº Carta Adjudicación</label>
                 <input type="text" value={procesoActual.carta_adjudicacion} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, carta_adjudicacion: e.target.value})} placeholder="Opcional..." />
+              </div>
+              
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Término Carta Adj.</label>
+                <input type="date" value={procesoActual.termino_carta} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, termino_carta: e.target.value})} />
               </div>
 
               <div>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>¿Aplica Contrato?</label>
                 <select value={procesoActual.aplica_contrato} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, aplica_contrato: e.target.value, numero_contrato: e.target.value === 'no' ? '' : procesoActual.numero_contrato})}>
-                  <option value="no">No Aplica</option>
-                  <option value="si">Sí Aplica</option>
+                  <option value="no">No Aplica</option><option value="si">Sí Aplica</option>
                 </select>
               </div>
 
@@ -886,6 +954,35 @@ export default function App() {
                   <input type="text" value={procesoActual.numero_contrato || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, numero_contrato: e.target.value})} placeholder="Ingrese Número..." />
                 </div>
               ) : <div></div>}
+
+              {procesoActual.aplica_contrato === 'si' && (
+                <>
+                  <div>
+                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Término Contrato *</label>
+                    <input type="date" required value={procesoActual.termino_contrato} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, termino_contrato: e.target.value})} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Vigencia Contrato</label>
+                    <select value={procesoActual.vigencia_contrato} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, vigencia_contrato: e.target.value})}>
+                      <option value="">Seleccione...</option>{vigenciaOpciones.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Renovación Automática</label>
+                    <select value={procesoActual.renovacion_automatica} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, renovacion_automatica: e.target.value})}>
+                      <option value="No">No</option><option value="Si">Sí</option>
+                    </select>
+                  </div>
+                  {procesoActual.renovacion_automatica === 'Si' ? (
+                    <div>
+                      <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Meses de Renovación *</label>
+                      <select required value={procesoActual.meses_renovacion} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, meses_renovacion: e.target.value})}>
+                        <option value="">Seleccione...</option>{mesesRenovacionOpciones.map(m => <option key={m} value={m}>{m} meses</option>)}
+                      </select>
+                    </div>
+                  ) : <div></div>}
+                </>
+              )}
 
               <button type="submit" style={{ gridColumn: '1 / -1', padding: '15px', marginTop: '15px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer', fontSize: '15px' }}>GUARDAR CAMBIOS DEL PROCESO</button>
             </form>
@@ -1139,15 +1236,15 @@ export default function App() {
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
                 <div style={{ backgroundColor: '#004A99', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
-                  <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores</h3>
+                  <h3 style={{ margin: '0', fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores</h3>
                   <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{proveedores.length}</p>
                 </div>
                 <div style={{ backgroundColor: '#EE2D24', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
-                  <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Aprobados en Base</h3>
+                  <h3 style={{ margin: '0', fontSize: '14px', textTransform: 'uppercase' }}>Aprobados en Base</h3>
                   <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{proveedoresAprobados.length}</p>
                 </div>
                 <div style={{ backgroundColor: '#ffc107', color: '#333', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
-                  <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Requieren Actualización (>90 días)</h3>
+                  <h3 style={{ margin: '0', fontSize: '14px', textTransform: 'uppercase' }}>Requieren Actualización (>90 días)</h3>
                   <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{stats.renovaciones.length}</p>
                 </div>
               </div>
@@ -1555,18 +1652,24 @@ export default function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Registro de Procesos y Adjudicaciones</h3>
                 <button onClick={() => {
-                  setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: '', baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: '' });
+                  setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: '', baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', clasificacion: '', solicitante: '', tipo_compra: 'Spot', termino_carta: '', termino_contrato: '', vigencia_contrato: '', renovacion_automatica: 'No', meses_renovacion: '', carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: '' });
                   setModalProceso(true);
                 }} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>+ Crear Proceso Manual</button>
               </div>
 
-              {/* ALERTAS DE PROCESOS FINALIZADOS */}
-              {procesosConAlertaFinalizacion.length > 0 && (
+              {/* ALERTAS DEL SISTEMA */}
+              {(procesosConAlertaFinalizacion.length > 0 || alertasContratos.length > 0) && (
                 <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {procesosConAlertaFinalizacion.map(proc => (
-                    <div key={`alerta-${proc.id}`} style={{ backgroundColor: '#fff3cd', color: '#856404', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #ffeeba', fontSize: '13px', display: 'flex', alignItems: 'center' }}>
+                    <div key={`alerta-fin-${proc.id}`} style={{ backgroundColor: '#fff3cd', color: '#856404', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #ffc107', fontSize: '13px', display: 'flex', alignItems: 'center' }}>
                       <span style={{ marginRight: '10px', fontSize: '16px' }}>⚠️</span>
-                      <span><strong>Recordatorio:</strong> Proceso "{proc.nombre}" ha finalizado. Actualice el estatus.</span>
+                      <span><strong>Recordatorio:</strong> Proceso "{proc.nombre}" ha finalizado su fecha programada. Actualice el estatus.</span>
+                    </div>
+                  ))}
+                  {alertasContratos.map(alerta => (
+                    <div key={`alerta-contrato-${alerta.id}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #17a2b8', fontSize: '13px', display: 'flex', alignItems: 'center' }}>
+                      <span style={{ marginRight: '10px', fontSize: '16px' }}>⏳</span>
+                      <span><strong>Alerta Contrato:</strong> El contrato asociado al proceso "{alerta.nombre}" vence en <strong>{alerta.diasRestantes} días</strong> ({alerta.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
                     </div>
                   ))}
                 </div>
@@ -1626,10 +1729,28 @@ export default function App() {
                     ))}
                   </div>
                 </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#666' }}>Documentos Emitidos:</label>
+                  <select style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '12px', minWidth: '150px' }} onChange={e => {
+                    const val = e.target.value; if (val && !filtroDocsEmitidos.includes(val)) setFiltroDocsEmitidos([...filtroDocsEmitidos, val]); e.target.value = "";
+                  }}>
+                    <option value="">Filtrar Emitidos...</option>
+                    <option value="Carta">Con Carta Adjudicación</option>
+                    <option value="Contrato">Con Contrato Vigente</option>
+                  </select>
+                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', maxWidth: '200px' }}>
+                    {filtroDocsEmitidos.map(d => (
+                      <span key={d} style={{ backgroundColor: '#e2e8f0', padding: '2px 6px', borderRadius: '12px', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        {d} <button onClick={() => setFiltroDocsEmitidos(filtroDocsEmitidos.filter(x => x !== d))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc3545', padding: 0 }}>x</button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
 
-              {/* DASHBOARD DE PROCESOS */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+              {/* DASHBOARD DE PROCESOS - FILA 1 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
                 <div style={{ border: '1px solid #eee', padding: '15px', borderRadius: '8px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                   <h4 style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#555', textTransform: 'uppercase' }}>Participación Proveedores (%)</h4>
                   {procesosOrdenados.length === 0 ? <p style={{ fontSize: '11px', color: '#999', textAlign: 'center', marginTop: '30px' }}>Sin datos suficientes</p> : (
@@ -1660,19 +1781,28 @@ export default function App() {
                   <span style={{ fontSize: '11px', backgroundColor: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px', marginTop: '5px' }}>Según filtros activos</span>
                 </div>
 
+                <div style={{ border: '1px solid #eee', padding: '15px', borderRadius: '8px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#555', textTransform: 'uppercase', textAlign: 'center' }}>Spot vs Anualizado</h4>
+                  <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', flex: 1 }}>
+                    <div style={{ textAlign: 'center' }}><p style={{fontSize:'24px', fontWeight:'bold', color:'#004A99', margin:0}}>{countSpot}</p><span style={{fontSize:'11px', color:'#666', fontWeight: 'bold'}}>Spot</span></div>
+                    <div style={{ borderLeft: '1px solid #ddd', height: '40px' }}></div>
+                    <div style={{ textAlign: 'center' }}><p style={{fontSize:'24px', fontWeight:'bold', color:'#28a745', margin:0}}>{countAnualizado}</p><span style={{fontSize:'11px', color:'#666', fontWeight: 'bold'}}>Anualizado</span></div>
+                  </div>
+                </div>
+
                 <div style={{ backgroundColor: '#004A99', color: 'white', padding: '15px', borderRadius: '8px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                   <h4 style={{ margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase', opacity: 0.9 }}>Total Baseline (CLP)</h4>
-                  <p style={{ margin: 0, fontSize: '22px', fontWeight: 'bold' }}>{formatearMoneda(totalBaselineProcesos)}</p>
+                  <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>{formatearMoneda(totalBaselineProcesos)}</p>
                 </div>
 
                 <div style={{ backgroundColor: '#28a745', color: 'white', padding: '15px', borderRadius: '8px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                  <h4 style={{ margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase', opacity: 0.9 }}>Total Ahorro (CLP)</h4>
-                  <p style={{ margin: 0, fontSize: '22px', fontWeight: 'bold' }}>{formatearMoneda(ahorroTotalProcesos)}</p>
-                  <span style={{ fontSize: '11px', backgroundColor: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px', marginTop: '5px' }}>{ahorroPorcentajeProcesos}% de ahorro global</span>
+                  <h4 style={{ margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase', opacity: 0.9 }}>Ahorro (Solo Cerrados)</h4>
+                  <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>{formatearMoneda(ahorroTotalProcesos)}</p>
+                  <span style={{ fontSize: '11px', backgroundColor: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px', marginTop: '5px', textAlign: 'center' }}>{ahorroPorcentajeProcesos}% de ahorro sobre su base</span>
                 </div>
               </div>
 
-              {/* SEGUNDA FILA DASHBOARD: Contratos/Cartas y Gráfico de Torta */}
+              {/* DASHBOARD DE PROCESOS - FILA 2 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '30px' }}>
                 <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                   <h4 style={{ margin: '0 0 15px 0', fontSize: '14px', color: '#555', textTransform: 'uppercase' }}>Gestión Documental (Emitidos)</h4>
@@ -1731,6 +1861,7 @@ export default function App() {
                           <td style={{ padding: '10px' }}>
                             <strong style={{ fontSize: '14px', color: '#004A99' }}>{proc.nombre}</strong><br/>
                             <span style={{ backgroundColor: '#ffc107', color: '#333', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{proc.tipo}</span> • <span style={{ color: '#666', fontWeight: 'bold' }}>{proc.subgerencia || 'S/A'}</span><br/>
+                            <span style={{ backgroundColor: '#e2e8f0', color: '#555', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', display: 'inline-block', marginTop: '4px' }}>{proc.tipo_compra} - {proc.clasificacion || 'N/A'}</span><br/>
                             <span style={{ color: '#888', fontSize: '10px' }}>👤 {proc.controller}</span>
                           </td>
                           <td style={{ padding: '10px', color: '#555' }}>
@@ -1749,8 +1880,8 @@ export default function App() {
                           </td>
                           <td style={{ padding: '10px' }}>
                             <span style={{ fontWeight: 'bold', color: proc.proveedor_adjudicado ? '#333' : '#999' }}>{proc.proveedor_adjudicado || 'Pendiente'}</span><br/>
-                            {proc.carta_adjudicacion && <span style={{ fontSize: '10px', color: '#6f42c1', display: 'block' }}>✉️ C.Adj: {proc.carta_adjudicacion}</span>}
-                            {proc.aplica_contrato === 'si' && proc.numero_contrato && <span style={{ fontSize: '10px', color: '#e83e8c', display: 'block' }}>📝 Contrato: {proc.numero_contrato}</span>}
+                            {proc.carta_adjudicacion && <span style={{ fontSize: '10px', color: '#6f42c1', display: 'block', marginTop: '4px' }}>✉️ C.Adj: {proc.carta_adjudicacion}</span>}
+                            {proc.aplica_contrato === 'si' && proc.numero_contrato && <span style={{ fontSize: '10px', color: '#e83e8c', display: 'block', marginTop: '2px' }}>📝 Contrato: {proc.numero_contrato}</span>}
                           </td>
                           <td style={{ padding: '10px', textAlign: 'center' }}>
                             <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
