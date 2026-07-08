@@ -45,6 +45,14 @@ const cargarCategoriasDinamicas = () => {
   return categoriasSodimac;
 };
 
+// HELPER NUEVO: Formateo de contabilidad (EJ: $5.555.555)
+const formatearMoneda = (val) => {
+  if (val === '' || val === null || val === undefined) return '';
+  const num = val.toString().replace(/\D/g, '');
+  if (!num) return '';
+  return '$' + parseInt(num, 10).toLocaleString('es-CL');
+};
+
 export default function App() {
   const [vista, setVista] = useState('registro'); 
   const [tabAdmin, setTabAdmin] = useState('dashboard');
@@ -55,9 +63,17 @@ export default function App() {
   const [nuevaCatInput, setNuevaCatInput] = useState('');
   const [nuevasSubInputs, setNuevasSubInputs] = useState({});
 
-  // --- NUEVO ESTADO PARA AUDITORÍA DE PROVEEDORES ---
   const [mostrarModalAuditoria, setMostrarModalAuditoria] = useState(false);
   const [logsAuditoriaProv, setLogsAuditoriaProv] = useState([]);
+
+  // --- NUEVOS ESTADOS PARA REGISTRO DE PROCESOS ---
+  const [procesos, setProcesos] = useState([]);
+  const [modalProceso, setModalProceso] = useState(false);
+  const [procesoActual, setProcesoActual] = useState({
+    id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '',
+    proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: '',
+    baseline: '', monto_adjudicado: '', controller: ''
+  });
 
   useEffect(() => {
     localStorage.setItem('sodimac_categorias_dinamicas', JSON.stringify(categoriasDinamicas));
@@ -115,7 +131,6 @@ export default function App() {
     } catch (err) { console.error(err); }
   };
 
-  // --- FUNCIÓN HELPER: REGISTRAR CAMBIOS EN PROVEEDORES ---
   const registrarAuditoriaProv = async (rut, nombre, accion, detalles, usuario) => {
     try {
       await supabase.from('auditoria_proveedores').insert([{
@@ -284,7 +299,7 @@ export default function App() {
 
     await registrarAuditoria(data.usuario, 'Éxito', 'Login Panel Admin');
     setIntentosFallidos(0); setUsuarioActual(data); setVista('panel');
-    cargarProveedores(); cargarAdministradores();
+    cargarProveedores(); cargarAdministradores(); cargarProcesos();
   };
 
   const cargarProveedores = async () => {
@@ -310,7 +325,6 @@ export default function App() {
         }
       });
 
-      // Lógica de eliminación con AUDITORÍA (Aquí podrás ver por qué se borró)
       if (idsToDelete.length > 0) {
         const provsToDelete = dataOrdenada.filter(p => idsToDelete.includes(p.id));
         for (const p of provsToDelete) {
@@ -326,6 +340,50 @@ export default function App() {
       setProveedores(dataLimpia);
     }
   };
+
+  // --- FUNCIONES DE REGISTRO DE PROCESOS ---
+  const cargarProcesos = async () => {
+    const { data, error } = await supabase.from('procesos').select('*').order('created_at', { ascending: false });
+    if (!error && data) setProcesos(data);
+  };
+
+  const guardarProceso = async (e) => {
+    e.preventDefault();
+    const payload = {
+      nombre: sanitizarYCapitalizar(procesoActual.nombre),
+      tipo: procesoActual.tipo,
+      fecha_inicio: procesoActual.fecha_inicio,
+      fecha_termino: procesoActual.fecha_termino,
+      proveedores_invitados: Array.isArray(procesoActual.proveedores_invitados) ? procesoActual.proveedores_invitados.join(', ') : procesoActual.proveedores_invitados,
+      cantidad_ofertas: procesoActual.cantidad_ofertas || null,
+      proveedor_adjudicado: procesoActual.proveedor_adjudicado || null,
+      baseline: procesoActual.baseline ? parseInt(procesoActual.baseline.toString().replace(/\D/g, '')) : null,
+      monto_adjudicado: procesoActual.monto_adjudicado ? parseInt(procesoActual.monto_adjudicado.toString().replace(/\D/g, '')) : null,
+      controller: procesoActual.controller
+    };
+
+    if (procesoActual.id) {
+      const { error } = await supabase.from('procesos').update(payload).eq('id', procesoActual.id);
+      if(error) alert("⚠️ Error al actualizar el proceso."); 
+      else { alert("✅ Proceso actualizado."); setModalProceso(false); cargarProcesos(); }
+    } else {
+      const { error } = await supabase.from('procesos').insert([payload]);
+      if(error) alert("⚠️ Error al crear el proceso."); 
+      else { alert("✅ Proceso creado."); setModalProceso(false); cargarProcesos(); }
+    }
+  };
+
+  const eliminarProceso = async (id) => {
+    if(!window.confirm("¿Estás seguro de eliminar permanentemente este registro de proceso?")) return;
+    const { error } = await supabase.from('procesos').delete().eq('id', id);
+    if (!error) {
+      alert("✅ Proceso eliminado.");
+      cargarProcesos();
+    } else {
+      alert("⚠️ Error al eliminar.");
+    }
+  };
+  // ----------------------------------------
 
   const cargarAdministradores = async () => {
     const { data, error } = await supabase.from('administradores').select('*').order('id', { ascending: true });
@@ -406,7 +464,8 @@ export default function App() {
       cargarProveedores(); 
     }
   };
-const descargarPlantillaCSV = () => {
+
+  const descargarPlantillaCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
     csvContent += "Razon Social,Nombre de Fantasia,RUT,Domicilio Comercial,Categoria,Subcategoria,Zonas de Cobertura (Separadas por guion -),Email Principal,Email Secundario,Nombre Contacto,Cargo,Telefono\n";
     csvContent += "Empresa Ejemplo SpA,Ejemplo,12345678-9,Av. Siempre Viva 123,Seguridad,Barreras De Seguridad,Metropolitana de Santiago - Valparaíso,contacto@ejemplo.cl,,Juan Perez,Gerente General,+56912345678\n";
@@ -672,6 +731,46 @@ const descargarPlantillaCSV = () => {
     return { conteo, maxMapa: Math.max(...Object.values(conteo), 1), totalMapeados: filtradosMapa.length };
   };
   const mapStats = statsMapa();
+  // --- FUNCIONES Y CÁLCULOS PARA EL MÓDULO DE PROCESOS ---
+  const abrirNuevoProcesoConSeleccionados = () => {
+    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor de la tabla para invitarlo al proceso.");
+    const provsNombres = proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).map(p => p.nombre_fantasia);
+    setProcesoActual({
+      id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '',
+      proveedores_invitados: provsNombres, cantidad_ofertas: '', proveedor_adjudicado: '',
+      baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || ''
+    });
+    setModalProceso(true);
+    setTabAdmin('procesos');
+  };
+
+  const editarProceso = (proc) => {
+    setProcesoActual({
+      ...proc,
+      proveedores_invitados: proc.proveedores_invitados ? proc.proveedores_invitados.split(', ') : [],
+      baseline: formatearMoneda(proc.baseline || ''),
+      monto_adjudicado: formatearMoneda(proc.monto_adjudicado || '')
+    });
+    setModalProceso(true);
+  };
+
+  // Cálculos del Dashboard Power BI para Procesos
+  const totalBaselineProcesos = procesos.reduce((acc, p) => acc + (p.baseline || 0), 0);
+  const totalAdjudicadoProcesos = procesos.reduce((acc, p) => acc + (p.monto_adjudicado || 0), 0);
+  const ahorroTotalProcesos = totalBaselineProcesos - totalAdjudicadoProcesos;
+  const ahorroPorcentajeProcesos = totalBaselineProcesos > 0 ? ((ahorroTotalProcesos / totalBaselineProcesos) * 100).toFixed(1) : 0;
+  
+  // Datos para gráfico de tendencia de participación
+  const procesosOrdenados = [...procesos].filter(p => p.cantidad_ofertas !== null && p.proveedores_invitados).sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
+  const chartWidthProc = 400; const chartHeightProc = 150;
+  const maxPart = 100; // Porcentaje máximo 100%
+  const stepXProc = procesosOrdenados.length > 1 ? (chartWidthProc - 40) / (procesosOrdenados.length - 1) : 0;
+  const puntosTendencia = procesosOrdenados.map((p, i) => {
+    const invitados = p.proveedores_invitados.split(',').length;
+    const ofertas = parseInt(p.cantidad_ofertas) || 0;
+    const porcentaje = invitados > 0 ? (ofertas / invitados) * 100 : 0;
+    return `${20 + i * stepXProc},${chartHeightProc - 20 - ((Math.min(porcentaje, 100) / maxPart) * (chartHeightProc - 40))}`;
+  }).join(' ');
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
@@ -728,6 +827,76 @@ const descargarPlantillaCSV = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL REGISTRO DE PROCESOS (NUEVO) */}
+      {modalProceso && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
+          <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '800px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+            <button onClick={() => setModalProceso(false)} style={{ position: 'absolute', top: '15px', right: '20px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#EE2D24', fontWeight: 'bold' }}>&times;</button>
+            <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>{procesoActual.id ? 'Editar Proceso' : 'Nuevo Proceso'}</h2>
+            
+            <form onSubmit={guardarProceso} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nombre del Proceso *</label>
+                <input required value={procesoActual.nombre} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, nombre: sanitizarYCapitalizar(e.target.value)})} />
+              </div>
+              
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Tipo de Proceso *</label>
+                <select required value={procesoActual.tipo} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, tipo: e.target.value})}>
+                  <option value="RFI">RFI</option>
+                  <option value="RFQ">RFQ</option>
+                  <option value="RFP">RFP</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Controller *</label>
+                <input required readOnly value={procesoActual.controller} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#e9ecef', color: '#495057' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Fecha de Inicio *</label>
+                <input type="date" required value={procesoActual.fecha_inicio} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, fecha_inicio: e.target.value})} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Fecha de Término *</label>
+                <input type="date" required value={procesoActual.fecha_termino} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, fecha_termino: e.target.value})} />
+              </div>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedores Invitados</label>
+                <div style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#f8f9fa', minHeight: '40px', fontSize: '12px' }}>
+                  {procesoActual.proveedores_invitados.length > 0 ? procesoActual.proveedores_invitados.map(p => <span key={p} style={{display: 'inline-block', backgroundColor: '#004A99', color: 'white', padding: '2px 6px', borderRadius: '4px', marginRight: '5px', marginBottom: '5px'}}>{p}</span>) : 'Ninguno seleccionado'}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Cantidad de Ofertas Recibidas</label>
+                <input type="number" min="0" value={procesoActual.cantidad_ofertas} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, cantidad_ofertas: e.target.value})} placeholder="Se recibe al final" />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedor Adjudicado</label>
+                <input type="text" value={procesoActual.proveedor_adjudicado} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, proveedor_adjudicado: e.target.value})} placeholder="Se sabe al terminar" />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Baseline ($)</label>
+                <input type="text" required value={procesoActual.baseline} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, baseline: formatearMoneda(e.target.value)})} placeholder="Ej: $5.555.555" />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Monto Adjudicado ($)</label>
+                <input type="text" value={procesoActual.monto_adjudicado} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, monto_adjudicado: formatearMoneda(e.target.value)})} placeholder="Ej: $5.555.555" />
+              </div>
+
+              <button type="submit" style={{ gridColumn: '1 / -1', padding: '12px', marginTop: '10px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>GUARDAR PROCESO</button>
+            </form>
           </div>
         </div>
       )}
@@ -968,6 +1137,7 @@ const descargarPlantillaCSV = () => {
             <h2 onClick={() => setTabAdmin('gestion')} style={{ color: tabAdmin === 'gestion' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Gestión</h2>
             <h2 onClick={() => setTabAdmin('actualizacion_form')} style={{ color: tabAdmin === 'actualizacion_form' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Actualización Formulario</h2>
             <h2 onClick={() => {setTabAdmin('exportar'); setSeleccionados([]);}} style={{ color: tabAdmin === 'exportar' ? '#28a745' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Exportar Aprobados</h2>
+            <h2 onClick={() => {setTabAdmin('procesos'); cargarProcesos();}} style={{ color: tabAdmin === 'procesos' ? '#ffc107' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Procesos</h2>
             <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Admin / Roles</h2>
             {usuarioActual?.usuario === 'mmaquieira' && (
               <h2 onClick={() => { setTabAdmin('auditoria'); cargarLogsAuditoria(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>🛡️ Auditoría</h2>
@@ -1303,7 +1473,7 @@ const descargarPlantillaCSV = () => {
 
           {tabAdmin === 'exportar' && (
             <div>
-              <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo compatible con los sistemas internos.</p>
+              <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Filtra y selecciona los proveedores aprobados para generar un archivo compatible o crear un nuevo proceso.</p>
               
               <div style={{ backgroundColor: '#f9f9f9', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '20px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
@@ -1353,6 +1523,7 @@ const descargarPlantillaCSV = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                 <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#004A99' }}>Seleccionados: {seleccionados.length} de {proveedoresFiltrados.length}</span>
                 <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={abrirNuevoProcesoConSeleccionados} style={{ padding: '10px 20px', backgroundColor: '#ffc107', color: '#333', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>+ Nuevo Proceso</button>
                   <button onClick={exportarCSV} style={{ padding: '10px 20px', backgroundColor: '#28a745', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>Descargar CSV Clean</button>
                   <button onClick={exportarExcel} style={{ padding: '10px 20px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>Descargar Excel (.xls)</button>
                 </div>
@@ -1382,6 +1553,111 @@ const descargarPlantillaCSV = () => {
                         <td style={{ padding: '12px' }}>{prov.email_principal}</td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* MÓDULO NUEVO: PROCESOS */}
+          {tabAdmin === 'procesos' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Registro de Procesos y Adjudicaciones</h3>
+                <button onClick={() => {
+                  setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: '', baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '' });
+                  setModalProceso(true);
+                }} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>+ Crear Proceso Manual</button>
+              </div>
+
+              {/* DASHBOARD DE PROCESOS */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
+                <div style={{ border: '1px solid #eee', padding: '15px', borderRadius: '8px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#555', textTransform: 'uppercase' }}>Participación Proveedores (%)</h4>
+                  {procesosOrdenados.length === 0 ? <p style={{ fontSize: '12px', color: '#999', textAlign: 'center', marginTop: '40px' }}>No hay datos suficientes para graficar</p> : (
+                    <div style={{ position: 'relative', width: '100%', height: `${chartHeightProc}px` }}>
+                      <svg width="100%" height="100%" viewBox={`0 0 ${chartWidthProc} ${chartHeightProc}`} preserveAspectRatio="none">
+                        <line x1="20" y1={chartHeightProc - 20} x2={chartWidthProc} y2={chartHeightProc - 20} stroke="#ccc" strokeWidth="1" />
+                        <line x1="20" y1="0" x2="20" y2={chartHeightProc - 20} stroke="#ccc" strokeWidth="1" />
+                        {procesosOrdenados.length > 1 && <polyline points={puntosTendencia} fill="none" stroke="#28a745" strokeWidth="2" />}
+                        {procesosOrdenados.map((p, i) => {
+                          const invitados = p.proveedores_invitados.split(',').length;
+                          const ofertas = parseInt(p.cantidad_ofertas) || 0;
+                          const porcentaje = invitados > 0 ? (ofertas / invitados) * 100 : 0;
+                          const cx = 20 + i * stepXProc; 
+                          const cy = chartHeightProc - 20 - ((Math.min(porcentaje, 100) / maxPart) * (chartHeightProc - 40));
+                          return (
+                            <g key={p.id}>
+                              <circle cx={cx} cy={cy} r="4" fill="#004A99" />
+                              <text x={cx} y={cy - 10} fontSize="10" fill="#333" textAnchor="middle">{porcentaje.toFixed(0)}%</text>
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ backgroundColor: '#004A99', color: 'white', padding: '20px', borderRadius: '8px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  <h4 style={{ margin: '0 0 5px 0', fontSize: '13px', textTransform: 'uppercase', opacity: 0.9 }}>Total Baseline (CLP)</h4>
+                  <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold' }}>{formatearMoneda(totalBaselineProcesos)}</p>
+                </div>
+
+                <div style={{ backgroundColor: '#28a745', color: 'white', padding: '20px', borderRadius: '8px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  <h4 style={{ margin: '0 0 5px 0', fontSize: '13px', textTransform: 'uppercase', opacity: 0.9 }}>Total Ahorro</h4>
+                  <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{formatearMoneda(ahorroTotalProcesos)}</p>
+                  <span style={{ fontSize: '14px', backgroundColor: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px', marginTop: '5px' }}>{ahorroPorcentajeProcesos}% de ahorro global</span>
+                </div>
+              </div>
+
+              <div style={{ overflowX: 'auto', border: '1px solid #ccc', borderRadius: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
+                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Proceso</th>
+                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Fechas</th>
+                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Participación</th>
+                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Montos</th>
+                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc' }}>Adjudicado A</th>
+                      <th style={{ padding: '10px', borderBottom: '2px solid #ccc', textAlign: 'center' }}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {procesos.length === 0 ? <tr><td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se han registrado procesos aún.</td></tr> : 
+                    procesos.map(proc => {
+                      const ahorro = (proc.baseline || 0) - (proc.monto_adjudicado || 0);
+                      const inv = proc.proveedores_invitados ? proc.proveedores_invitados.split(',').length : 0;
+                      return (
+                        <tr key={proc.id} style={{ borderBottom: '1px solid #eee' }}>
+                          <td style={{ padding: '10px' }}>
+                            <strong style={{ fontSize: '14px', color: '#004A99' }}>{proc.nombre}</strong><br/>
+                            <span style={{ backgroundColor: '#ffc107', color: '#333', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{proc.tipo}</span> • <span style={{ color: '#666' }}>{proc.controller}</span>
+                          </td>
+                          <td style={{ padding: '10px', color: '#555' }}>
+                            <strong>Inicio:</strong> {proc.fecha_inicio ? new Date(proc.fecha_inicio).toLocaleDateString('es-CL') : 'N/A'}<br/>
+                            <strong>Fin:</strong> {proc.fecha_termino ? new Date(proc.fecha_termino).toLocaleDateString('es-CL') : 'N/A'}
+                          </td>
+                          <td style={{ padding: '10px' }}>
+                            <span style={{ color: '#555' }}>Invitados: <strong>{inv}</strong></span><br/>
+                            <span style={{ color: '#555' }}>Ofertas: <strong>{proc.cantidad_ofertas || 0}</strong></span>
+                          </td>
+                          <td style={{ padding: '10px' }}>
+                            <span style={{ color: '#555' }}>Base: {formatearMoneda(proc.baseline)}</span><br/>
+                            <span style={{ color: '#555' }}>Adj: {formatearMoneda(proc.monto_adjudicado)}</span><br/>
+                            <strong style={{ color: ahorro > 0 ? '#28a745' : (ahorro < 0 ? '#dc3545' : '#666') }}>Ahorro: {formatearMoneda(ahorro)}</strong>
+                          </td>
+                          <td style={{ padding: '10px', fontWeight: 'bold', color: proc.proveedor_adjudicado ? '#333' : '#999' }}>
+                            {proc.proveedor_adjudicado || 'Pendiente'}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
+                              <button onClick={() => editarProceso(proc)} style={{ padding: '4px 8px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Editar</button>
+                              <button onClick={() => eliminarProceso(proc.id)} style={{ padding: '4px 8px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
