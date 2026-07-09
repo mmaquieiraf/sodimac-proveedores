@@ -91,12 +91,8 @@ export default function App() {
   
   const [procesoActual, setProcesoActual] = useState({
     id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '',
-<<<<<<< HEAD
     proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [],
     adjudicaciones_detalle: [],
-=======
-    proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [],
->>>>>>> fc44124a6d619bcf65776e11b2f21c0aa3984de6
     baseline: '', monto_adjudicado: '', controller: '',
     subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos',
     clasificacion: '', solicitante: '', tipo_compra: 'Spot'
@@ -319,12 +315,8 @@ export default function App() {
       fecha_termino: procesoActual.fecha_termino,
       proveedores_invitados: Array.isArray(procesoActual.proveedores_invitados) ? procesoActual.proveedores_invitados.join(', ') : procesoActual.proveedores_invitados,
       cantidad_ofertas: procesoActual.cantidad_ofertas || null,
-<<<<<<< HEAD
       proveedor_adjudicado: Array.isArray(procesoActual.proveedor_adjudicado) && procesoActual.proveedor_adjudicado.length > 0 ? procesoActual.proveedor_adjudicado.join(', ') : null,
       adjudicaciones_detalle: procesoActual.adjudicaciones_detalle || [],
-=======
-      proveedor_adjudicado: Array.isArray(procesoActual.proveedor_adjudicado) && procesoActual.proveedor_adjudicado.length > 0 ? procesoActual.proveedor_adjudicado.join(', ') : null,
->>>>>>> fc44124a6d619bcf65776e11b2f21c0aa3984de6
       baseline: procesoActual.baseline ? parseInt(procesoActual.baseline.toString().replace(/\D/g, '')) : null,
       monto_adjudicado: procesoActual.monto_adjudicado ? parseInt(procesoActual.monto_adjudicado.toString().replace(/\D/g, '')) : null,
       controller: procesoActual.controller,
@@ -676,78 +668,7 @@ export default function App() {
     return { conteo, maxMapa: Math.max(...Object.values(conteo), 1), totalMapeados: filtradosMapa.length };
   };
   const mapStats = statsMapa();
-<<<<<<< HEAD
-=======
-  // --- FUNCIONES Y CÁLCULOS PARA EL MÓDULO DE PROCESOS ---
-  const abrirNuevoProcesoConSeleccionados = () => {
-    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor de la tabla para invitarlo al proceso.");
-    const provsNombres = proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).map(p => p.nombre_fantasia);
-    setProcesoActual({
-      id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '',
-      proveedores_invitados: provsNombres, cantidad_ofertas: '', proveedor_adjudicado: [],
-      baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '',
-      subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos',
-      clasificacion: '', solicitante: '', tipo_compra: 'Spot',
-      termino_carta: '', termino_contrato: '', vigencia_contrato: '',
-      renovacion_automatica: 'No', meses_renovacion: '',
-      carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: ''
-    });
-    setModalProceso(true);
-    setTabAdmin('procesos');
-  };
->>>>>>> fc44124a6d619bcf65776e11b2f21c0aa3984de6
 
-<<<<<<< HEAD
-=======
-  const editarProceso = (proc) => {
-    setProcesoActual({
-      ...proc,
-      proveedores_invitados: proc.proveedores_invitados ? proc.proveedores_invitados.split(', ') : [],
-      proveedor_adjudicado: proc.proveedor_adjudicado ? proc.proveedor_adjudicado.split(', ') : [],
-      baseline: formatearMoneda(proc.baseline || ''),
-      monto_adjudicado: formatearMoneda(proc.monto_adjudicado || '')
-    });
-    setModalProceso(true);
-  };
-
-  const formatearFechaLocal = (fechaString) => {
-    if (!fechaString) return 'N/A';
-    const partes = fechaString.split('-');
-    if (partes.length !== 3) return fechaString;
-    return `${partes[2]}-${partes[1]}-${partes[0]}`; 
-  };
-
-  const obtenerMesAno = (fechaString) => {
-    if (!fechaString) return 'Sin Fecha';
-    const partes = fechaString.split('-');
-    if (partes.length !== 3) return 'Sin Fecha';
-    const meses = { '01':'Enero', '02':'Febrero', '03':'Marzo', '04':'Abril', '05':'Mayo', '06':'Junio', '07':'Julio', '08':'Agosto', '09':'Septiembre', '10':'Octubre', '11':'Noviembre', '12':'Diciembre' };
-    return `${meses[partes[1]]} ${partes[0]}`;
-  };
-
-  const removerProveedorInvitado = (nombreProv) => {
-    const nuevosInvitados = procesoActual.proveedores_invitados.filter(p => p !== nombreProv);
-    const nuevosAdjudicados = procesoActual.proveedor_adjudicado.filter(p => p !== nombreProv);
-    setProcesoActual({ ...procesoActual, proveedores_invitados: nuevosInvitados, proveedor_adjudicado: nuevosAdjudicados });
-  };
-
-  const agregarProveedorInvitado = (nombreProv) => {
-    if (!nombreProv) return;
-    setProcesoActual({ ...procesoActual, proveedores_invitados: [...procesoActual.proveedores_invitados, nombreProv] });
-  };
-
-  const removerProveedorAdjudicado = (nombreProv) => {
-    const nuevosAdjudicados = procesoActual.proveedor_adjudicado.filter(p => p !== nombreProv);
-    setProcesoActual({ ...procesoActual, proveedor_adjudicado: nuevosAdjudicados });
-  };
-
-  const agregarProveedorAdjudicado = (nombreProv) => {
-    if (!nombreProv) return;
-    if (!procesoActual.proveedor_adjudicado.includes(nombreProv)) {
-      setProcesoActual({ ...procesoActual, proveedor_adjudicado: [...procesoActual.proveedor_adjudicado, nombreProv] });
-    }
-  };
->>>>>>> fc44124a6d619bcf65776e11b2f21c0aa3984de6
   // --- FILTROS Y DASHBOARD DE PROCESOS ---
   const [filtroProcesosController, setFiltroProcesosController] = useState([]);
   const [filtroProcesosEstado, setFiltroProcesosEstado] = useState([]);
@@ -799,6 +720,7 @@ export default function App() {
 
   const totalCartas = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.adjudicaciones_detalle ? p.adjudicaciones_detalle.filter(d => d.carta_adjudicacion && d.carta_adjudicacion.trim() !== '').length : 0), 0);
   const totalContratos = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.adjudicaciones_detalle ? p.adjudicaciones_detalle.filter(d => d.aplica_contrato === 'si' && d.numero_contrato && d.numero_contrato.trim() !== '').length : 0), 0);
+  
   const chartWidthProc = 350; const chartHeightProc = 120; const maxPart = 100;
   const procesosOrdenados = [...procesos].filter(p => p.cantidad_ofertas !== null && p.proveedores_invitados).sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
   const stepXProc = procesosOrdenados.length > 1 ? (chartWidthProc - 40) / (procesosOrdenados.length - 1) : 0;
@@ -869,7 +791,7 @@ export default function App() {
       });
     }
   });
-  return (
+ return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
       
       {/* NAVBAR */}
@@ -1806,11 +1728,7 @@ export default function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Registro de Procesos y Adjudicaciones</h3>
                 <button onClick={() => {
-<<<<<<< HEAD
                   setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [], adjudicaciones_detalle: [], baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', clasificacion: '', solicitante: '', tipo_compra: 'Spot' });
-=======
-                  setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [], baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', clasificacion: '', solicitante: '', tipo_compra: 'Spot', termino_carta: '', termino_contrato: '', vigencia_contrato: '', renovacion_automatica: 'No', meses_renovacion: '', carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: '' });
->>>>>>> fc44124a6d619bcf65776e11b2f21c0aa3984de6
                   setModalProceso(true);
                 }} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>+ Crear Proceso Manual</button>
               </div>
@@ -2177,4 +2095,4 @@ export default function App() {
 
     </div>
   );
-}
+} 
