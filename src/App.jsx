@@ -91,7 +91,7 @@ export default function App() {
   // Estado base actualizado con los nuevos campos
   const [procesoActual, setProcesoActual] = useState({
     id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '',
-    proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: '',
+    proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [],
     baseline: '', monto_adjudicado: '', controller: '',
     subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos',
     clasificacion: '', solicitante: '', tipo_compra: 'Spot',
@@ -316,7 +316,7 @@ export default function App() {
       fecha_termino: procesoActual.fecha_termino,
       proveedores_invitados: Array.isArray(procesoActual.proveedores_invitados) ? procesoActual.proveedores_invitados.join(', ') : procesoActual.proveedores_invitados,
       cantidad_ofertas: procesoActual.cantidad_ofertas || null,
-      proveedor_adjudicado: procesoActual.proveedor_adjudicado || null,
+      proveedor_adjudicado: Array.isArray(procesoActual.proveedor_adjudicado) && procesoActual.proveedor_adjudicado.length > 0 ? procesoActual.proveedor_adjudicado.join(', ') : null,
       baseline: procesoActual.baseline ? parseInt(procesoActual.baseline.toString().replace(/\D/g, '')) : null,
       monto_adjudicado: procesoActual.monto_adjudicado ? parseInt(procesoActual.monto_adjudicado.toString().replace(/\D/g, '')) : null,
       controller: procesoActual.controller,
@@ -592,7 +592,7 @@ export default function App() {
     const provsNombres = proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).map(p => p.nombre_fantasia);
     setProcesoActual({
       id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '',
-      proveedores_invitados: provsNombres, cantidad_ofertas: '', proveedor_adjudicado: '',
+      proveedores_invitados: provsNombres, cantidad_ofertas: '', proveedor_adjudicado: [],
       baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '',
       subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos',
       clasificacion: '', solicitante: '', tipo_compra: 'Spot',
@@ -608,6 +608,7 @@ export default function App() {
     setProcesoActual({
       ...proc,
       proveedores_invitados: proc.proveedores_invitados ? proc.proveedores_invitados.split(', ') : [],
+      proveedor_adjudicado: proc.proveedor_adjudicado ? proc.proveedor_adjudicado.split(', ') : [],
       baseline: formatearMoneda(proc.baseline || ''),
       monto_adjudicado: formatearMoneda(proc.monto_adjudicado || '')
     });
@@ -631,8 +632,8 @@ export default function App() {
 
   const removerProveedorInvitado = (nombreProv) => {
     const nuevosInvitados = procesoActual.proveedores_invitados.filter(p => p !== nombreProv);
-    const adjudicado = procesoActual.proveedor_adjudicado === nombreProv ? '' : procesoActual.proveedor_adjudicado;
-    setProcesoActual({ ...procesoActual, proveedores_invitados: nuevosInvitados, proveedor_adjudicado: adjudicado });
+    const nuevosAdjudicados = procesoActual.proveedor_adjudicado.filter(p => p !== nombreProv);
+    setProcesoActual({ ...procesoActual, proveedores_invitados: nuevosInvitados, proveedor_adjudicado: nuevosAdjudicados });
   };
 
   const agregarProveedorInvitado = (nombreProv) => {
@@ -640,6 +641,17 @@ export default function App() {
     setProcesoActual({ ...procesoActual, proveedores_invitados: [...procesoActual.proveedores_invitados, nombreProv] });
   };
 
+  const removerProveedorAdjudicado = (nombreProv) => {
+    const nuevosAdjudicados = procesoActual.proveedor_adjudicado.filter(p => p !== nombreProv);
+    setProcesoActual({ ...procesoActual, proveedor_adjudicado: nuevosAdjudicados });
+  };
+
+  const agregarProveedorAdjudicado = (nombreProv) => {
+    if (!nombreProv) return;
+    if (!procesoActual.proveedor_adjudicado.includes(nombreProv)) {
+      setProcesoActual({ ...procesoActual, proveedor_adjudicado: [...procesoActual.proveedor_adjudicado, nombreProv] });
+    }
+  };
   // --- FILTROS Y DASHBOARD DE PROCESOS ---
   const [filtroProcesosController, setFiltroProcesosController] = useState([]);
   const [filtroProcesosEstado, setFiltroProcesosEstado] = useState([]);
@@ -932,10 +944,25 @@ export default function App() {
               </div>
 
               <div style={{ gridColumn: 'span 3' }}>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedor Adjudicado</label>
-                <select value={procesoActual.proveedor_adjudicado || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: procesoActual.proveedor_adjudicado ? '#d4edda' : 'white' }} onChange={e => setProcesoActual({...procesoActual, proveedor_adjudicado: e.target.value})}>
-                  <option value="">Pendiente de resolución...</option>
-                  {procesoActual.proveedores_invitados && procesoActual.proveedores_invitados.map(prov => <option key={prov} value={prov}>{prov}</option>)}
+                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Proveedor(es) Adjudicado(s)</label>
+                <div style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: procesoActual.proveedor_adjudicado.length > 0 ? '#d4edda' : '#f8f9fa', minHeight: '45px', fontSize: '12px' }}>
+                  {procesoActual.proveedor_adjudicado.length > 0 ? procesoActual.proveedor_adjudicado.map(p => (
+                    <span key={`adj-${p}`} style={{display: 'inline-flex', alignItems: 'center', backgroundColor: '#28a745', color: 'white', padding: '4px 10px', borderRadius: '15px', marginRight: '8px', marginBottom: '8px'}}>
+                      {p}
+                      <button type="button" onClick={() => removerProveedorAdjudicado(p)} style={{ marginLeft: '8px', background: 'none', border: 'none', color: '#e8ecef', cursor: 'pointer', fontSize: '12px', padding: 0, fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✖</button>
+                    </span>
+                  )) : <span style={{ color: '#999', display: 'block', padding: '5px 0' }}>Pendiente de resolución...</span>}
+                </div>
+                <select 
+                  onChange={(e) => agregarProveedorAdjudicado(e.target.value)} value=""
+                  style={{ width: '100%', padding: '8px', marginTop: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #004A99', color: '#004A99', fontWeight: 'bold', cursor: 'pointer', outline: 'none' }}
+                >
+                  <option value="">+ Seleccionar proveedor adjudicado...</option>
+                  {procesoActual.proveedores_invitados
+                    .filter(p => !procesoActual.proveedor_adjudicado.includes(p))
+                    .map(p => (
+                      <option key={`opt-adj-${p}`} value={p}>{p}</option>
+                  ))}
                 </select>
               </div>
 
@@ -1674,7 +1701,7 @@ export default function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Registro de Procesos y Adjudicaciones</h3>
                 <button onClick={() => {
-                  setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: '', baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', clasificacion: '', solicitante: '', tipo_compra: 'Spot', termino_carta: '', termino_contrato: '', vigencia_contrato: '', renovacion_automatica: 'No', meses_renovacion: '', carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: '' });
+                  setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [], baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', clasificacion: '', solicitante: '', tipo_compra: 'Spot', termino_carta: '', termino_contrato: '', vigencia_contrato: '', renovacion_automatica: 'No', meses_renovacion: '', carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: '' });
                   setModalProceso(true);
                 }} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>+ Crear Proceso Manual</button>
               </div>
