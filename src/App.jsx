@@ -72,6 +72,21 @@ const formatearMoneda = (val) => {
   return '$' + parseInt(num, 10).toLocaleString('es-CL');
 };
 
+const formatearFechaLocal = (fechaString) => {
+  if (!fechaString) return 'N/A';
+  const partes = fechaString.split('-');
+  if (partes.length !== 3) return fechaString;
+  return `${partes[2]}-${partes[1]}-${partes[0]}`; 
+};
+
+const obtenerMesAno = (fechaString) => {
+  if (!fechaString) return 'Sin Fecha';
+  const partes = fechaString.split('-');
+  if (partes.length !== 3) return 'Sin Fecha';
+  const meses = { '01':'Enero', '02':'Febrero', '03':'Marzo', '04':'Abril', '05':'Mayo', '06':'Junio', '07':'Julio', '08':'Agosto', '09':'Septiembre', '10':'Octubre', '11':'Noviembre', '12':'Diciembre' };
+  return `${meses[partes[1]]} ${partes[0]}`;
+};
+
 export default function App() {
   const [vista, setVista] = useState('registro'); 
   const [tabAdmin, setTabAdmin] = useState('dashboard');
@@ -295,17 +310,16 @@ export default function App() {
     cargarProveedores(); cargarAdministradores(); cargarProcesos();
   };
 
-  // MODIFICACIÓN: Solución al límite de 1000 registros usando .limit() alto.
+  // EXTENSIÓN DE LÍMITE DE DATOS Y SIN AUTOLIMPIEZA
   const cargarProveedores = async () => {
     const { data, error } = await supabase.from('proveedores').select('*').order('fecha_registro', { ascending: false }).limit(20000);
-    if (!error && data) setProveedores(data);
+    if (!error && data) {
+      setProveedores(data);
+    }
   };
 
-  // --- FUNCIONES Y CÁLCULOS PARA EL MÓDULO DE PROCESOS ---
-  
-  // MODIFICACIÓN: Solución al límite de 1000 procesos usando .limit() alto.
   const cargarProcesos = async () => {
-    const { data, error } = await supabase.from('procesos').select('*').order('created_at', { ascending: false }).limit(10000);
+    const { data, error } = await supabase.from('procesos').select('*').order('created_at', { ascending: false }).limit(20000);
     if (!error && data) setProcesos(data);
   };
 
@@ -352,7 +366,7 @@ export default function App() {
     else { alert("⚠️ Error al actualizar el estado en la base de datos."); }
   };
 
-  // --- NUEVO: Exportar y Carga Masiva de Procesos Excel ---
+  // EXPORTAR Y CARGA MASIVA DE PROCESOS
   const exportarProcesosExcel = () => {
     if (procesosFiltradosDashboard.length === 0) return alert("⚠️ No hay procesos para exportar con los filtros actuales.");
     let excelHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8" /><style>table { border-collapse: collapse; font-family: Arial, sans-serif; } th { background-color: #004A99; color: white; font-weight: bold; border: 1px solid #cccccc; padding: 10px; text-align: left; } td { border: 1px solid #cccccc; padding: 8px; font-size: 13px; } .title { font-size: 18px; font-weight: bold; color: #004A99; padding-bottom: 15px; }</style></head><body><div class="title">Base Oficial de Procesos - Sodimac S.A.</div><table><thead><tr><th>Nombre del Proceso</th><th>Clasificación</th><th>Subgerencia</th><th>Solicitante</th><th>Tipo de Proceso</th><th>Tipo de Compra</th><th>Controller</th><th>Estado del proceso</th><th>Fecha de inicio</th><th>Fecha de Término</th><th>Proveedores Invitados</th><th>Cantidad de Ofertas</th><th>Proveedor Adjudicado</th><th>Baseline ($)</th><th>Monto Adjudicado ($)</th><th>Ahorro ($)</th></tr></thead><tbody>`;
@@ -380,9 +394,8 @@ export default function App() {
       if (lines.length <= 1) return alert("El archivo está vacío o solo contiene la cabecera.");
       const procesosNuevos = [];
       for (let i = 1; i < lines.length; i++) {
-        // Separa por comas, ignorando comas dentro de comillas
         const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
-        if (currentLine.length < 2) continue; // Si está muy vacío, saltar
+        if (currentLine.length < 2) continue; 
         
         const baselineLimpio = currentLine[10] ? parseInt(currentLine[10].replace(/\D/g, '')) : null;
         const montoAdjLimpio = currentLine[11] ? parseInt(currentLine[11].replace(/\D/g, '')) : null;
@@ -411,8 +424,7 @@ export default function App() {
     };
     reader.readAsText(file, 'UTF-8'); e.target.value = null; 
   };
-  // --------------------------------------------------------
-
+  
   const abrirNuevoProcesoConSeleccionados = () => {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor de la tabla para invitarlo al proceso.");
     const provsNombres = proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).map(p => p.nombre_fantasia);
@@ -438,21 +450,6 @@ export default function App() {
       monto_adjudicado: formatearMoneda(proc.monto_adjudicado || '')
     });
     setModalProceso(true);
-  };
-
-  const formatearFechaLocal = (fechaString) => {
-    if (!fechaString) return 'N/A';
-    const partes = fechaString.split('-');
-    if (partes.length !== 3) return fechaString;
-    return `${partes[2]}-${partes[1]}-${partes[0]}`; 
-  };
-
-  const obtenerMesAno = (fechaString) => {
-    if (!fechaString) return 'Sin Fecha';
-    const partes = fechaString.split('-');
-    if (partes.length !== 3) return 'Sin Fecha';
-    const meses = { '01':'Enero', '02':'Febrero', '03':'Marzo', '04':'Abril', '05':'Mayo', '06':'Junio', '07':'Julio', '08':'Agosto', '09':'Septiembre', '10':'Octubre', '11':'Noviembre', '12':'Diciembre' };
-    return `${meses[partes[1]]} ${partes[0]}`;
   };
 
   const removerProveedorInvitado = (nombreProv) => {
@@ -752,7 +749,6 @@ export default function App() {
     const matchEstado = filtroProcesosEstado.length === 0 || filtroProcesosEstado.includes(estado);
     const matchMesAno = filtroProcesosMesAno.length === 0 || filtroProcesosMesAno.includes(obtenerMesAno(p.fecha_inicio));
     
-    // Verificación en detalle de adjudicación (Array JSON)
     let tieneCarta = false;
     let tieneContrato = false;
     if (p.adjudicaciones_detalle) {
@@ -776,7 +772,6 @@ export default function App() {
   const countSpot = procesosFiltradosDashboard.filter(p => p.tipo_compra === 'Spot').length;
   const countAnualizado = procesosFiltradosDashboard.filter(p => p.tipo_compra === 'Anualizado').length;
 
-  // Modificación lógica de ahorro: Incluir "Acuerdo finalizado" en el conteo de ahorro
   const procesosParaAhorro = procesosFiltradosDashboard.filter(p => ['Gestión Contractual y/o Implementación', 'Adjudicado', 'Acuerdo finalizado'].includes(p.estado_proceso));
   const totalBaselineAhorro = procesosParaAhorro.reduce((acc, p) => acc + (p.baseline || 0), 0);
   const totalAdjudicadoAhorro = procesosParaAhorro.reduce((acc, p) => acc + (p.monto_adjudicado || 0), 0);
@@ -1306,6 +1301,7 @@ export default function App() {
         </div>
       )}
 
+      {/* ADMIN LOGIN */}
       {vista === 'login' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '25px' }}>Ingreso de Administrador</h2>
@@ -1319,6 +1315,7 @@ export default function App() {
         </div>
       )}
 
+      {/* RECUPERAR CLAVE */}
       {vista === 'recuperar' && (
         <div style={{ maxWidth: '400px', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '10px' }}>Recuperar Acceso</h2>
@@ -2051,12 +2048,14 @@ export default function App() {
                             <strong style={{ color: ahorro > 0 ? '#28a745' : (ahorro < 0 ? '#dc3545' : '#666') }}>Ahorro: {formatearMoneda(ahorro)}</strong>
                           </td>
                           <td style={{ padding: '10px' }}>
-                            <span style={{ fontWeight: 'bold', color: proc.proveedor_adjudicado ? '#333' : '#999' }}>{proc.proveedor_adjudicado || 'Pendiente'}</span><br/>
+                            {(!proc.adjudicaciones_detalle || proc.adjudicaciones_detalle.length === 0) && (
+                              <span style={{ fontWeight: 'bold', color: proc.proveedor_adjudicado ? '#333' : '#999' }}>{proc.proveedor_adjudicado || 'Pendiente'}</span>
+                            )}
                             {proc.adjudicaciones_detalle && proc.adjudicaciones_detalle.map(det => (
                               <div key={`doc-${proc.id}-${det.proveedor}`} style={{ marginTop: '5px', padding: '5px', backgroundColor: '#f8f9fa', borderRadius: '4px', border: '1px solid #eee' }}>
                                 <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#555' }}>{det.proveedor.substring(0, 15)}...</span>
-                                {det.carta_adjudicacion && <span style={{ fontSize: '10px', color: '#6f42c1', display: 'block' }}>✉️ C.Adj: {det.carta_adjudicacion}</span>}
-                                {det.aplica_contrato === 'si' && det.numero_contrato && <span style={{ fontSize: '10px', color: '#e83e8c', display: 'block' }}>📝 Contrato: {det.numero_contrato}</span>}
+                                {det.carta_adjudicacion && <span style={{ fontSize: '10px', color: '#6f42c1', display: 'block', marginTop: '4px' }}>✉️ C.Adj: {det.carta_adjudicacion}</span>}
+                                {det.aplica_contrato === 'si' && det.numero_contrato && <span style={{ fontSize: '10px', color: '#e83e8c', display: 'block', marginTop: '2px' }}>📝 Contrato: {det.numero_contrato}</span>}
                               </div>
                             ))}
                           </td>
