@@ -310,21 +310,71 @@ export default function App() {
     cargarProveedores(); cargarAdministradores(); cargarProcesos();
   };
 
-  // EXTENSIÓN DE LÍMITE DE DATOS Y SIN AUTOLIMPIEZA
+  // REEMPLAZO DEFINITIVO: Rompe la barrera de los 1000 registros mediante bucle secuencial
   const cargarProveedores = async () => {
-    const { data, error } = await supabase
-      .from('proveedores')
-      .select('*')
-      .range(0, 19999)
-      .order('fecha_registro', { ascending: false });
-    if (!error && data) {
-      setProveedores(data);
+    let todosLosProveedores = [];
+    let desde = 0;
+    let hasta = 999;
+    let seguirCargando = true;
+
+    while (seguirCargando) {
+      const { data, error } = await supabase
+        .from('proveedores')
+        .select('*')
+        .range(desde, hasta)
+        .order('fecha_registro', { ascending: false });
+
+      if (error) {
+        console.error("Error al cargar proveedores:", error);
+        break;
+      }
+
+      if (data && data.length > 0) {
+        todosLosProveedores = [...todosLosProveedores, ...data];
+        if (data.length < 1000) {
+          seguirCargando = false; 
+        } else {
+          desde += 1000;
+          hasta += 1000;
+        }
+      } else {
+        seguirCargando = false;
+      }
     }
+    setProveedores(todosLosProveedores);
   };
 
   const cargarProcesos = async () => {
-    const { data, error } = await supabase.from('procesos').select('*').order('created_at', { ascending: false }).limit(20000);
-    if (!error && data) setProcesos(data);
+    let todosLosProcesos = [];
+    let desde = 0;
+    let hasta = 999;
+    let seguirCargando = true;
+
+    while (seguirCargando) {
+      const { data, error } = await supabase
+        .from('procesos')
+        .select('*')
+        .range(desde, hasta)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Error al cargar procesos:", error);
+        break;
+      }
+
+      if (data && data.length > 0) {
+        todosLosProcesos = [...todosLosProcesos, ...data];
+        if (data.length < 1000) {
+          seguirCargando = false;
+        } else {
+          desde += 1000;
+          hasta += 1000;
+        }
+      } else {
+        seguirCargando = false;
+      }
+    }
+    setProcesos(todosLosProcesos);
   };
 
   const guardarProceso = async (e) => {
