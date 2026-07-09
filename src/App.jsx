@@ -295,14 +295,17 @@ export default function App() {
     cargarProveedores(); cargarAdministradores(); cargarProcesos();
   };
 
+  // MODIFICACIÓN: Solución al límite de 1000 registros usando .limit() alto.
   const cargarProveedores = async () => {
-    const { data, error } = await supabase.from('proveedores').select('*').order('fecha_registro', { ascending: false });
+    const { data, error } = await supabase.from('proveedores').select('*').order('fecha_registro', { ascending: false }).limit(20000);
     if (!error && data) setProveedores(data);
   };
 
   // --- FUNCIONES Y CÁLCULOS PARA EL MÓDULO DE PROCESOS ---
+  
+  // MODIFICACIÓN: Solución al límite de 1000 procesos usando .limit() alto.
   const cargarProcesos = async () => {
-    const { data, error } = await supabase.from('procesos').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('procesos').select('*').order('created_at', { ascending: false }).limit(10000);
     if (!error && data) setProcesos(data);
   };
 
@@ -348,6 +351,67 @@ export default function App() {
     if (!error) { alert("✅ Acuerdo finalizado exitosamente."); cargarProcesos(); }
     else { alert("⚠️ Error al actualizar el estado en la base de datos."); }
   };
+
+  // --- NUEVO: Exportar y Carga Masiva de Procesos Excel ---
+  const exportarProcesosExcel = () => {
+    if (procesosFiltradosDashboard.length === 0) return alert("⚠️ No hay procesos para exportar con los filtros actuales.");
+    let excelHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8" /><style>table { border-collapse: collapse; font-family: Arial, sans-serif; } th { background-color: #004A99; color: white; font-weight: bold; border: 1px solid #cccccc; padding: 10px; text-align: left; } td { border: 1px solid #cccccc; padding: 8px; font-size: 13px; } .title { font-size: 18px; font-weight: bold; color: #004A99; padding-bottom: 15px; }</style></head><body><div class="title">Base Oficial de Procesos - Sodimac S.A.</div><table><thead><tr><th>Nombre del Proceso</th><th>Clasificación</th><th>Subgerencia</th><th>Solicitante</th><th>Tipo de Proceso</th><th>Tipo de Compra</th><th>Controller</th><th>Estado del proceso</th><th>Fecha de inicio</th><th>Fecha de Término</th><th>Proveedores Invitados</th><th>Cantidad de Ofertas</th><th>Proveedor Adjudicado</th><th>Baseline ($)</th><th>Monto Adjudicado ($)</th><th>Ahorro ($)</th></tr></thead><tbody>`;
+    
+    procesosFiltradosDashboard.forEach(p => { 
+      const ahorro = (p.baseline || 0) - (p.monto_adjudicado || 0);
+      excelHtml += `<tr><td>${p.nombre || ''}</td><td>${p.clasificacion || ''}</td><td>${p.subgerencia || ''}</td><td>${p.solicitante || ''}</td><td>${p.tipo || ''}</td><td>${p.tipo_compra || ''}</td><td>${p.controller || ''}</td><td>${p.estado_proceso || ''}</td><td>${p.fecha_inicio || ''}</td><td>${p.fecha_termino || ''}</td><td>${p.proveedores_invitados || ''}</td><td>${p.cantidad_ofertas || ''}</td><td>${p.proveedor_adjudicado || ''}</td><td>${p.baseline || ''}</td><td>${p.monto_adjudicado || ''}</td><td>${ahorro}</td></tr>`; 
+    });
+    excelHtml += `</tbody></table></body></html>`;
+    const blob = new Blob([excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' }); const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url; link.setAttribute("download", "registro_procesos_sodimac.xls"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  const descargarPlantillaProcesos = () => {
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFFNombre del Proceso,Clasificación,Subgerencia,Solicitante,Tipo de Proceso (RFI/Q/P),Tipo de Compra,Controller,Estado del proceso,Fecha de inicio (YYYY-MM-DD),Fecha de Término (YYYY-MM-DD),Baseline (Presupuesto Base $),Monto Final Adjudicado ($)\n";
+    csvContent += "Licitación Aseo,Opex,Operaciones,Juan Perez,RFP,Anualizado,mmaquieira,En Aprobación y Adjudicación,2025-01-01,2025-02-15,10000000,9500000\n";
+    const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", "Plantilla_Carga_Procesos.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  const manejarCargaMasivaProcesos = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const lines = event.target.result.split(/\r?\n/).filter(line => line.trim() !== "");
+      if (lines.length <= 1) return alert("El archivo está vacío o solo contiene la cabecera.");
+      const procesosNuevos = [];
+      for (let i = 1; i < lines.length; i++) {
+        // Separa por comas, ignorando comas dentro de comillas
+        const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
+        if (currentLine.length < 2) continue; // Si está muy vacío, saltar
+        
+        const baselineLimpio = currentLine[10] ? parseInt(currentLine[10].replace(/\D/g, '')) : null;
+        const montoAdjLimpio = currentLine[11] ? parseInt(currentLine[11].replace(/\D/g, '')) : null;
+
+        procesosNuevos.push({
+          nombre: sanitizarYCapitalizar(currentLine[0]),
+          clasificacion: currentLine[1] || 'Opex',
+          subgerencia: currentLine[2] || 'Administración',
+          solicitante: sanitizarYCapitalizar(currentLine[3]),
+          tipo: currentLine[4] || 'RFP',
+          tipo_compra: currentLine[5] || 'Spot',
+          controller: currentLine[6] || usuarioActual.usuario,
+          estado_proceso: currentLine[7] || 'Estableciendo alcance, equipo y objetivos',
+          fecha_inicio: currentLine[8] || new Date().toISOString().split('T')[0],
+          fecha_termino: currentLine[9] || new Date().toISOString().split('T')[0],
+          baseline: isNaN(baselineLimpio) ? null : baselineLimpio,
+          monto_adjudicado: isNaN(montoAdjLimpio) ? null : montoAdjLimpio,
+          proveedores_invitados: '', proveedor_adjudicado: null, adjudicaciones_detalle: []
+        });
+      }
+      if (procesosNuevos.length > 0) { 
+        const { error } = await supabase.from('procesos').insert(procesosNuevos); 
+        if (!error) { alert(`✅ ${procesosNuevos.length} procesos agregados masivamente.`); cargarProcesos(); }
+        else { alert("⚠️ Error al importar procesos. Verifique formato de fechas (YYYY-MM-DD) y números."); }
+      }
+    };
+    reader.readAsText(file, 'UTF-8'); e.target.value = null; 
+  };
+  // --------------------------------------------------------
 
   const abrirNuevoProcesoConSeleccionados = () => {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor de la tabla para invitarlo al proceso.");
@@ -712,7 +776,8 @@ export default function App() {
   const countSpot = procesosFiltradosDashboard.filter(p => p.tipo_compra === 'Spot').length;
   const countAnualizado = procesosFiltradosDashboard.filter(p => p.tipo_compra === 'Anualizado').length;
 
-  const procesosParaAhorro = procesosFiltradosDashboard.filter(p => ['Gestión Contractual y/o Implementación', 'Adjudicado'].includes(p.estado_proceso));
+  // Modificación lógica de ahorro: Incluir "Acuerdo finalizado" en el conteo de ahorro
+  const procesosParaAhorro = procesosFiltradosDashboard.filter(p => ['Gestión Contractual y/o Implementación', 'Adjudicado', 'Acuerdo finalizado'].includes(p.estado_proceso));
   const totalBaselineAhorro = procesosParaAhorro.reduce((acc, p) => acc + (p.baseline || 0), 0);
   const totalAdjudicadoAhorro = procesosParaAhorro.reduce((acc, p) => acc + (p.monto_adjudicado || 0), 0);
   const ahorroTotalProcesos = totalBaselineAhorro - totalAdjudicadoAhorro;
@@ -791,7 +856,9 @@ export default function App() {
       });
     }
   });
- return (
+
+
+  return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
       
       {/* NAVBAR */}
@@ -849,7 +916,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL REGISTRO DE PROCESOS */}
+      {/* MODAL REGISTRO DE PROCESOS ACTUALIZADO */}
       {modalProceso && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
           <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '1000px', width: '100%', maxHeight: '95vh', overflowY: 'auto', position: 'relative' }}>
@@ -1727,19 +1794,35 @@ export default function App() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Registro de Procesos y Adjudicaciones</h3>
-                <button onClick={() => {
-                  setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [], adjudicaciones_detalle: [], baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', clasificacion: '', solicitante: '', tipo_compra: 'Spot' });
-                  setModalProceso(true);
-                }} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>+ Crear Proceso Manual</button>
+                
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  {/* NUEVOS BOTONES DE CARGA Y DESCARGA DE PROCESOS */}
+                  <button onClick={descargarPlantillaProcesos} style={{ padding: '6px 12px', backgroundColor: '#e2e8f0', color: '#333', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>📥 Plantilla CSV</button>
+                  
+                  <label style={{ padding: '6px 12px', backgroundColor: '#ffc107', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                    <input type="file" accept=".csv" onChange={manejarCargaMasivaProcesos} style={{ display: 'none' }} />
+                    ⬆️ Cargar Masiva
+                  </label>
+
+                  <button onClick={exportarProcesosExcel} style={{ padding: '6px 12px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>⬇️ Exportar Base</button>
+
+                  <button onClick={() => {
+                    setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [], adjudicaciones_detalle: [], baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', clasificacion: '', solicitante: '', tipo_compra: 'Spot' });
+                    setModalProceso(true);
+                  }} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', marginLeft: '10px' }}>+ Crear Manual</button>
+                </div>
               </div>
 
               {/* ALERTAS DEL SISTEMA */}
               {(procesosConAlertaFinalizacion.length > 0 || alertasContratos.length > 0 || alertasRenovacion.length > 0) && (
                 <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {procesosConAlertaFinalizacion.map(proc => (
-                    <div key={`alerta-fin-${proc.id}`} style={{ backgroundColor: '#fff3cd', color: '#856404', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #ffc107', fontSize: '13px', display: 'flex', alignItems: 'center' }}>
-                      <span style={{ marginRight: '10px', fontSize: '16px' }}>⚠️</span>
-                      <span><strong>Recordatorio:</strong> Proceso "{proc.nombre}" ha finalizado su fecha programada. Actualice el estatus.</span>
+                    <div key={`alerta-fin-${proc.id}`} style={{ backgroundColor: '#fff3cd', color: '#856404', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #ffc107', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{ marginRight: '10px', fontSize: '16px' }}>⚠️</span>
+                        <span><strong>Recordatorio:</strong> Proceso "{proc.nombre}" ha finalizado su fecha programada. Actualice el estatus.</span>
+                      </div>
+                      <button onClick={() => marcarAcuerdoFinalizado(proc.id)} style={{ padding: '5px 12px', backgroundColor: '#856404', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>✓ Omitir</button>
                     </div>
                   ))}
                   {alertasContratos.map(alerta => (
@@ -2002,7 +2085,7 @@ export default function App() {
                   <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Usuario</label><input required value={nuevoAdmin.usuario} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, usuario: e.target.value})} /></div>
                   <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Correo</label><input required type="email" value={nuevoAdmin.correo} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, correo: e.target.value})} /></div>
                   <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Contraseña</label><input required type="password" value={nuevoAdmin.password} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, password: e.target.value})} /></div>
-                  <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>PIN (6 dígitos)</label><input required type="password" maxLength="6" value={nuevoAdmin.pin} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', letterSpacing: '3px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, pin: e.target.value})} /></div>
+                  <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>PIN (6 dígitos)</label><input required type="text" maxLength="6" value={nuevoAdmin.pin} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', letterSpacing: '3px' }} onChange={e => setNuevoAdmin({...nuevoAdmin, pin: e.target.value})} /></div>
                   <button type="submit" disabled={bloqueoSeguridad} style={{ gridColumn: '1 / -1', padding: '12px', marginTop: '10px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>CREAR USUARIO</button>
                 </form>
               </div>
@@ -2095,4 +2178,4 @@ export default function App() {
 
     </div>
   );
-} 
+}
