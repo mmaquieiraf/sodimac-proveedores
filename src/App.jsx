@@ -47,7 +47,8 @@ const estadosProcesoOpciones = [
   "Gestión Contractual y/o Implementación", 
   "Adjudicado",
   "Cancelado",
-  "Desierto"
+  "Desierto",
+  "Acuerdo finalizado"
 ];
 
 const sanitizarYCapitalizar = (texto) => {
@@ -88,16 +89,17 @@ export default function App() {
   const [procesos, setProcesos] = useState([]);
   const [modalProceso, setModalProceso] = useState(false);
   
-  // Estado base actualizado con los nuevos campos
   const [procesoActual, setProcesoActual] = useState({
     id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '',
+<<<<<<< HEAD
     proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [],
+    adjudicaciones_detalle: [],
+=======
+    proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [],
+>>>>>>> fc44124a6d619bcf65776e11b2f21c0aa3984de6
     baseline: '', monto_adjudicado: '', controller: '',
     subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos',
-    clasificacion: '', solicitante: '', tipo_compra: 'Spot',
-    termino_carta: '', termino_contrato: '', vigencia_contrato: '',
-    renovacion_automatica: 'No', meses_renovacion: '',
-    carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: ''
+    clasificacion: '', solicitante: '', tipo_compra: 'Spot'
   });
 
   useEffect(() => {
@@ -302,6 +304,7 @@ export default function App() {
     if (!error && data) setProveedores(data);
   };
 
+  // --- FUNCIONES Y CÁLCULOS PARA EL MÓDULO DE PROCESOS ---
   const cargarProcesos = async () => {
     const { data, error } = await supabase.from('procesos').select('*').order('created_at', { ascending: false });
     if (!error && data) setProcesos(data);
@@ -316,7 +319,12 @@ export default function App() {
       fecha_termino: procesoActual.fecha_termino,
       proveedores_invitados: Array.isArray(procesoActual.proveedores_invitados) ? procesoActual.proveedores_invitados.join(', ') : procesoActual.proveedores_invitados,
       cantidad_ofertas: procesoActual.cantidad_ofertas || null,
+<<<<<<< HEAD
       proveedor_adjudicado: Array.isArray(procesoActual.proveedor_adjudicado) && procesoActual.proveedor_adjudicado.length > 0 ? procesoActual.proveedor_adjudicado.join(', ') : null,
+      adjudicaciones_detalle: procesoActual.adjudicaciones_detalle || [],
+=======
+      proveedor_adjudicado: Array.isArray(procesoActual.proveedor_adjudicado) && procesoActual.proveedor_adjudicado.length > 0 ? procesoActual.proveedor_adjudicado.join(', ') : null,
+>>>>>>> fc44124a6d619bcf65776e11b2f21c0aa3984de6
       baseline: procesoActual.baseline ? parseInt(procesoActual.baseline.toString().replace(/\D/g, '')) : null,
       monto_adjudicado: procesoActual.monto_adjudicado ? parseInt(procesoActual.monto_adjudicado.toString().replace(/\D/g, '')) : null,
       controller: procesoActual.controller,
@@ -324,15 +332,7 @@ export default function App() {
       estado_proceso: procesoActual.estado_proceso,
       clasificacion: procesoActual.clasificacion,
       solicitante: sanitizarYCapitalizar(procesoActual.solicitante),
-      tipo_compra: procesoActual.tipo_compra,
-      termino_carta: procesoActual.termino_carta || null,
-      termino_contrato: procesoActual.aplica_contrato === 'si' ? (procesoActual.termino_contrato || null) : null,
-      vigencia_contrato: procesoActual.aplica_contrato === 'si' ? procesoActual.vigencia_contrato : null,
-      renovacion_automatica: procesoActual.aplica_contrato === 'si' ? procesoActual.renovacion_automatica : 'No',
-      meses_renovacion: (procesoActual.aplica_contrato === 'si' && procesoActual.renovacion_automatica === 'Si') ? procesoActual.meses_renovacion : null,
-      carta_adjudicacion: procesoActual.carta_adjudicacion || '',
-      aplica_contrato: procesoActual.aplica_contrato,
-      numero_contrato: procesoActual.aplica_contrato === 'si' ? procesoActual.numero_contrato : null
+      tipo_compra: procesoActual.tipo_compra
     };
 
     if (procesoActual.id) {
@@ -350,6 +350,96 @@ export default function App() {
     if (!error) { alert("✅ Proceso eliminado."); cargarProcesos(); }
   };
 
+  const marcarAcuerdoFinalizado = async (id) => {
+    if(!window.confirm("¿Marcar este acuerdo como finalizado? Dejará de recibir alertas de término o renovación para este contrato.")) return;
+    const { error } = await supabase.from('procesos').update({ estado_proceso: 'Acuerdo finalizado' }).eq('id', id);
+    if (!error) { alert("✅ Acuerdo finalizado exitosamente."); cargarProcesos(); }
+    else { alert("⚠️ Error al actualizar el estado en la base de datos."); }
+  };
+
+  const abrirNuevoProcesoConSeleccionados = () => {
+    if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor de la tabla para invitarlo al proceso.");
+    const provsNombres = proveedoresFiltrados.filter(p => seleccionados.includes(p.id)).map(p => p.nombre_fantasia);
+    setProcesoActual({
+      id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '',
+      proveedores_invitados: provsNombres, cantidad_ofertas: '', proveedor_adjudicado: [],
+      adjudicaciones_detalle: [],
+      baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '',
+      subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos',
+      clasificacion: '', solicitante: '', tipo_compra: 'Spot'
+    });
+    setModalProceso(true);
+    setTabAdmin('procesos');
+  };
+
+  const editarProceso = (proc) => {
+    setProcesoActual({
+      ...proc,
+      proveedores_invitados: proc.proveedores_invitados ? proc.proveedores_invitados.split(', ') : [],
+      proveedor_adjudicado: proc.proveedor_adjudicado ? proc.proveedor_adjudicado.split(', ') : [],
+      adjudicaciones_detalle: proc.adjudicaciones_detalle || [],
+      baseline: formatearMoneda(proc.baseline || ''),
+      monto_adjudicado: formatearMoneda(proc.monto_adjudicado || '')
+    });
+    setModalProceso(true);
+  };
+
+  const formatearFechaLocal = (fechaString) => {
+    if (!fechaString) return 'N/A';
+    const partes = fechaString.split('-');
+    if (partes.length !== 3) return fechaString;
+    return `${partes[2]}-${partes[1]}-${partes[0]}`; 
+  };
+
+  const obtenerMesAno = (fechaString) => {
+    if (!fechaString) return 'Sin Fecha';
+    const partes = fechaString.split('-');
+    if (partes.length !== 3) return 'Sin Fecha';
+    const meses = { '01':'Enero', '02':'Febrero', '03':'Marzo', '04':'Abril', '05':'Mayo', '06':'Junio', '07':'Julio', '08':'Agosto', '09':'Septiembre', '10':'Octubre', '11':'Noviembre', '12':'Diciembre' };
+    return `${meses[partes[1]]} ${partes[0]}`;
+  };
+
+  const removerProveedorInvitado = (nombreProv) => {
+    const nuevosInvitados = procesoActual.proveedores_invitados.filter(p => p !== nombreProv);
+    const nuevosAdjudicados = procesoActual.proveedor_adjudicado.filter(p => p !== nombreProv);
+    const nuevosDetalles = (procesoActual.adjudicaciones_detalle || []).filter(d => d.proveedor !== nombreProv);
+    setProcesoActual({ ...procesoActual, proveedores_invitados: nuevosInvitados, proveedor_adjudicado: nuevosAdjudicados, adjudicaciones_detalle: nuevosDetalles });
+  };
+
+  const agregarProveedorInvitado = (nombreProv) => {
+    if (!nombreProv) return;
+    setProcesoActual({ ...procesoActual, proveedores_invitados: [...procesoActual.proveedores_invitados, nombreProv] });
+  };
+
+  const removerProveedorAdjudicado = (nombreProv) => {
+    const nuevosAdjudicados = procesoActual.proveedor_adjudicado.filter(p => p !== nombreProv);
+    const nuevosDetalles = (procesoActual.adjudicaciones_detalle || []).filter(d => d.proveedor !== nombreProv);
+    setProcesoActual({ ...procesoActual, proveedor_adjudicado: nuevosAdjudicados, adjudicaciones_detalle: nuevosDetalles });
+  };
+
+  const agregarProveedorAdjudicado = (nombreProv) => {
+    if (!nombreProv) return;
+    if (!procesoActual.proveedor_adjudicado.includes(nombreProv)) {
+      setProcesoActual({ 
+        ...procesoActual, 
+        proveedor_adjudicado: [...procesoActual.proveedor_adjudicado, nombreProv],
+        adjudicaciones_detalle: [...(procesoActual.adjudicaciones_detalle || []), {
+          proveedor: nombreProv, carta_adjudicacion: '', termino_carta: '', aplica_contrato: 'no', 
+          numero_contrato: '', termino_contrato: '', vigencia_contrato: '', renovacion_automatica: 'No', meses_renovacion: ''
+        }]
+      });
+    }
+  };
+
+  const handleDetalleAdjudicacionChange = (proveedor, campo, valor) => {
+    const nuevosDetalles = (procesoActual.adjudicaciones_detalle || []).map(det => {
+      if (det.proveedor === proveedor) return { ...det, [campo]: valor };
+      return det;
+    });
+    setProcesoActual({ ...procesoActual, adjudicaciones_detalle: nuevosDetalles });
+  };
+
+  // --- ADMINISTRACIÓN DE PROVEEDORES Y USUARIOS ---
   const cargarAdministradores = async () => {
     const { data } = await supabase.from('administradores').select('*').order('id', { ascending: true });
     if (data) setAdministradoresDb(data);
@@ -586,6 +676,8 @@ export default function App() {
     return { conteo, maxMapa: Math.max(...Object.values(conteo), 1), totalMapeados: filtradosMapa.length };
   };
   const mapStats = statsMapa();
+<<<<<<< HEAD
+=======
   // --- FUNCIONES Y CÁLCULOS PARA EL MÓDULO DE PROCESOS ---
   const abrirNuevoProcesoConSeleccionados = () => {
     if (seleccionados.length === 0) return alert("⚠️ Seleccione al menos un proveedor de la tabla para invitarlo al proceso.");
@@ -603,7 +695,10 @@ export default function App() {
     setModalProceso(true);
     setTabAdmin('procesos');
   };
+>>>>>>> fc44124a6d619bcf65776e11b2f21c0aa3984de6
 
+<<<<<<< HEAD
+=======
   const editarProceso = (proc) => {
     setProcesoActual({
       ...proc,
@@ -652,11 +747,12 @@ export default function App() {
       setProcesoActual({ ...procesoActual, proveedor_adjudicado: [...procesoActual.proveedor_adjudicado, nombreProv] });
     }
   };
+>>>>>>> fc44124a6d619bcf65776e11b2f21c0aa3984de6
   // --- FILTROS Y DASHBOARD DE PROCESOS ---
   const [filtroProcesosController, setFiltroProcesosController] = useState([]);
   const [filtroProcesosEstado, setFiltroProcesosEstado] = useState([]);
   const [filtroProcesosMesAno, setFiltroProcesosMesAno] = useState([]);
-  const [filtroDocsEmitidos, setFiltroDocsEmitidos] = useState([]); // Nuevo filtro documental
+  const [filtroDocsEmitidos, setFiltroDocsEmitidos] = useState([]); 
 
   const controllersUnicos = [...new Set(procesos.map(p => p.controller).filter(Boolean))];
   const mesesAnosUnicos = [...new Set(procesos.map(p => obtenerMesAno(p.fecha_inicio)).filter(f => f !== 'Sin Fecha'))];
@@ -671,14 +767,19 @@ export default function App() {
     const matchEstado = filtroProcesosEstado.length === 0 || filtroProcesosEstado.includes(estado);
     const matchMesAno = filtroProcesosMesAno.length === 0 || filtroProcesosMesAno.includes(obtenerMesAno(p.fecha_inicio));
     
-    const tieneCarta = p.carta_adjudicacion && p.carta_adjudicacion.trim() !== '';
-    const tieneContrato = p.aplica_contrato === 'si' && p.numero_contrato && p.numero_contrato.trim() !== '';
+    // Verificación en detalle de adjudicación (Array JSON)
+    let tieneCarta = false;
+    let tieneContrato = false;
+    if (p.adjudicaciones_detalle) {
+      tieneCarta = p.adjudicaciones_detalle.some(d => d.carta_adjudicacion && d.carta_adjudicacion.trim() !== '');
+      tieneContrato = p.adjudicaciones_detalle.some(d => d.aplica_contrato === 'si' && d.numero_contrato && d.numero_contrato.trim() !== '');
+    }
     
     let matchDocs = true;
     if (filtroDocsEmitidos.length > 0) {
       const matchC = filtroDocsEmitidos.includes('Carta') ? tieneCarta : false;
       const matchCont = filtroDocsEmitidos.includes('Contrato') ? tieneContrato : false;
-      matchDocs = matchC || matchCont; // Se muestra si cumple con CUALQUIERA de las selecciones del filtro
+      matchDocs = matchC || matchCont; 
     }
 
     return matchController && matchEstado && matchMesAno && matchDocs;
@@ -687,25 +788,22 @@ export default function App() {
   const totalBaselineProcesos = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.baseline || 0), 0);
   const procesosRecuentoCount = procesosFiltradosDashboard.length; 
   
-  // Relación Spot vs Anualizado
   const countSpot = procesosFiltradosDashboard.filter(p => p.tipo_compra === 'Spot').length;
   const countAnualizado = procesosFiltradosDashboard.filter(p => p.tipo_compra === 'Anualizado').length;
 
-  // AHORRO: Exclusivo para procesos adjudicados o en gestión
   const procesosParaAhorro = procesosFiltradosDashboard.filter(p => ['Gestión Contractual y/o Implementación', 'Adjudicado'].includes(p.estado_proceso));
   const totalBaselineAhorro = procesosParaAhorro.reduce((acc, p) => acc + (p.baseline || 0), 0);
   const totalAdjudicadoAhorro = procesosParaAhorro.reduce((acc, p) => acc + (p.monto_adjudicado || 0), 0);
   const ahorroTotalProcesos = totalBaselineAhorro - totalAdjudicadoAhorro;
   const ahorroPorcentajeProcesos = totalBaselineAhorro > 0 ? ((ahorroTotalProcesos / totalBaselineAhorro) * 100).toFixed(1) : 0;
 
-  const totalCartas = procesosFiltradosDashboard.filter(p => p.carta_adjudicacion && p.carta_adjudicacion.trim() !== '').length;
-  const totalContratos = procesosFiltradosDashboard.filter(p => p.aplica_contrato === 'si' && p.numero_contrato && p.numero_contrato.trim() !== '').length;
-  
-  const procesosOrdenados = [...procesos].filter(p => p.cantidad_ofertas !== null && p.proveedores_invitados).sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
+  const totalCartas = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.adjudicaciones_detalle ? p.adjudicaciones_detalle.filter(d => d.carta_adjudicacion && d.carta_adjudicacion.trim() !== '').length : 0), 0);
+  const totalContratos = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.adjudicaciones_detalle ? p.adjudicaciones_detalle.filter(d => d.aplica_contrato === 'si' && d.numero_contrato && d.numero_contrato.trim() !== '').length : 0), 0);
   const chartWidthProc = 350; const chartHeightProc = 120; const maxPart = 100;
+  const procesosOrdenados = [...procesos].filter(p => p.cantidad_ofertas !== null && p.proveedores_invitados).sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
   const stepXProc = procesosOrdenados.length > 1 ? (chartWidthProc - 40) / (procesosOrdenados.length - 1) : 0;
   const puntosTendencia = procesosOrdenados.map((p, i) => {
-    const invitados = p.proveedores_invitados.split(',').length;
+    const invitados = p.proveedores_invitados ? p.proveedores_invitados.split(',').length : 0;
     const ofertas = parseInt(p.cantidad_ofertas) || 0;
     const porcentaje = invitados > 0 ? (ofertas / invitados) * 100 : 0;
     return `${20 + i * stepXProc},${chartHeightProc - 20 - ((Math.min(porcentaje, 100) / maxPart) * (chartHeightProc - 40))}`;
@@ -722,14 +820,6 @@ export default function App() {
   });
   const tortaGradientSg = procesosFiltradosDashboard.length > 0 ? `conic-gradient(${pieSlicesSg.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
-// --- NUEVA FUNCIÓN: MARCAR ACUERDO FINALIZADO ---
-  const marcarAcuerdoFinalizado = async (id) => {
-    if(!window.confirm("¿Marcar este acuerdo como finalizado? Dejará de recibir alertas de término o renovación para este contrato.")) return;
-    const { error } = await supabase.from('procesos').update({ estado_proceso: 'Acuerdo finalizado' }).eq('id', id);
-    if (!error) { alert("✅ Acuerdo finalizado exitosamente."); cargarProcesos(); }
-    else { alert("⚠️ Error al actualizar el estado en la base de datos."); }
-  };
-
   // --- LÓGICA DE ALERTAS ---
   const hoyDate = new Date();
   hoyDate.setHours(0,0,0,0);
@@ -744,42 +834,41 @@ export default function App() {
   const procesosConAlertaFinalizacion = procesos.filter(p => {
     if (!p.fecha_termino) return false;
     const fechaT = new Date(p.fecha_termino + 'T00:00:00');
-    // Agregamos "Acuerdo finalizado" para que no salten alertas si ya se cerró
     const estadosCerrados = ['Adjudicado', 'Cancelado', 'Desierto', 'Gestión Contractual y/o Implementación', 'Acuerdo finalizado'];
     return fechaT < hoyDate && !estadosCerrados.includes(p.estado_proceso);
   });
 
-  // 2. Alertas de Contratos y Renovaciones
+  // 2. Alertas de Contratos y Renovaciones Múltiples
   const alertasContratos = [];
   const alertasRenovacion = [];
 
   procesos.forEach(p => {
-    // Excluir si el proceso ya fue Cancelado o Finalizado manualmente
-    if (p.aplica_contrato === 'si' && p.termino_contrato && p.estado_proceso !== 'Cancelado' && p.estado_proceso !== 'Acuerdo finalizado') {
-      const fechaTerminoInicial = new Date(p.termino_contrato + 'T00:00:00');
-      
-      // Evaluar Alerta de Término de Contrato Inicial (120 días)
-      if (fechaTerminoInicial >= hoyDate && fechaTerminoInicial <= limite120Dias) {
-        const diasRestantes = Math.ceil((fechaTerminoInicial - hoyDate) / (1000 * 60 * 60 * 24));
-        alertasContratos.push({ ...p, fecha_vencimiento_real: fechaTerminoInicial, diasRestantes });
-      } 
-      // Evaluar Alerta de Autorrenovación (90 días)
-      else if (p.renovacion_automatica === 'Si' && p.meses_renovacion && fechaTerminoInicial < hoyDate) {
-        let fechaRenovada = new Date(fechaTerminoInicial);
-        const mesesAAgregar = parseInt(p.meses_renovacion);
-        
-        while (fechaRenovada < hoyDate) {
-          fechaRenovada.setMonth(fechaRenovada.getMonth() + mesesAAgregar);
-        }
+    if (p.estado_proceso !== 'Cancelado' && p.estado_proceso !== 'Acuerdo finalizado' && p.adjudicaciones_detalle) {
+      p.adjudicaciones_detalle.forEach(det => {
+        if (det.aplica_contrato === 'si' && det.termino_contrato) {
+          const fechaTerminoInicial = new Date(det.termino_contrato + 'T00:00:00');
+          
+          if (fechaTerminoInicial >= hoyDate && fechaTerminoInicial <= limite120Dias) {
+            const diasRestantes = Math.ceil((fechaTerminoInicial - hoyDate) / (1000 * 60 * 60 * 24));
+            alertasContratos.push({ ...p, proveedor_alerta: det.proveedor, fecha_vencimiento_real: fechaTerminoInicial, diasRestantes });
+          } 
+          else if (det.renovacion_automatica === 'Si' && det.meses_renovacion && fechaTerminoInicial < hoyDate) {
+            let fechaRenovada = new Date(fechaTerminoInicial);
+            const mesesAAgregar = parseInt(det.meses_renovacion);
+            
+            while (fechaRenovada < hoyDate) {
+              fechaRenovada.setMonth(fechaRenovada.getMonth() + mesesAAgregar);
+            }
 
-        if (fechaRenovada >= hoyDate && fechaRenovada <= limite90Dias) {
-          const diasRestantesRenovacion = Math.ceil((fechaRenovada - hoyDate) / (1000 * 60 * 60 * 24));
-          alertasRenovacion.push({ ...p, fecha_vencimiento_real: fechaRenovada, diasRestantes: diasRestantesRenovacion });
+            if (fechaRenovada >= hoyDate && fechaRenovada <= limite90Dias) {
+              const diasRestantesRenovacion = Math.ceil((fechaRenovada - hoyDate) / (1000 * 60 * 60 * 24));
+              alertasRenovacion.push({ ...p, proveedor_alerta: det.proveedor, fecha_vencimiento_real: fechaRenovada, diasRestantes: diasRestantesRenovacion });
+            }
+          }
         }
-      }
+      });
     }
   });
-
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
       
@@ -838,7 +927,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL REGISTRO DE PROCESOS ACTUALIZADO */}
+      {/* MODAL REGISTRO DE PROCESOS */}
       {modalProceso && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
           <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '8px', maxWidth: '1000px', width: '100%', maxHeight: '95vh', overflowY: 'auto', position: 'relative' }}>
@@ -908,7 +997,7 @@ export default function App() {
                     <option value="Gestión Contractual y/o Implementación">Gestión Contractual y/o Implementación</option>
                     <option value="Adjudicado">Adjudicado</option>
                   </optgroup>
-                  <optgroup label="Ignorados / Anulados"><option value="Cancelado">Cancelado</option><option value="Desierto">Desierto</option></optgroup>
+                  <optgroup label="Ignorados / Anulados"><option value="Cancelado">Cancelado</option><option value="Desierto">Desierto</option><option value="Acuerdo finalizado">Acuerdo finalizado</option></optgroup>
                 </select>
               </div>
 
@@ -980,57 +1069,73 @@ export default function App() {
               
               <div style={{ gridColumn: '1 / span 4', borderTop: '2px dashed #eee', margin: '5px 0' }}></div>
 
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nº Carta Adjudicación</label>
-                <input type="text" value={procesoActual.carta_adjudicacion} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, carta_adjudicacion: e.target.value})} placeholder="Opcional..." />
-              </div>
-              
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Término Carta Adj.</label>
-                <input type="date" value={procesoActual.termino_carta} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, termino_carta: e.target.value})} />
-              </div>
+              {procesoActual.adjudicaciones_detalle && procesoActual.adjudicaciones_detalle.length > 0 && (
+                <div style={{ gridColumn: '1 / -1', marginTop: '10px' }}>
+                  <h4 style={{ color: '#004A99', fontSize: '15px', borderBottom: '2px solid #eee', paddingBottom: '5px', marginBottom: '15px' }}>Documentos y Contratos por Proveedor</h4>
+                  {procesoActual.adjudicaciones_detalle.map((det, index) => (
+                    <div key={`det-${det.proveedor}`} style={{ backgroundColor: '#f8f9fa', border: '1px solid #ddd', borderRadius: '6px', padding: '15px', marginBottom: '15px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px' }}>
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <strong style={{ fontSize: '14px', color: '#28a745' }}>{index + 1}. {det.proveedor}</strong>
+                      </div>
+                      
+                      <div>
+                        <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nº Carta Adjudicación</label>
+                        <input type="text" value={det.carta_adjudicacion || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => handleDetalleAdjudicacionChange(det.proveedor, 'carta_adjudicacion', e.target.value)} placeholder="Opcional..." />
+                      </div>
+                      
+                      <div>
+                        <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Término Carta Adj.</label>
+                        <input type="date" value={det.termino_carta || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => handleDetalleAdjudicacionChange(det.proveedor, 'termino_carta', e.target.value)} />
+                      </div>
 
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>¿Aplica Contrato?</label>
-                <select value={procesoActual.aplica_contrato} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, aplica_contrato: e.target.value, numero_contrato: e.target.value === 'no' ? '' : procesoActual.numero_contrato})}>
-                  <option value="no">No Aplica</option><option value="si">Sí Aplica</option>
-                </select>
-              </div>
+                      <div>
+                        <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>¿Aplica Contrato?</label>
+                        <select value={det.aplica_contrato || 'no'} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => {
+                          handleDetalleAdjudicacionChange(det.proveedor, 'aplica_contrato', e.target.value);
+                          if(e.target.value === 'no') handleDetalleAdjudicacionChange(det.proveedor, 'numero_contrato', '');
+                        }}>
+                          <option value="no">No Aplica</option><option value="si">Sí Aplica</option>
+                        </select>
+                      </div>
 
-              {procesoActual.aplica_contrato === 'si' ? (
-                <div>
-                  <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nº de Contrato</label>
-                  <input type="text" value={procesoActual.numero_contrato || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, numero_contrato: e.target.value})} placeholder="Ingrese Número..." />
-                </div>
-              ) : <div></div>}
+                      {det.aplica_contrato === 'si' ? (
+                        <div>
+                          <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nº de Contrato</label>
+                          <input type="text" value={det.numero_contrato || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => handleDetalleAdjudicacionChange(det.proveedor, 'numero_contrato', e.target.value)} placeholder="Ingrese Número..." />
+                        </div>
+                      ) : <div></div>}
 
-              {procesoActual.aplica_contrato === 'si' && (
-                <>
-                  <div>
-                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Término Contrato *</label>
-                    <input type="date" required value={procesoActual.termino_contrato} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, termino_contrato: e.target.value})} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Vigencia Contrato</label>
-                    <select value={procesoActual.vigencia_contrato} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, vigencia_contrato: e.target.value})}>
-                      <option value="">Seleccione...</option>{vigenciaOpciones.map(v => <option key={v} value={v}>{v}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Renovación Automática</label>
-                    <select value={procesoActual.renovacion_automatica} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, renovacion_automatica: e.target.value})}>
-                      <option value="No">No</option><option value="Si">Sí</option>
-                    </select>
-                  </div>
-                  {procesoActual.renovacion_automatica === 'Si' ? (
-                    <div>
-                      <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Meses de Renovación *</label>
-                      <select required value={procesoActual.meses_renovacion} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, meses_renovacion: e.target.value})}>
-                        <option value="">Seleccione...</option>{mesesRenovacionOpciones.map(m => <option key={m} value={m}>{m} meses</option>)}
-                      </select>
+                      {det.aplica_contrato === 'si' && (
+                        <>
+                          <div>
+                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Término Contrato *</label>
+                            <input type="date" required value={det.termino_contrato || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => handleDetalleAdjudicacionChange(det.proveedor, 'termino_contrato', e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Vigencia Contrato</label>
+                            <select value={det.vigencia_contrato || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => handleDetalleAdjudicacionChange(det.proveedor, 'vigencia_contrato', e.target.value)}>
+                              <option value="">Seleccione...</option>{vigenciaOpciones.map(v => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Renovación Automática</label>
+                            <select value={det.renovacion_automatica || 'No'} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => handleDetalleAdjudicacionChange(det.proveedor, 'renovacion_automatica', e.target.value)}>
+                              <option value="No">No</option><option value="Si">Sí</option>
+                            </select>
+                          </div>
+                          {det.renovacion_automatica === 'Si' ? (
+                            <div>
+                              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Meses de Renovación *</label>
+                              <select required value={det.meses_renovacion || ''} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => handleDetalleAdjudicacionChange(det.proveedor, 'meses_renovacion', e.target.value)}>
+                                <option value="">Seleccione...</option>{mesesRenovacionOpciones.map(m => <option key={m} value={m}>{m} meses</option>)}
+                              </select>
+                            </div>
+                          ) : <div></div>}
+                        </>
+                      )}
                     </div>
-                  ) : <div></div>}
-                </>
+                  ))}
+                </div>
               )}
 
               <button type="submit" style={{ gridColumn: '1 / -1', padding: '15px', marginTop: '15px', backgroundColor: '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer', fontSize: '15px' }}>GUARDAR CAMBIOS DEL PROCESO</button>
@@ -1274,7 +1379,7 @@ export default function App() {
             <h2 onClick={() => setTabAdmin('gestion')} style={{ color: tabAdmin === 'gestion' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Gestión</h2>
             <h2 onClick={() => setTabAdmin('actualizacion_form')} style={{ color: tabAdmin === 'actualizacion_form' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Actualización Formulario</h2>
             <h2 onClick={() => {setTabAdmin('exportar'); setSeleccionados([]);}} style={{ color: tabAdmin === 'exportar' ? '#28a745' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Exportar Aprobados</h2>
-            <h2 onClick={() => {setTabAdmin('procesos');}} style={{ color: tabAdmin === 'procesos' ? '#ffc107' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Procesos</h2>
+            <h2 onClick={() => {setTabAdmin('procesos'); cargarProcesos();}} style={{ color: tabAdmin === 'procesos' ? '#ffc107' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Procesos</h2>
             <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Admin / Roles</h2>
             {usuarioActual?.usuario === 'mmaquieira' && (
               <h2 onClick={() => { setTabAdmin('auditoria'); cargarLogsAuditoria(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>🛡️ Auditoría</h2>
@@ -1701,12 +1806,16 @@ export default function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Registro de Procesos y Adjudicaciones</h3>
                 <button onClick={() => {
+<<<<<<< HEAD
+                  setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [], adjudicaciones_detalle: [], baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', clasificacion: '', solicitante: '', tipo_compra: 'Spot' });
+=======
                   setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [], baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', clasificacion: '', solicitante: '', tipo_compra: 'Spot', termino_carta: '', termino_contrato: '', vigencia_contrato: '', renovacion_automatica: 'No', meses_renovacion: '', carta_adjudicacion: '', aplica_contrato: 'no', numero_contrato: '' });
+>>>>>>> fc44124a6d619bcf65776e11b2f21c0aa3984de6
                   setModalProceso(true);
                 }} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>+ Crear Proceso Manual</button>
               </div>
 
-             {/* ALERTAS DEL SISTEMA */}
+              {/* ALERTAS DEL SISTEMA */}
               {(procesosConAlertaFinalizacion.length > 0 || alertasContratos.length > 0 || alertasRenovacion.length > 0) && (
                 <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {procesosConAlertaFinalizacion.map(proc => (
@@ -1716,19 +1825,19 @@ export default function App() {
                     </div>
                   ))}
                   {alertasContratos.map(alerta => (
-                    <div key={`alerta-contrato-${alerta.id}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #17a2b8', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div key={`alerta-contrato-${alerta.id}-${alerta.proveedor_alerta}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #17a2b8', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         <span style={{ marginRight: '10px', fontSize: '16px' }}>⏳</span>
-                        <span><strong>Alerta Contrato:</strong> El contrato asociado al proceso "{alerta.nombre}" vence en <strong>{alerta.diasRestantes} días</strong> ({alerta.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
+                        <span><strong>Alerta Contrato:</strong> El contrato asociado al proceso "{alerta.nombre}" ({alerta.proveedor_alerta}) vence en <strong>{alerta.diasRestantes} días</strong> ({alerta.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
                       </div>
                       <button onClick={() => marcarAcuerdoFinalizado(alerta.id)} style={{ padding: '5px 12px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>✓ Acuerdo Finalizado</button>
                     </div>
                   ))}
                   {alertasRenovacion.map(alertaR => (
-                    <div key={`alerta-renovacion-${alertaR.id}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #28a745', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div key={`alerta-renovacion-${alertaR.id}-${alertaR.proveedor_alerta}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #28a745', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         <span style={{ marginRight: '10px', fontSize: '16px' }}>🔄</span>
-                        <span><strong>Alerta Contrato:</strong> La autorrenovación del contrato asociado al proceso "{alertaR.nombre}" vence en <strong>{alertaR.diasRestantes} días</strong> ({alertaR.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
+                        <span><strong>Alerta Renovación:</strong> La autorrenovación del contrato asociado al proceso "{alertaR.nombre}" ({alertaR.proveedor_alerta}) vence en <strong>{alertaR.diasRestantes} días</strong> ({alertaR.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
                       </div>
                       <button onClick={() => marcarAcuerdoFinalizado(alertaR.id)} style={{ padding: '5px 12px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>✓ Acuerdo Finalizado</button>
                     </div>
@@ -1821,7 +1930,8 @@ export default function App() {
                         <line x1="20" y1="0" x2="20" y2={chartHeightProc - 20} stroke="#ccc" strokeWidth="1" />
                         {procesosOrdenados.length > 1 && <polyline points={puntosTendencia} fill="none" stroke="#28a745" strokeWidth="2" />}
                         {procesosOrdenados.map((p, i) => {
-                          const invitados = p.proveedores_invitados.split(',').length; const ofertas = parseInt(p.cantidad_ofertas) || 0;
+                          const invitados = p.proveedores_invitados ? p.proveedores_invitados.split(',').length : 0; 
+                          const ofertas = parseInt(p.cantidad_ofertas) || 0;
                           const porcentaje = invitados > 0 ? (ofertas / invitados) * 100 : 0;
                           const cx = 20 + i * stepXProc; const cy = chartHeightProc - 20 - ((Math.min(porcentaje, 100) / maxPart) * (chartHeightProc - 40));
                           return (
@@ -1941,8 +2051,13 @@ export default function App() {
                           </td>
                           <td style={{ padding: '10px' }}>
                             <span style={{ fontWeight: 'bold', color: proc.proveedor_adjudicado ? '#333' : '#999' }}>{proc.proveedor_adjudicado || 'Pendiente'}</span><br/>
-                            {proc.carta_adjudicacion && <span style={{ fontSize: '10px', color: '#6f42c1', display: 'block', marginTop: '4px' }}>✉️ C.Adj: {proc.carta_adjudicacion}</span>}
-                            {proc.aplica_contrato === 'si' && proc.numero_contrato && <span style={{ fontSize: '10px', color: '#e83e8c', display: 'block', marginTop: '2px' }}>📝 Contrato: {proc.numero_contrato}</span>}
+                            {proc.adjudicaciones_detalle && proc.adjudicaciones_detalle.map(det => (
+                              <div key={`doc-${proc.id}-${det.proveedor}`} style={{ marginTop: '5px', padding: '5px', backgroundColor: '#f8f9fa', borderRadius: '4px', border: '1px solid #eee' }}>
+                                <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#555' }}>{det.proveedor.substring(0, 15)}...</span>
+                                {det.carta_adjudicacion && <span style={{ fontSize: '10px', color: '#6f42c1', display: 'block' }}>✉️ C.Adj: {det.carta_adjudicacion}</span>}
+                                {det.aplica_contrato === 'si' && det.numero_contrato && <span style={{ fontSize: '10px', color: '#e83e8c', display: 'block' }}>📝 Contrato: {det.numero_contrato}</span>}
+                              </div>
+                            ))}
                           </td>
                           <td style={{ padding: '10px', textAlign: 'center' }}>
                             <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
