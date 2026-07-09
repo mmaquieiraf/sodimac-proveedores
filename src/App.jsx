@@ -312,7 +312,11 @@ export default function App() {
 
   // EXTENSIÓN DE LÍMITE DE DATOS Y SIN AUTOLIMPIEZA
   const cargarProveedores = async () => {
-    const { data, error } = await supabase.from('proveedores').select('*').order('fecha_registro', { ascending: false }).limit(20000);
+    const { data, error } = await supabase
+      .from('proveedores')
+      .select('*')
+      .range(0, 19999)
+      .order('fecha_registro', { ascending: false });
     if (!error && data) {
       setProveedores(data);
     }
@@ -1376,8 +1380,8 @@ export default function App() {
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
                 <div style={{ backgroundColor: '#004A99', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
-                  <h3 style={{ margin: '0', fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores</h3>
-                  <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{proveedores.length}</p>
+                  <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores</h3>
+                  <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{proveedores ? proveedores.length : 0}</p>
                 </div>
                 <div style={{ backgroundColor: '#EE2D24', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <h3 style={{ margin: '0', fontSize: '14px', textTransform: 'uppercase' }}>Aprobados en Base</h3>
