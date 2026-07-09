@@ -710,7 +710,15 @@ export default function App() {
   });
   const tortaGradientSg = procesosFiltradosDashboard.length > 0 ? `conic-gradient(${pieSlicesSg.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
-// --- LÓGICA DE ALERTAS ---
+// --- NUEVA FUNCIÓN: MARCAR ACUERDO FINALIZADO ---
+  const marcarAcuerdoFinalizado = async (id) => {
+    if(!window.confirm("¿Marcar este acuerdo como finalizado? Dejará de recibir alertas de término o renovación para este contrato.")) return;
+    const { error } = await supabase.from('procesos').update({ estado_proceso: 'Acuerdo finalizado' }).eq('id', id);
+    if (!error) { alert("✅ Acuerdo finalizado exitosamente."); cargarProcesos(); }
+    else { alert("⚠️ Error al actualizar el estado en la base de datos."); }
+  };
+
+  // --- LÓGICA DE ALERTAS ---
   const hoyDate = new Date();
   hoyDate.setHours(0,0,0,0);
   
@@ -724,36 +732,34 @@ export default function App() {
   const procesosConAlertaFinalizacion = procesos.filter(p => {
     if (!p.fecha_termino) return false;
     const fechaT = new Date(p.fecha_termino + 'T00:00:00');
-    const estadosCerrados = ['Adjudicado', 'Cancelado', 'Desierto', 'Gestión Contractual y/o Implementación'];
+    // Agregamos "Acuerdo finalizado" para que no salten alertas si ya se cerró
+    const estadosCerrados = ['Adjudicado', 'Cancelado', 'Desierto', 'Gestión Contractual y/o Implementación', 'Acuerdo finalizado'];
     return fechaT < hoyDate && !estadosCerrados.includes(p.estado_proceso);
   });
 
-  // 2. Alertas de Contratos
+  // 2. Alertas de Contratos y Renovaciones
   const alertasContratos = [];
   const alertasRenovacion = [];
 
   procesos.forEach(p => {
-    if (p.aplica_contrato === 'si' && p.termino_contrato && p.estado_proceso !== 'Cancelado') {
+    // Excluir si el proceso ya fue Cancelado o Finalizado manualmente
+    if (p.aplica_contrato === 'si' && p.termino_contrato && p.estado_proceso !== 'Cancelado' && p.estado_proceso !== 'Acuerdo finalizado') {
       const fechaTerminoInicial = new Date(p.termino_contrato + 'T00:00:00');
       
       // Evaluar Alerta de Término de Contrato Inicial (120 días)
-      // Solo se muestra si la fecha inicial no ha pasado (o si no tiene renovación)
       if (fechaTerminoInicial >= hoyDate && fechaTerminoInicial <= limite120Dias) {
         const diasRestantes = Math.ceil((fechaTerminoInicial - hoyDate) / (1000 * 60 * 60 * 24));
         alertasContratos.push({ ...p, fecha_vencimiento_real: fechaTerminoInicial, diasRestantes });
       } 
       // Evaluar Alerta de Autorrenovación (90 días)
-      // Solo si tiene renovación automática Y la fecha inicial ya pasó
       else if (p.renovacion_automatica === 'Si' && p.meses_renovacion && fechaTerminoInicial < hoyDate) {
         let fechaRenovada = new Date(fechaTerminoInicial);
         const mesesAAgregar = parseInt(p.meses_renovacion);
         
-        // Proyectar la fecha hasta el ciclo de renovación actual/futuro
         while (fechaRenovada < hoyDate) {
           fechaRenovada.setMonth(fechaRenovada.getMonth() + mesesAAgregar);
         }
 
-        // Evaluar si esta nueva fecha cae en la ventana de 90 días
         if (fechaRenovada >= hoyDate && fechaRenovada <= limite90Dias) {
           const diasRestantesRenovacion = Math.ceil((fechaRenovada - hoyDate) / (1000 * 60 * 60 * 24));
           alertasRenovacion.push({ ...p, fecha_vencimiento_real: fechaRenovada, diasRestantes: diasRestantesRenovacion });
@@ -1673,7 +1679,7 @@ export default function App() {
                 }} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>+ Crear Proceso Manual</button>
               </div>
 
-              {/* ALERTAS DEL SISTEMA */}
+             {/* ALERTAS DEL SISTEMA */}
               {(procesosConAlertaFinalizacion.length > 0 || alertasContratos.length > 0 || alertasRenovacion.length > 0) && (
                 <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {procesosConAlertaFinalizacion.map(proc => (
@@ -1683,15 +1689,21 @@ export default function App() {
                     </div>
                   ))}
                   {alertasContratos.map(alerta => (
-                    <div key={`alerta-contrato-${alerta.id}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #17a2b8', fontSize: '13px', display: 'flex', alignItems: 'center' }}>
-                      <span style={{ marginRight: '10px', fontSize: '16px' }}>⏳</span>
-                      <span><strong>Alerta Contrato:</strong> El contrato asociado al proceso "{alerta.nombre}" vence en <strong>{alerta.diasRestantes} días</strong> ({alerta.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
+                    <div key={`alerta-contrato-${alerta.id}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #17a2b8', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{ marginRight: '10px', fontSize: '16px' }}>⏳</span>
+                        <span><strong>Alerta Contrato:</strong> El contrato asociado al proceso "{alerta.nombre}" vence en <strong>{alerta.diasRestantes} días</strong> ({alerta.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
+                      </div>
+                      <button onClick={() => marcarAcuerdoFinalizado(alerta.id)} style={{ padding: '5px 12px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>✓ Acuerdo Finalizado</button>
                     </div>
                   ))}
                   {alertasRenovacion.map(alertaR => (
-                    <div key={`alerta-renovacion-${alertaR.id}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #28a745', fontSize: '13px', display: 'flex', alignItems: 'center' }}>
-                      <span style={{ marginRight: '10px', fontSize: '16px' }}>🔄</span>
-                      <span><strong>Alerta Contrato:</strong> La autorrenovación del contrato asociado al proceso "{alertaR.nombre}" vence en <strong>{alertaR.diasRestantes} días</strong> ({alertaR.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
+                    <div key={`alerta-renovacion-${alertaR.id}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #28a745', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{ marginRight: '10px', fontSize: '16px' }}>🔄</span>
+                        <span><strong>Alerta Contrato:</strong> La autorrenovación del contrato asociado al proceso "{alertaR.nombre}" vence en <strong>{alertaR.diasRestantes} días</strong> ({alertaR.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
+                      </div>
+                      <button onClick={() => marcarAcuerdoFinalizado(alertaR.id)} style={{ padding: '5px 12px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>✓ Acuerdo Finalizado</button>
                     </div>
                   ))}
                 </div>
