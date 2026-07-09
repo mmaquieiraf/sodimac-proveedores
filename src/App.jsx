@@ -710,13 +710,17 @@ export default function App() {
   });
   const tortaGradientSg = procesosFiltradosDashboard.length > 0 ? `conic-gradient(${pieSlicesSg.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
-  // --- LÓGICA DE ALERTAS ---
+// --- LÓGICA DE ALERTAS ---
   const hoyDate = new Date();
   hoyDate.setHours(0,0,0,0);
+  
   const limite120Dias = new Date(hoyDate);
   limite120Dias.setDate(limite120Dias.getDate() + 120);
 
-  // Alertas de Fin de Proceso
+  const limite90Dias = new Date(hoyDate);
+  limite90Dias.setDate(limite90Dias.getDate() + 90);
+
+  // 1. Alertas de Fin de Proceso Programado
   const procesosConAlertaFinalizacion = procesos.filter(p => {
     if (!p.fecha_termino) return false;
     const fechaT = new Date(p.fecha_termino + 'T00:00:00');
@@ -724,24 +728,36 @@ export default function App() {
     return fechaT < hoyDate && !estadosCerrados.includes(p.estado_proceso);
   });
 
-  // Alertas de Contratos por Vencer (120 días) con Renovación Automática
+  // 2. Alertas de Contratos
   const alertasContratos = [];
+  const alertasRenovacion = [];
+
   procesos.forEach(p => {
     if (p.aplica_contrato === 'si' && p.termino_contrato && p.estado_proceso !== 'Cancelado') {
-      let fechaTerminoContrato = new Date(p.termino_contrato + 'T00:00:00');
+      const fechaTerminoInicial = new Date(p.termino_contrato + 'T00:00:00');
       
-      // Proyectar fecha si tiene renovación automática y la fecha inicial ya pasó
-      if (p.renovacion_automatica === 'Si' && p.meses_renovacion) {
+      // Evaluar Alerta de Término de Contrato Inicial (120 días)
+      // Solo se muestra si la fecha inicial no ha pasado (o si no tiene renovación)
+      if (fechaTerminoInicial >= hoyDate && fechaTerminoInicial <= limite120Dias) {
+        const diasRestantes = Math.ceil((fechaTerminoInicial - hoyDate) / (1000 * 60 * 60 * 24));
+        alertasContratos.push({ ...p, fecha_vencimiento_real: fechaTerminoInicial, diasRestantes });
+      } 
+      // Evaluar Alerta de Autorrenovación (90 días)
+      // Solo si tiene renovación automática Y la fecha inicial ya pasó
+      else if (p.renovacion_automatica === 'Si' && p.meses_renovacion && fechaTerminoInicial < hoyDate) {
+        let fechaRenovada = new Date(fechaTerminoInicial);
         const mesesAAgregar = parseInt(p.meses_renovacion);
-        while (fechaTerminoContrato < hoyDate) {
-          fechaTerminoContrato.setMonth(fechaTerminoContrato.getMonth() + mesesAAgregar);
+        
+        // Proyectar la fecha hasta el ciclo de renovación actual/futuro
+        while (fechaRenovada < hoyDate) {
+          fechaRenovada.setMonth(fechaRenovada.getMonth() + mesesAAgregar);
         }
-      }
 
-      // Evaluar si está dentro de la ventana de 120 días hacia adelante
-      if (fechaTerminoContrato >= hoyDate && fechaTerminoContrato <= limite120Dias) {
-        const diasRestantes = Math.ceil((fechaTerminoContrato - hoyDate) / (1000 * 60 * 60 * 24));
-        alertasContratos.push({ ...p, fecha_vencimiento_real: fechaTerminoContrato, diasRestantes });
+        // Evaluar si esta nueva fecha cae en la ventana de 90 días
+        if (fechaRenovada >= hoyDate && fechaRenovada <= limite90Dias) {
+          const diasRestantesRenovacion = Math.ceil((fechaRenovada - hoyDate) / (1000 * 60 * 60 * 24));
+          alertasRenovacion.push({ ...p, fecha_vencimiento_real: fechaRenovada, diasRestantes: diasRestantesRenovacion });
+        }
       }
     }
   });
@@ -1658,7 +1674,7 @@ export default function App() {
               </div>
 
               {/* ALERTAS DEL SISTEMA */}
-              {(procesosConAlertaFinalizacion.length > 0 || alertasContratos.length > 0) && (
+              {(procesosConAlertaFinalizacion.length > 0 || alertasContratos.length > 0 || alertasRenovacion.length > 0) && (
                 <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {procesosConAlertaFinalizacion.map(proc => (
                     <div key={`alerta-fin-${proc.id}`} style={{ backgroundColor: '#fff3cd', color: '#856404', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #ffc107', fontSize: '13px', display: 'flex', alignItems: 'center' }}>
@@ -1670,6 +1686,12 @@ export default function App() {
                     <div key={`alerta-contrato-${alerta.id}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #17a2b8', fontSize: '13px', display: 'flex', alignItems: 'center' }}>
                       <span style={{ marginRight: '10px', fontSize: '16px' }}>⏳</span>
                       <span><strong>Alerta Contrato:</strong> El contrato asociado al proceso "{alerta.nombre}" vence en <strong>{alerta.diasRestantes} días</strong> ({alerta.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
+                    </div>
+                  ))}
+                  {alertasRenovacion.map(alertaR => (
+                    <div key={`alerta-renovacion-${alertaR.id}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #28a745', fontSize: '13px', display: 'flex', alignItems: 'center' }}>
+                      <span style={{ marginRight: '10px', fontSize: '16px' }}>🔄</span>
+                      <span><strong>Alerta Contrato:</strong> La autorrenovación del contrato asociado al proceso "{alertaR.nombre}" vence en <strong>{alertaR.diasRestantes} días</strong> ({alertaR.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
                     </div>
                   ))}
                 </div>
