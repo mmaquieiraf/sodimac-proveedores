@@ -3,7 +3,7 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
 
-// URL de tu plantilla en Supabase
+// URL de tu plantilla base en el Storage público de Supabase
 const URL_PLANTILLA = "https://zpxptembhqlmpkbctvml.supabase.co/storage/v1/object/public/plantillas/plantilla-rfp-sodimac.docx";
 
 // Lista de administradores predefinidos
@@ -24,7 +24,7 @@ export default function GeneradorRFP() {
   const [reqVigenciaFiel, setReqVigenciaFiel] = useState('No');
   const [valVigenciaFiel, setValVigenciaFiel] = useState('No aplica');
 
-  // --- ESTADOS PARA ALCANCE E IA ---
+  // --- ESTADOS PARA ALCANCE E INTEGRACIÓN CON GEMINI IA ---
   const [contextoIA, setContextoIA] = useState('');
   const [archivosContexto, setArchivosContexto] = useState([]);
   const [alcanceGenerado, setAlcanceGenerado] = useState('El alcance detallado será generado por la IA en base a los antecedentes proporcionados en esta sección...');
@@ -52,7 +52,7 @@ export default function GeneradorRFP() {
   const [despachoNombre, setDespachoNombre] = useState('Cristian Reyes');
   const [despachoEmail, setDespachoEmail] = useState('creyesb@sodimac.cl');
 
-  // --- FUNCIONES MANEJADORAS ---
+  // --- FUNCIONES MANEJADORAS GENERALES ---
   const handleAdminChange = (e) => {
     const admin = administradores.find(a => a.nombre === e.target.value);
     if(admin) setAdminSeleccionado(admin);
@@ -87,19 +87,102 @@ export default function GeneradorRFP() {
     return `${meses[parseInt(month)-1]} ${year}`;
   };
 
-  // --- FUNCIONES DE EXPORTACIÓN E IA ---
+  // --- EXPORTACIÓN DE PDF DE LA VISTA ---
   const exportarPDF = () => {
     window.print(); 
   };
 
-  const procesarConIA = () => {
-    setCargandoIA(true);
-    setTimeout(() => {
-      setAlcanceGenerado("El servicio consiste en la instalación integral de cámaras de seguridad CCTV en las sucursales definidas, incluyendo cableado, configuración de software de gestión, puesta en marcha y capacitación del personal técnico de la Contratante, asegurando el correcto funcionamiento según las normativas de seguridad actuales.");
-      setCargandoIA(false);
-    }, 2000);
+  // --- TRUCO TÉCNICO: CONVERTIR ARCHIVOS LOCALES A BASE64 PARA LA IA ---
+  const transformarArchivoBase64 = (archivo) => {
+    return new Promise((resolve, reject) => {
+      const lector = new FileReader();
+      lector.readAsDataURL(archivo);
+      lector.onload = () => {
+        const cadenaBase64 = lector.result.split(',')[1];
+        resolve(cadenaBase64);
+      };
+      lector.onerror = (error) => reject(error);
+    });
   };
 
+  // --- CONEXIÓN DIRECTA CON GEMINI IA (USANDO VARIABLE DE ENTORNO VERCEL) ---
+  const procesarConIA = async () => {
+    // Leemos la clave secreta desde las variables de Vercel
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+    if (!apiKey) {
+      alert("Error de sistema: No se encontró la API Key en las variables de entorno de Vercel. Asegúrate de haber agregado VITE_GEMINI_API_KEY en los settings de tu proyecto en Vercel y haber redesplegado.");
+      return;
+    }
+
+    setCargandoIA(true);
+
+    try {
+      // 1. Convertimos todos los archivos adjuntos locales a la estructura exigida por Google
+      const partesDocumentos = await Promise.all(
+        archivosContexto.map(async (archivo) => {
+          const base64Data = await transformarArchivoBase64(archivo);
+          return {
+            inlineData: {
+              mimeType: archivo.type || "application/octet-stream",
+              data: base64Data
+            }
+          };
+        })
+      );
+
+      // 2. Definimos las instrucciones detalladas de redacción corporativa
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones y redacción de bases técnicas de licitación (RFP) para Sodimac Chile. Tu tarea es redactar el cuerpo del 'ALCANCE DEL PROCESO' correspondiente a los puntos del 3.2 al 3.7. Debes utilizar un tono técnico, sumamente riguroso, formal y preciso en español de Chile corporativo. Explica el despliegue, la ejecución, las obligaciones operativas del contratista y los niveles de servicio esperados de forma extendida.";
+
+      const promptEstructurado = `Genera un alcance técnico completo y robusto para una propuesta RFP basado en las siguientes especificaciones:
+      
+      Detalles ingresados por el usuario administrador:
+      ${contextoIA}
+      
+      Instrucciones críticas adicionales:
+      - Lee minuciosamente todos los documentos adjuntos (si existen) y extrae sus pautas técnicas como contexto matriz.
+      - Redacta de corrido y estructuradamente con párrafos bien diferenciados.
+      - No repitas títulos generales ni introducciones genéricas, ve directo al desarrollo del clausulado de alcance.
+      - Respeta la separación de párrafos usando saltos de línea claros.`;
+
+      // 3. Empaquetamos todo en el JSON oficial y llamamos al endpoint v1beta de Gemini 1.5 Flash
+      const payload = {
+        contents: [
+          {
+            parts: [
+              { text: promptEstructurado },
+              ...partesDocumentos
+            ]
+          }
+        ],
+        systemInstruction: {
+          parts: [{ text: instruccionesSistema }]
+        }
+      };
+
+      const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const datosRecibidos = await respuestaApi.json();
+
+      if (datosRecibidos.candidates && datosRecibidos.candidates[0]?.content?.parts[0]?.text) {
+        setAlcanceGenerado(datosRecibidos.candidates[0].content.parts[0].text);
+      } else {
+        throw new Error("Respuesta inválida de la API");
+      }
+
+    } catch (error) {
+      console.error("Error en la conexión con Gemini:", error);
+      alert("Hubo un problema al intentar conectar con el motor de Gemini. Asegúrate de que tu API Key sea válida y que los archivos no superen las capacidades de red.");
+    } finally {
+      setCargandoIA(false);
+    }
+  };
+
+  // --- MOTOR DE FUSIÓN CON TU PLANTILLA WORD DE SUPABASE ---
   const generarWordFinal = async () => {
     try {
       const response = await fetch(URL_PLANTILLA);
@@ -135,7 +218,7 @@ export default function GeneradorRFP() {
       saveAs(out, `Bases_RFP_${adminSeleccionado.nombre.replace(' ', '_')}.docx`);
     } catch (error) {
       console.error(error);
-      alert("Error al generar el documento. Asegúrate de que las llaves en el Word coincidan exactamente con las variables del código.");
+      alert("Error al generar Word. Verifica que las llaves del Word coincidan con el motor de render.");
     }
   };
 
@@ -182,11 +265,11 @@ export default function GeneradorRFP() {
           </div>
         </div>
 
-        {/* 2. ALCANCE E IA */}
+        {/* 2. ALCANCE E IA CON CONEXIÓN ACTIVA OCULTA */}
         <div style={{ marginBottom: '25px', backgroundColor: '#eef2f7', padding: '15px', borderRadius: '6px', border: '1px solid #cce5ff' }}>
           <h3 style={{ fontSize: '16px', color: '#004A99', marginTop: 0 }}>2. Contexto para IA (Alcance)</h3>
-          <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Ingresa los detalles del servicio o adjunta bases técnicas de referencia.</p>
           
+          <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Ingresa detalles o adjunta antecedentes técnicos de referencia para que Gemini redacte.</p>
           <textarea rows="3" placeholder="Ej: Servicio de instalación de cámaras CCTV..." value={contextoIA} onChange={e => setContextoIA(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}></textarea>
           
           <div style={{ marginTop: '10px', padding: '12px', backgroundColor: 'white', borderRadius: '4px', border: '1px dashed #004A99' }}>
@@ -212,7 +295,7 @@ export default function GeneradorRFP() {
           </div>
 
           <button onClick={procesarConIA} disabled={cargandoIA} style={{ width: '100%', padding: '12px', marginTop: '15px', backgroundColor: cargandoIA ? '#ccc' : '#6f42c1', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: cargandoIA ? 'not-allowed' : 'pointer', transition: '0.3s' }}>
-            {cargandoIA ? '⏳ Analizando documentos...' : '✨ Generar Alcance IA'}
+            {cargandoIA ? '⏳ Conectando y redactando con Gemini...' : '✨ Generar Alcance con Gemini IA'}
           </button>
         </div>
 
@@ -262,12 +345,12 @@ export default function GeneradorRFP() {
         </div>
       </div>
 
-      {/* PANEL DERECHO: VISUALIZADOR Y DESCARGAS */}
+      {/* PANEL DERECHO: VISUALIZADOR INTEGRO Y ACCIONES DE EXPORTACIÓN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px', minWidth: 0 }}>
         
         {/* BARRA DE BOTONES */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-          <button onClick={generarWordFinal} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>📄 Descargar Plantilla en Word</button>
+          <button onClick={generarWordFinal} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>📄 Descargar en Word Oficial (Supabase)</button>
           <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Guardar vista como PDF</button>
         </div>
 
@@ -312,12 +395,12 @@ export default function GeneradorRFP() {
             <p style={{ textAlign: 'justify' }}>Por medio de este Proceso, la Titular pretende seleccionar una empresa para contratar el suministro y despacho de suministro o servicios para Sodimac, suscribir una carta de adjudicación y/o contrato para la entrega de suministros o servicios en los términos establecidos en esta base especial y base general.</p>
 
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>ALCANCE DEL PROCESO</h3>
-            <div style={{ backgroundColor: '#fffbe6', padding: '10px', border: '1px dashed #ffd700', color: '#856404', fontStyle: 'italic', marginBottom: '20px', whiteSpace: 'pre-wrap' }}>
+            <div style={{ backgroundColor: '#fffbe6', padding: '15px', border: '1px dashed #ffd700', color: '#856404', fontStyle: 'italic', marginBottom: '20px', whiteSpace: 'pre-wrap' }}>
               {alcanceGenerado}
             </div>
 
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>CONSULTAS Y ACLARACIONES</h3>
-            <p style={{ textAlign: 'justify' }}>Conforme a lo establecido en estas bases, el Proponente deberá contemplar las siguientes condiciones generales: Todas las consultas, tanto las de carácter técnico como las de índole administrativas, que los Proponentes deseen formular en relación con la materia de este Proceso de Solicitud de Propuestas, deberán ser realizadas a través de la Plataforma.</p>
+            <p style={{ textAlign: 'justify' }}>Conforme a lo establecido en estas bases, el Proponente deberá contemplar las siguientes conditions generales: Todas las consultas, tanto las de carácter técnico como las de índole administrativas, que los Proponentes deseen formular en relación con la materia de este Proceso de Solicitud de Propuestas, deberán ser realizadas a través de la Plataforma.</p>
 
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>PACTO DE INTEGRIDAD</h3>
             <p style={{ textAlign: 'justify' }}>Los Participantes declaran que, por el sólo hecho de participar en el presente proceso, acepta expresamente el presente pacto de integridad, obligándose a cumplir con todas y cada una de las estipulaciones contenidas en la misma. El oferente se obliga a no intentar ni efectuar acuerdos o realizar negociaciones, actos o conductas que tengan por objeto influir o afectar de cualquier forma la libre competencia.</p>
@@ -381,6 +464,7 @@ export default function GeneradorRFP() {
             
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>CELEBRACIÓN DEL CONTRATO Y ESTIPULACIONES OBLIGATORIAS</h3>
             <p style={{ textAlign: 'justify' }}>Por el hecho de adjudicarse el servicio, se entenderá que queda celebrado un Contrato de Abastecimiento o Suministro entre La Empresa y el Adjudicatario. Estas Bases, contienen todos los derechos y obligaciones de las partes, entendiéndose que forman parte integrante de las mismas además el documento que comunique la adjudicación.</p>
+
           </div>
         </div>
       </div>
