@@ -1643,45 +1643,44 @@ export default function App() {
                 </div>
               </div>
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
-                        <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Fecha Aprobación</div>
-                      </th>
-                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
-                        <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Razón Social / RUT</div>
-                        <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '100%', maxWidth: '160px', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
-                      </th>
-                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
-                        <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Categoría / Subcategoría</div>
-                        <div style={{ display: 'flex', gap: '4px', maxWidth: '200px' }}>
-                          <select value={filtroGestionCat} onChange={e => {setFiltroGestionCat(e.target.value); setFiltroGestionSub('');}} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
-                            <option value="">Categoría...</option>
-                            {Object.keys(categoriasDinamicas).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                          </select>
-                          <select disabled={!filtroGestionCat} value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
-                            <option value="">Subcat...</option>
-                            {filtroGestionCat && categoriasDinamicas[filtroGestionCat]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
-                          </select>
-                        </div>
-                      </th>
-                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
-                        <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Cobertura</div>
-                        <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '100%', maxWidth: '110px', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
-                      </th>
-                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top' }}>
-                        <div style={{ fontWeight: 'bold', marginTop: '1px' }}>Contacto</div>
-                      </th>
-                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center' }}>
-                        <div style={{ fontWeight: 'bold', marginTop: '1px' }}>Auditoría</div>
-                      </th>
-                      <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center' }}>
-                        <div style={{ fontWeight: 'bold', marginTop: '1px' }}>Acciones</div>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
+                  <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '12%' }}>
+                    <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Fecha Aprobación</div>
+                  </th>
+                  <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '22%' }}>
+                    <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Razón Social / RUT</div>
+                    <input type="text" placeholder="Filtrar Proveedor..." value={filtroGestionNombre} onChange={e => setFiltroGestionNombre(e.target.value)} style={{ width: '100%', maxWidth: '160px', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
+                  </th>
+                  <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '22%' }}>
+                    <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Categoría / Subcategoría</div>
+                    <div style={{ display: 'flex', gap: '4px', maxWidth: '200px' }}>
+                      <select value={filtroGestionCat} onChange={e => {setFiltroGestionCat(e.target.value); setFiltroGestionSub('');}} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
+                        <option value="">Categoría...</option>
+                        {Object.keys(categoriasDinamicas).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      </select>
+                      <select disabled={!filtroGestionCat} value={filtroGestionSub} onChange={e => setFiltroGestionSub(e.target.value)} style={{ width: '50%', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }}>
+                        <option value="">Subcat...</option>
+                        {filtroGestionCat && categoriasDinamicas[filtroGestionCat]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                      </select>
+                    </div>
+                  </th>
+                  <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '12%' }}>
+                    <div style={{ marginBottom: '4px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Cobertura</div>
+                    <input type="text" placeholder="Filtrar Zona..." value={filtroGestionZona} onChange={e => setFiltroGestionZona(e.target.value)} style={{ width: '100%', maxWidth: '110px', padding: '4px', fontSize: '11px', border: '1px solid #ccc', borderRadius: '4px', boxSizing: 'border-box', outline: 'none' }} />
+                  </th>
+                  <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', width: '16%' }}>
+                    <div style={{ fontWeight: 'bold', marginTop: '1px' }}>Contacto</div>
+                  </th>
+                  <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center', width: '8%' }}>
+                    <div style={{ fontWeight: 'bold', marginTop: '1px' }}>Auditoría</div>
+                  </th>
+                  <th style={{ padding: '8px', borderBottom: '2px solid #ccc', verticalAlign: 'top', textAlign: 'center', width: '10%' }}>
+                    <div style={{ fontWeight: 'bold', marginTop: '1px' }}>Acciones</div>
+                  </th>
+                </tr>
+              </thead>
                     {proveedoresGestionFiltrados.length === 0 ? <tr><td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No se encontraron proveedores con los filtros aplicados.</td></tr> : 
                     proveedoresGestionFiltrados.map(prov => (
                       <tr key={prov.id} style={{ borderBottom: '1px solid #eee' }}>
