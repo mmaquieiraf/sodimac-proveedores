@@ -23,6 +23,7 @@ export default function GeneradorRFP() {
 
   // --- ESTADOS PARA ALCANCE E IA ---
   const [contextoIA, setContextoIA] = useState('');
+  const [archivosContexto, setArchivosContexto] = useState([]);
   const [alcanceGenerado, setAlcanceGenerado] = useState('El alcance detallado será generado por la IA en base a los antecedentes proporcionados...');
 
   // --- ESTADOS PARA EL CALENDARIO ---
@@ -72,6 +73,16 @@ export default function GeneradorRFP() {
     return `${meses[parseInt(month)-1]} ${year}`;
   };
 
+  const manejarCargaArchivos = (e) => {
+    const nuevosArchivos = Array.from(e.target.files);
+    setArchivosContexto([...archivosContexto, ...nuevosArchivos]);
+    e.target.value = null; // Limpia el input para poder subir el mismo archivo si se borra
+  };
+
+  const eliminarArchivo = (index) => {
+    setArchivosContexto(archivosContexto.filter((_, i) => i !== index));
+  };
+
   return (
     <div style={{ display: 'flex', gap: '20px', height: 'calc(100vh - 100px)', padding: '20px', boxSizing: 'border-box', backgroundColor: '#f4f4f4' }}>
       
@@ -119,9 +130,35 @@ export default function GeneradorRFP() {
         {/* 2. ALCANCE E IA */}
         <div style={{ marginBottom: '25px', backgroundColor: '#eef2f7', padding: '15px', borderRadius: '6px', border: '1px solid #cce5ff' }}>
           <h3 style={{ fontSize: '16px', color: '#004A99', marginTop: 0 }}>2. Contexto para IA (Alcance del Proyecto)</h3>
-          <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Ingresa los detalles del servicio. La IA usará esto para redactar el Alcance y los puntos 3.2 al 3.7.</p>
-          <textarea rows="4" placeholder="Ej: Servicio de instalación de cámaras CCTV en 5 tiendas..." value={contextoIA} onChange={e => setContextoIA(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}></textarea>
-          <button style={{ width: '100%', padding: '10px', marginTop: '10px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'not-allowed', opacity: 0.7 }} disabled>✨ Generar Alcance con Gemini IA (Próxima Fase)</button>
+          <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Ingresa los detalles del servicio o adjunta bases técnicas de referencia (PDF, Word, Excel, etc).</p>
+          
+          <textarea rows="3" placeholder="Ej: Servicio de instalación de cámaras CCTV en 5 tiendas, basarse en el archivo adjunto..." value={contextoIA} onChange={e => setContextoIA(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}></textarea>
+          
+          {/* ZONA DE ARCHIVOS ADJUNTOS EN MEMORIA */}
+          <div style={{ marginTop: '10px', padding: '12px', backgroundColor: 'white', borderRadius: '4px', border: '1px dashed #004A99' }}>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', display: 'flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
+              <span style={{ backgroundColor: '#17a2b8', color: 'white', padding: '6px 15px', borderRadius: '4px', marginRight: '10px', transition: '0.2s' }}>📎 Adjuntar Archivo Local</span>
+              <span style={{ color: '#666', fontWeight: 'normal' }}>(Los archivos no se guardan, solo se procesan en esta sesión)</span>
+              <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" onChange={manejarCargaArchivos} style={{ display: 'none' }} />
+            </label>
+
+            {archivosContexto.length > 0 && (
+              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {archivosContexto.map((archivo, index) => (
+                  <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8f9fa', padding: '6px 10px', borderRadius: '4px', border: '1px solid #eee', fontSize: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                      <span style={{ fontSize: '14px' }}>📄</span>
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 'bold', color: '#333' }}>{archivo.name}</span>
+                      <span style={{ color: '#999', fontSize: '10px' }}>({(archivo.size / 1024).toFixed(0)} KB)</span>
+                    </div>
+                    <button onClick={() => eliminarArchivo(index)} style={{ background: 'none', border: 'none', color: '#EE2D24', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', padding: '0 5px' }}>✖</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button style={{ width: '100%', padding: '12px', marginTop: '15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'not-allowed', opacity: 0.7 }} disabled>✨ Procesar Documentos con Gemini IA (Próxima Fase)</button>
         </div>
 
         {/* 3. CALENDARIO */}
