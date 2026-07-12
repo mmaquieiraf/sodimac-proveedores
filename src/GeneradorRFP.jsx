@@ -105,47 +105,49 @@ export default function GeneradorRFP() {
     });
   };
 
-  // --- CONEXIÓN DIRECTA CON GEMINI IA (USANDO VARIABLE DE ENTORNO VERCEL) ---
+  // --- CONEXIÓN DIRECTA CON GEMINI IA (ROBUSTA Y CON MANEJO DE ERRORES) ---
   const procesarConIA = async () => {
     // Leemos la clave secreta desde las variables de Vercel
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
+    // 1. Verificación de Vercel
     if (!apiKey) {
-      alert("Error de sistema: No se encontró la API Key en las variables de entorno de Vercel. Asegúrate de haber agregado VITE_GEMINI_API_KEY en los settings de tu proyecto en Vercel y haber redesplegado.");
+      alert("❌ Error: Vercel no está leyendo la API Key. \n\nEsto sucede porque tu variable VITE_GEMINI_API_KEY está configurada solo para 'Production' y estás viendo una URL de 'Preview'. Ve a Vercel, edita la variable para que marque las casillas 'Preview' y 'Development' también, y redespliega.");
       return;
     }
 
     setCargandoIA(true);
 
     try {
-      // 1. Convertimos todos los archivos adjuntos locales a la estructura exigida por Google
+      // 2. Filtro de archivos (Solo dejamos pasar lo que Gemini entiende nativamente por web)
+      const archivosValidos = archivosContexto.filter(f => 
+        f.type === 'application/pdf' || 
+        f.type.startsWith('image/') || 
+        f.type.startsWith('text/')
+      );
+
+      const archivosInvalidos = archivosContexto.filter(f => !archivosValidos.includes(f));
+
+      if (archivosInvalidos.length > 0) {
+        alert(`⚠️ Atención: Archivos como Excel o Word (${archivosInvalidos.map(a => a.name).join(', ')}) no son legibles directamente por la IA sin un servidor intermedio.\n\nEl sistema ignorará estos archivos y continuará generando el texto con lo que escribiste en el cuadro y los PDF/Imágenes que hayas subido.\n\n*Consejo: Guarda tus Word/Excel como PDF si quieres que la IA los lea.*`);
+      }
+
       const partesDocumentos = await Promise.all(
-        archivosContexto.map(async (archivo) => {
+        archivosValidos.map(async (archivo) => {
           const base64Data = await transformarArchivoBase64(archivo);
           return {
             inlineData: {
-              mimeType: archivo.type || "application/octet-stream",
+              mimeType: archivo.type,
               data: base64Data
             }
           };
         })
       );
 
-      // 2. Definimos las instrucciones detalladas de redacción corporativa
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones y redacción de bases técnicas de licitación (RFP) para Sodimac Chile. Tu tarea es redactar el cuerpo del 'ALCANCE DEL PROCESO' correspondiente a los puntos del 3.2 al 3.7. Debes utilizar un tono técnico, sumamente riguroso, formal y preciso en español de Chile corporativo. Explica el despliegue, la ejecución, las obligaciones operativas del contratista y los niveles de servicio esperados de forma extendida.";
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones y redacción de bases técnicas de licitación (RFP) para Sodimac Chile. Tu tarea es redactar el cuerpo del 'ALCANCE DEL PROCESO' correspondiente a los puntos del 3.2 al 3.7. Debes utilizar un tono técnico, sumamente riguroso, formal y preciso en español de Chile corporativo. Explica el despliegue, la ejecución, las obligaciones operativas del contratista y los niveles de servicio esperados.";
 
-      const promptEstructurado = `Genera un alcance técnico completo y robusto para una propuesta RFP basado en las siguientes especificaciones:
-      
-      Detalles ingresados por el usuario administrador:
-      ${contextoIA}
-      
-      Instrucciones críticas adicionales:
-      - Lee minuciosamente todos los documentos adjuntos (si existen) y extrae sus pautas técnicas como contexto matriz.
-      - Redacta de corrido y estructuradamente con párrafos bien diferenciados.
-      - No repitas títulos generales ni introducciones genéricas, ve directo al desarrollo del clausulado de alcance.
-      - Respeta la separación de párrafos usando saltos de línea claros.`;
+      const promptEstructurado = `Genera un alcance técnico completo y robusto para una propuesta RFP basado en las siguientes especificaciones:\n\nDetalles ingresados por el administrador:\n${contextoIA}\n\nInstrucciones críticas:\n- Lee minuciosamente todos los documentos adjuntos (si existen) y extrae sus pautas técnicas como contexto matriz.\n- Redacta de corrido y estructuradamente con párrafos bien diferenciados.\n- No repitas títulos generales ni introducciones genéricas, ve directo al desarrollo del clausulado de alcance.\n- Respeta la separación de párrafos usando saltos de línea claros.`;
 
-      // 3. Empaquetamos todo en el JSON oficial y llamamos al endpoint v1beta de Gemini 1.5 Flash
       const payload = {
         contents: [
           {
@@ -168,15 +170,21 @@ export default function GeneradorRFP() {
 
       const datosRecibidos = await respuestaApi.json();
 
+      // 3. Interceptor del error real de Google
+      if (!respuestaApi.ok) {
+        console.error("Error devuelto por Google:", datosRecibidos);
+        throw new Error(datosRecibidos.error?.message || `Google rechazó la conexión. Código: ${respuestaApi.status}`);
+      }
+
       if (datosRecibidos.candidates && datosRecibidos.candidates[0]?.content?.parts[0]?.text) {
         setAlcanceGenerado(datosRecibidos.candidates[0].content.parts[0].text);
       } else {
-        throw new Error("Respuesta inválida de la API");
+        throw new Error("La IA no devolvió un formato de texto válido.");
       }
 
     } catch (error) {
-      console.error("Error en la conexión con Gemini:", error);
-      alert("Hubo un problema al intentar conectar con el motor de Gemini. Asegúrate de que tu API Key sea válida y que los archivos no superen las capacidades de red.");
+      console.error("Fallo de ejecución:", error);
+      alert(`⚠️ Fallo en conexión con Gemini:\n\n${error.message}`);
     } finally {
       setCargandoIA(false);
     }
@@ -269,13 +277,13 @@ export default function GeneradorRFP() {
         <div style={{ marginBottom: '25px', backgroundColor: '#eef2f7', padding: '15px', borderRadius: '6px', border: '1px solid #cce5ff' }}>
           <h3 style={{ fontSize: '16px', color: '#004A99', marginTop: 0 }}>2. Contexto para IA (Alcance)</h3>
           
-          <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Ingresa detalles o adjunta antecedentes técnicos de referencia para que Gemini redacte.</p>
+          <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Ingresa detalles o adjunta antecedentes técnicos de referencia (PDF) para que Gemini redacte.</p>
           <textarea rows="3" placeholder="Ej: Servicio de instalación de cámaras CCTV..." value={contextoIA} onChange={e => setContextoIA(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}></textarea>
           
           <div style={{ marginTop: '10px', padding: '12px', backgroundColor: 'white', borderRadius: '4px', border: '1px dashed #004A99' }}>
             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', display: 'flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
               <span style={{ backgroundColor: '#17a2b8', color: 'white', padding: '6px 10px', borderRadius: '4px', marginRight: '10px' }}>📎 Adjuntar Archivo</span>
-              <span style={{ color: '#666', fontWeight: 'normal' }}>(Memoria Local)</span>
+              <span style={{ color: '#666', fontWeight: 'normal' }}>(Soporta PDF, TXT o Imágenes)</span>
               <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" onChange={manejarCargaArchivos} style={{ display: 'none' }} />
             </label>
 
