@@ -1584,15 +1584,13 @@ export default function App() {
               <div style={{ overflowX: 'auto', border: '1px solid #ccc', borderRadius: '8px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', tableLayout: 'fixed' }}>
                   <thead>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', tableLayout: 'fixed' }}>
-                  <thead>
                     <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
                       <th style={{ padding: '10px 8px', borderBottom: '2px solid #ccc', width: '10%' }}>Fecha Registro</th>
-                      <th style={{ padding: '10px 8px', borderBottom: '2px solid #ccc', width: '25%' }}>Razón Social / RUT</th>
-                      <th style={{ padding: '10px 8px', borderBottom: '2px solid #ccc', width: '25%' }}>Categoría / Subcategoría</th>
-                      <th style={{ padding: '10px 8px', borderBottom: '2px solid #ccc', width: '15%' }}>Cobertura</th>
-                      <th style={{ padding: '10px 8px', borderBottom: '2px solid #ccc', width: '15%' }}>Contacto</th>
-                      <th style={{ padding: '10px 8px', borderBottom: '2px solid #ccc', width: '10%', textAlign: 'center' }}>Acciones</th>
+                      <th style={{ padding: '10px 8px', borderBottom: '2px solid #ccc', width: '22%' }}>Razón Social / RUT</th>
+                      <th style={{ padding: '10px 8px', borderBottom: '2px solid #ccc', width: '20%' }}>Categoría / Subcategoría</th>
+                      <th style={{ padding: '10px 8px', borderBottom: '2px solid #ccc', width: '14%' }}>Cobertura</th>
+                      <th style={{ padding: '10px 8px', borderBottom: '2px solid #ccc', width: '22%' }}>Contacto</th>
+                      <th style={{ padding: '10px 8px', borderBottom: '2px solid #ccc', width: '12%', textAlign: 'center' }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
