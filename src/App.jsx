@@ -2188,7 +2188,7 @@ export default function App() {
               </div>
             </div>
           )}
-{tabAdmin === 'generador_rfp' && <GeneradorRFP />}
+          {tabAdmin === 'generador_rfp' && <GeneradorRFP />}
           {/* 🛡️ PESTAÑA DE AUDITORÍA SOLO PARA MMAQUIEIRA */}
           {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
             <div>
