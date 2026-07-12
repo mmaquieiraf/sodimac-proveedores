@@ -337,6 +337,7 @@ export default function GeneradorRFP() {
             </tbody>
           </table>
           <p style={{ textAlign: 'justify' }}>Una vez que el Prestador se encuentre en condiciones de entrega deberá agendar una hora con la <strong>{despachoCargo || '[Cargo]'}</strong>, <strong>{despachoNombre || '[Nombre]'}</strong> (<strong>{despachoEmail || '[Email]'}</strong>) para posteriormente realizar la entrega física en cada una de las tiendas.</p>
+ </div>
         </div>
       </div>
     </div>
