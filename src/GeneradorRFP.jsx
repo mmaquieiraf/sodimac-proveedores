@@ -83,6 +83,41 @@ export default function GeneradorRFP() {
     setArchivosContexto(archivosContexto.filter((_, i) => i !== index));
   };
 
+  const [cargandoIA, setCargandoIA] = useState(false);
+
+  // --- FUNCIONES DE EXPORTACIÓN E IA ---
+  const exportarWord = () => {
+    const contenido = document.getElementById('documento-rfp').innerHTML;
+    const html = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head><meta charset='utf-8'><title>Bases RFP</title></head>
+      <body>${contenido}</body>
+      </html>
+    `;
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Bases_RFP_${adminSeleccionado.nombre.replace(' ', '_')}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportarPDF = () => {
+    // Utiliza el motor nativo del navegador para guardar en PDF la vista actual
+    window.print(); 
+  };
+
+  const procesarConIA = () => {
+    setCargandoIA(true);
+    // Aquí irá la llamada real a Gemini
+    setTimeout(() => {
+      alert("¡El botón ya está activo! En el próximo paso conectaremos la API de Gemini aquí.");
+      setCargandoIA(false);
+    }, 2000);
+  };
+
   return (
     <div style={{ display: 'flex', gap: '20px', height: 'calc(100vh - 100px)', padding: '20px', boxSizing: 'border-box', backgroundColor: '#f4f4f4' }}>
       
@@ -158,7 +193,9 @@ export default function GeneradorRFP() {
             )}
           </div>
 
-          <button style={{ width: '100%', padding: '12px', marginTop: '15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'not-allowed', opacity: 0.7 }} disabled>✨ Procesar Documentos con Gemini IA (Próxima Fase)</button>
+          <button onClick={procesarConIA} disabled={cargandoIA} style={{ width: '100%', padding: '12px', marginTop: '15px', backgroundColor: cargandoIA ? '#ccc' : '#6f42c1', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: cargandoIA ? 'not-allowed' : 'pointer', transition: '0.3s' }}>
+            {cargandoIA ? '⏳ Analizando documentos y redactando...' : '✨ Generar Alcance con Gemini IA'}
+          </button>
         </div>
 
         {/* 3. CALENDARIO */}
@@ -209,8 +246,17 @@ export default function GeneradorRFP() {
       </div>
 
       {/* PANEL DERECHO: VISUALIZADOR TIPO WORD */}
-      <div style={{ flex: '1.2', backgroundColor: '#e5e5e5', padding: '20px', borderRadius: '8px', overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
-        <div style={{ backgroundColor: 'white', width: '21cm', minHeight: '29.7cm', padding: '2.5cm', boxShadow: '0 4px 10px rgba(0,0,0,0.15)', fontFamily: 'Arial, sans-serif', fontSize: '10pt', color: '#333', lineHeight: '1.5' }}>
+      <div style={{ flex: '1.2', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+        
+        {/* BARRA DE HERRAMIENTAS: DESCARGAS */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+          <button onClick={exportarWord} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>📄 Descargar en Word</button>
+          <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Guardar como PDF</button>
+        </div>
+
+        {/* HOJA DEL DOCUMENTO */}
+        <div style={{ backgroundColor: '#e5e5e5', padding: '20px', borderRadius: '8px', overflowY: 'auto', display: 'flex', justifyContent: 'center', flex: 1 }}>
+          <div id="documento-rfp" style={{ backgroundColor: 'white', width: '21cm', minHeight: '29.7cm', padding: '2.5cm', boxShadow: '0 4px 10px rgba(0,0,0,0.15)', fontFamily: 'Arial, sans-serif', fontSize: '10pt', color: '#333', lineHeight: '1.5' }}>
           
           <h1 style={{ textAlign: 'center', fontSize: '16pt', color: '#004A99', marginBottom: '20px' }}>Bases Proceso de Solicitud de Propuestas<br/>Condicionado Particular</h1>
           <p style={{ textAlign: 'justify', fontSize: '9pt', color: '#666', fontStyle: 'italic' }}>Este documento es propiedad del Titular del Proceso. El contenido de este documento está sujeto a reserva...</p>
