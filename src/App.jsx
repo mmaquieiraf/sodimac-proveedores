@@ -1,3 +1,4 @@
+import GeneradorRFP from './GeneradorRFP';
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { categoriasSodimac as catSodimacOriginal, formatearRUT, validarRUT } from './datosSodimac';
@@ -1421,6 +1422,7 @@ export default function App() {
             <h2 onClick={() => {setTabAdmin('exportar'); setSeleccionados([]);}} style={{ color: tabAdmin === 'exportar' ? '#28a745' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Exportar Aprobados</h2>
             <h2 onClick={() => {setTabAdmin('procesos'); cargarProcesos();}} style={{ color: tabAdmin === 'procesos' ? '#ffc107' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Procesos</h2>
             <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Admin / Roles</h2>
+            <h2 onClick={() => setTabAdmin('generador_rfp')} style={{ color: tabAdmin === 'generador_rfp' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>📄 Generador RFP</h2>
             {usuarioActual?.usuario === 'mmaquieira' && (
               <h2 onClick={() => { setTabAdmin('auditoria'); cargarLogsAuditoria(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>🛡️ Auditoría</h2>
             )}
@@ -2186,7 +2188,7 @@ export default function App() {
               </div>
             </div>
           )}
-
+{tabAdmin === 'generador_rfp' && <GeneradorRFP />}
           {/* 🛡️ PESTAÑA DE AUDITORÍA SOLO PARA MMAQUIEIRA */}
           {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
             <div>
