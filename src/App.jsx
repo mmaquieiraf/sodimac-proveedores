@@ -1,7 +1,7 @@
-import GeneradorRFP from './GeneradorRFP';
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { categoriasSodimac as catSodimacOriginal, formatearRUT, validarRUT } from './datosSodimac';
+import GeneradorRFP from './GeneradorRFP';
 
 const categoriasSodimac = JSON.parse(JSON.stringify(catSodimacOriginal));
 
@@ -2188,7 +2188,10 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {/* === NUEVO MÓDULO GENERADOR RFP === */}
           {tabAdmin === 'generador_rfp' && <GeneradorRFP />}
+
           {/* 🛡️ PESTAÑA DE AUDITORÍA SOLO PARA MMAQUIEIRA */}
           {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
             <div>
