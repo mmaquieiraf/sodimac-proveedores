@@ -136,6 +136,10 @@ export default function GeneradorRFP() {
 
       --- TEXTO TIPO (NO MODIFICAR ESTRUCTURA NI LENGUAJE BASE): ---
 
+      IMPORTANTE: Para los encabezados 3.2 al 3.7, utiliza MAYÚSCULAS para que destaquen como títulos (Ejemplo: 3.2 ALCANCE DE LOS SERVICIOS). 
+      No uses asteriscos ni HTML, solo escribe el título en mayúsculas para asegurar que el formato se mantenga limpio y legible.
+      ... (sigue el resto) ...
+      `;
       
       El presente Proceso de Licitación tiene por objeto la contratación de los servicios de [DESCRIBIR SERVICIO O ACTIVIDAD PRINCIPAL], a ejecutarse en [UBICACIÓN O INSTALACIONES OBJETO DEL SERVICIO], conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
       La prestación requerida comprenderá la totalidad de las actividades, recursos, suministros, medios humanos, equipos, herramientas, materiales, transportes, coordinaciones, permisos, documentación y demás elementos necesarios para la correcta, completa y oportuna ejecución del servicio, aun cuando éstos no se encuentren expresamente señalados en los documentos del proceso, pero resulten razonablemente necesarios para el cumplimiento de su objeto.
