@@ -100,7 +100,7 @@ export default function GeneradorRFP() {
     });
   };
 
-  // --- CONEXIÓN DIRECTA CON GEMINI IA (CON ESTRUCTURA ESTRICTA) ---
+  // --- CONEXIÓN DIRECTA CON GEMINI IA (CON ESTRUCTURA ESTRICTA Y NEGRITAS) ---
   const procesarConIA = async () => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -128,81 +128,137 @@ export default function GeneradorRFP() {
         })
       );
 
-      // Instrucción de candado corporativo
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Debes redactar el ALCANCE DEL PROCESO usando la estructura tipo proporcionada. NO modifiques el lenguaje tipo, solo rellena los corchetes [] con el contexto técnico del usuario.";
+      // Instrucción estricta para formato y saltos de línea
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Debes redactar el ALCANCE DEL PROCESO usando la estructura tipo proporcionada. IMPORTANTE: Usa formato Markdown para las negritas (**texto**) y deja OBLIGATORIAMENTE un salto de línea en blanco (doble enter) entre cada párrafo, título e ítem de las listas para dar el espaciado correcto.";
 
       const promptEstructurado = `
-      Genera el cuerpo del ALCANCE DEL PROCESO siguiendo ESTRICTAMENTE esta estructura. Rellena los campos entre corchetes [ ] basándote en el contexto técnico proporcionado.
+      Genera el cuerpo del ALCANCE DEL PROCESO siguiendo ESTRICTAMENTE esta estructura. 
+      REGLAS DE FORMATO:
+      1. Usa negritas (**texto**) para el servicio y la ubicación en el primer párrafo.
+      2. Usa negritas para los encabezados numerados (ej: **3.2 Alcance de los Servicios**).
+      3. Usa negritas en los listados solo hasta los dos puntos (ej: **a) Levantamiento y Diagnóstico Inicial:**).
+      4. Deja SIEMPRE una línea en blanco entre cada párrafo, título y letra del listado.
 
       --- TEXTO TIPO (NO MODIFICAR ESTRUCTURA NI LENGUAJE BASE): ---
 
+      ALCANCE DEL PROCESO
       
-      El presente Proceso de Licitación tiene por objeto la contratación de los servicios de [DESCRIBIR SERVICIO O ACTIVIDAD PRINCIPAL], a ejecutarse en [UBICACIÓN O INSTALACIONES OBJETO DEL SERVICIO], conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
+      El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[INSERTA DESCRIBIR SERVICIO O ACTIVIDAD PRINCIPAL]**, a ejecutarse en **[INSERTA UBICACIÓN O INSTALACIONES OBJETO DEL SERVICIO]**, conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
+      
       La prestación requerida comprenderá la totalidad de las actividades, recursos, suministros, medios humanos, equipos, herramientas, materiales, transportes, coordinaciones, permisos, documentación y demás elementos necesarios para la correcta, completa y oportuna ejecución del servicio, aun cuando éstos no se encuentren expresamente señalados en los documentos del proceso, pero resulten razonablemente necesarios para el cumplimiento de su objeto.
+      
       La sola presentación de una oferta implicará que el oferente declara conocer y aceptar íntegramente las condiciones del proceso, habiendo considerado en su propuesta todos los recursos, riesgos, costos directos e indirectos, obligaciones y exigencias necesarias para la ejecución del servicio.
 
-      3.2 Alcance de los Servicios
+      **3.2 Alcance de los Servicios**
+      
       El proveedor adjudicado deberá ejecutar la totalidad de las actividades contempladas en el alcance definido para el proceso, incluyendo aquellas labores complementarias, accesorias o necesarias para la correcta materialización del servicio contratado. Dependiendo de la naturaleza de la contratación, el alcance podrá considerar una o más de las siguientes actividades:
-      a) Levantamiento y Diagnóstico Inicial: Cuando corresponda, el adjudicatario deberá efectuar un levantamiento técnico previo de los equipos, instalaciones, activos o elementos objeto de intervención, verificando su estado, ubicación, cantidad, condiciones de operación y cualquier otra información relevante para la adecuada planificación y ejecución de los trabajos. El levantamiento deberá quedar respaldado mediante registros documentales y/o fotográficos, los cuales podrán ser requeridos por la Contratante como condición previa al inicio de las actividades.
-      b) Desinstalación, Desmontaje o Retiro: El adjudicatario deberá ejecutar las labores de desmontaje, desinstalación, desconexión, retiro, segregación y manejo de los equipos, componentes o elementos comprendidos dentro del alcance del proceso. Salvo indicación expresa en contrario, se entenderá que forman parte del alcance todas aquellas estructuras, fijaciones, soportes, accesorios, canalizaciones, conexiones y elementos asociados que resulten necesarios de retirar para completar adecuadamente la intervención.
-      c) Embalaje, Identificación y Acondicionamiento: Cuando el servicio contemple el retiro o traslado de activos, el adjudicatario será responsable de su adecuado acondicionamiento, protección, embalaje, rotulación, identificación, consolidación y preparación para transporte o almacenamiento. La metodología utilizada deberá asegurar la conservación, integridad, trazabilidad y resguardo de los activos durante todas las etapas del servicio.
-      d) Transporte y Logística: Cuando corresponda, el adjudicatario deberá ejecutar todas las actividades asociadas a la carga, transporte, descarga, traslado, almacenamiento temporal y entrega de los bienes o materiales comprendidos dentro del alcance contractual. Todos los costos asociados a estas actividades deberán considerarse incluidos en la oferta económica, salvo que las Bases establezcan expresamente una condición distinta.
-      e) Reinstalación o Puesta en Servicio: Cuando así se establezca en las Especificaciones Técnicas, el alcance podrá contemplar la reinstalación, montaje, conexión, configuración, pruebas funcionales, puesta en marcha o cualquier otra actividad necesaria para restituir la operación de los equipos o sistemas intervenidos.
+      
+      **a) Levantamiento y Diagnóstico Inicial:** Cuando corresponda, el adjudicatario deberá efectuar un levantamiento técnico previo de los equipos, instalaciones, activos o elementos objeto de intervención, verificando su estado, ubicación, cantidad, condiciones de operación y cualquier otra información relevante para la adecuada planificación y ejecución de los trabajos. El levantamiento deberá quedar respaldado mediante registros documentales y/o fotográficos, los cuales podrán ser requeridos por la Contratante como condición previa al inicio de las actividades.
+      
+      **b) Desinstalación, Desmontaje o Retiro:** El adjudicatario deberá ejecutar las labores de desmontaje, desinstalación, desconexión, retiro, segregación y manejo de los equipos, componentes o elementos comprendidos dentro del alcance del proceso. Salvo indicación expresa en contrario, se entenderá que forman parte del alcance todas aquellas estructuras, fijaciones, soportes, accesorios, canalizaciones, conexiones y elementos asociados que resulten necesarios de retirar para completar adecuadamente la intervención.
+      
+      **c) Embalaje, Identificación y Acondicionamiento:** Cuando el servicio contemple el retiro o traslado de activos, el adjudicatario será responsable de su adecuado acondicionamiento, protección, embalaje, rotulación, identificación, consolidación y preparación para transporte o almacenamiento. La metodología utilizada deberá asegurar la conservación, integridad, trazabilidad y resguardo de los activos durante todas las etapas del servicio.
+      
+      **d) Transporte y Logística:** Cuando corresponda, el adjudicatario deberá ejecutar todas las actividades asociadas a la carga, transporte, descarga, traslado, almacenamiento temporal y entrega de los bienes o materiales comprendidos dentro del alcance contractual. Todos los costos asociados a estas actividades deberán considerarse incluidos en la oferta económica, salvo que las Bases establezcan expresamente una condición distinta.
+      
+      **e) Reinstalación o Puesta en Servicio:** Cuando así se establezca en las Especificaciones Técnicas, el alcance podrá contemplar la reinstalación, montaje, conexión, configuración, pruebas funcionales, puesta en marcha o cualquier otra actividad necesaria para restituir la operación de los equipos o sistemas intervenidos.
 
-      3.3 Alcances Complementarios
+      **3.3 Alcances Complementarios**
+      
       Sin perjuicio de las actividades específicas descritas en los antecedentes técnicos, el adjudicatario deberá considerar dentro del alcance del servicio todas aquellas labores que resulten necesarias para:
+      
       - Garantizar la correcta ejecución de los trabajos. 
+      
       - Mantener la continuidad operacional de las instalaciones cuando corresponda. 
+      
       - Resguardar la seguridad de las personas y bienes involucrados. 
+      
       - Proteger la infraestructura existente. 
+      
       - Cumplir con la normativa legal y reglamentaria aplicable. 
+      
       - Dar cumplimiento a las exigencias de calidad definidas por la Contratante. 
+      
       La Contratante no reconocerá costos adicionales derivados de actividades que, aun cuando no hayan sido expresamente mencionadas en las Bases, sean inherentes, complementarias o necesarias para la correcta ejecución del servicio.
 
-      3.4 Condiciones de Ejecución
+      **3.4 Condiciones de Ejecución**
+      
       Los servicios deberán ejecutarse en estricto cumplimiento de las disposiciones contenidas en las presentes Bases, los antecedentes técnicos del proceso, la oferta adjudicada, la normativa legal vigente y las instrucciones impartidas por la Contratante. El adjudicatario será responsable de proporcionar la totalidad de los recursos requeridos para la ejecución del servicio, incluyendo, entre otros:
+      
       - Personal calificado y competente. 
+      
       - Supervisión técnica. 
+      
       - Herramientas y equipos de trabajo. 
+      
       - Equipos especiales de apoyo. 
+      
       - Vehículos y medios de transporte. 
+      
       - Equipos de izaje y elevación. 
+      
       - Señalización y segregación de áreas. 
+      
       - Elementos de Protección Personal (EPP). 
+      
       - Documentación técnica y administrativa. 
+      
       - Permisos, certificaciones y autorizaciones que resulten exigibles.
+      
       Toda coordinación operacional deberá realizarse con la contraparte designada por la Contratante, respetando las restricciones de acceso, horarios, condiciones de operación y medidas de seguridad definidas para cada instalación.
 
-      3.5 Obligaciones del Adjudicatario
+      **3.5 Obligaciones del Adjudicatario**
+      
       Serán obligaciones esenciales del proveedor adjudicado, entre otras:
-      a) Ejecutar íntegramente el servicio contratado conforme a las condiciones establecidas en el proceso.
-      b) Mantener durante toda la ejecución personal competente y recursos suficientes para asegurar el cumplimiento de los plazos comprometidos.
-      c) Cumplir con toda la normativa laboral, previsional, tributaria, ambiental, sanitaria y de seguridad aplicable.
-      d) Adoptar las medidas necesarias para prevenir daños a personas, infraestructura, equipos, mercaderías o activos de terceros.
-      e) Informar oportunamente cualquier desviación, interferencia, hallazgo o situación que pueda afectar el desarrollo normal de los trabajos.
-      f) Entregar la totalidad de los informes, registros, certificados, respaldos y demás documentos exigidos por la Contratante.
-      g) Mantener la debida coordinación con la contraparte técnica designada durante toda la vigencia del servicio.
+      
+      **a)** Ejecutar íntegramente el servicio contratado conforme a las condiciones establecidas en el proceso.
+      
+      **b)** Mantener durante toda la ejecución personal competente y recursos suficientes para asegurar el cumplimiento de los plazos comprometidos.
+      
+      **c)** Cumplir con toda la normativa laboral, previsional, tributaria, ambiental, sanitaria y de seguridad aplicable.
+      
+      **d)** Adoptar las medidas necesarias para prevenir daños a personas, infraestructura, equipos, mercaderías o activos de terceros.
+      
+      **e)** Informar oportunamente cualquier desviación, interferencia, hallazgo o situación que pueda afectar el desarrollo normal de los trabajos.
+      
+      **f)** Entregar la totalidad de los informes, registros, certificados, respaldos y demás documentos exigidos por la Contratante.
+      
+      **g)** Mantener la debida coordinación con la contraparte técnica designada durante toda la vigencia del servicio.
 
-      3.6 Entregables
+      **3.6 Entregables**
+      
       El adjudicatario deberá proporcionar todos los antecedentes de respaldo requeridos para acreditar la correcta ejecución de los servicios, incluyendo, cuando corresponda:
+      
       - Informes técnicos. 
+      
       - Actas de inicio y término. 
+      
       - Registros fotográficos. 
+      
       - Inventarios. 
+      
       - Protocolos de ejecución. 
+      
       - Certificados de recepción. 
+      
       - Guías de despacho. 
+      
       - Documentación de transporte. 
+      
       - Informes de cierre. 
+      
       - Cualquier otro antecedente exigido en las Bases Técnicas o solicitado fundadamente por la Contratante.
 
-      3.7 Interpretación del Alcance
+      **3.7 Interpretación del Alcance**
+      
       El alcance definido en las presentes Bases deberá interpretarse de manera amplia y suficiente para cumplir íntegramente el objeto de la contratación.
+      
       En consecuencia, se entenderán incorporadas al servicio todas aquellas actividades, recursos, materiales, equipos, medios auxiliares y acciones que, aun cuando no se encuentren expresamente indicados en los documentos del proceso, resulten necesarios para la correcta, segura, completa y oportuna ejecución de los trabajos.
+      
       La eventual omisión de alguna actividad en la oferta del adjudicatario no lo eximirá de su obligación de ejecutarla cuando ésta resulte indispensable para el cumplimiento del objeto contractual, sin que ello genere derecho a cobros, compensaciones o reajustes adicionales para la Contratante.
 
       -----------------------------------------
-      CONTEXTO TÉCNICO PROPORCIONADO POR EL ADMINISTRADOR:
+      CONTEXTO TÉCNICO PROPORCIONADO POR EL ADMINISTRADOR A INYECTAR:
       ${contextoIA}
       `;
 
@@ -211,7 +267,6 @@ export default function GeneradorRFP() {
         systemInstruction: { parts: [{ text: instruccionesSistema }] }
       };
 
-      // USANDO EL ENDPOINT LATEST PARA EVITAR EL ERROR 404
       const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -247,13 +302,18 @@ export default function GeneradorRFP() {
       const zip = new PizZip(content);
       const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
+      // 🔥 EL TRUCO MAGICO: Borramos los asteriscos invisiblemente solo para el Word.
+      // La pantalla web mantiene sus negritas, pero el documento de Word bajará limpio, 
+      // ordenado, con sus saltos de línea intactos y sin "sopa de símbolos".
+      const alcanceLimpioParaWord = alcanceGenerado.replace(/\*/g, '');
+
       doc.setData({
         administrador_nombre: adminSeleccionado.nombre,
         administrador_email: adminSeleccionado.email,
         val_seriedad: valSeriedad,
         val_fiel: valFiel,
         val_vigencia_fiel: valVigenciaFiel,
-        alcance_ia: alcanceGenerado,
+        alcance_ia: alcanceLimpioParaWord,
         cal_liberacion: calLiberacion ? new Date(calLiberacion).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_consultas: calLimiteConsultas ? new Date(calLimiteConsultas).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_respuestas: calRespuestas ? new Date(calRespuestas).toLocaleDateString('es-CL') : '[Sin Fecha]',
@@ -277,6 +337,17 @@ export default function GeneradorRFP() {
       console.error(error);
       alert("Error al generar Word. Verifica las llaves en la plantilla.");
     }
+  };
+
+  // --- FUNCIÓN NATIVA PARA RENDERIZAR NEGRITAS DE LA IA ---
+  const renderTextoConNegritas = (texto) => {
+    if (!texto) return null;
+    return texto.split(/(\*\*.*?\*\*)/g).map((parte, index) => {
+      if (parte.startsWith('**') && parte.endsWith('**')) {
+        return <strong key={index}>{parte.slice(2, -2)}</strong>;
+      }
+      return <span key={index}>{parte}</span>;
+    });
   };
 
   return (
@@ -413,7 +484,7 @@ export default function GeneradorRFP() {
 
         {/* VISUALIZADOR DEL DOCUMENTO */}
         <div style={{ flex: 1, backgroundColor: '#e5e5e5', padding: '20px', borderRadius: '8px', overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
-          <div id="documento-rfp" style={{ backgroundColor: 'white', width: '21cm', minHeight: '29.7cm', padding: '2.5cm', boxShadow: '0 4px 10px rgba(0,0,0,0.15)', fontFamily: 'Arial, sans-serif', fontSize: '10pt', color: '#333', lineHeight: '1.5' }}>
+          <div id="documento-rfp" style={{ backgroundColor: 'white', width: '21cm', minHeight: '29.7cm', padding: '2.5cm', boxShadow: '0 4px 10px rgba(0,0,0,0.15)', fontFamily: 'Arial, sans-serif', fontSize: '10pt', color: '#333', lineHeight: '1.5', textAlign: 'left', whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
             
             <h1 style={{ textAlign: 'center', fontSize: '16pt', color: '#004A99', marginBottom: '20px' }}>Bases Proceso de Solicitud de Propuestas<br/>Condicionado Particular</h1>
             <p style={{ textAlign: 'justify', fontStyle: 'italic' }}>Este documento es propiedad del Titular del Proceso. El contenido de este documento está sujeto a reserva. Este documento no puede ser reproducido, ni en su totalidad ni parcialmente, ni mostrado a terceros que no tengan relación con el Proceso de Solicitud de Propuestas, ni utilizado con propósitos comerciales sin previa autorización escrita del Titular del Proceso.</p>
@@ -451,9 +522,9 @@ export default function GeneradorRFP() {
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>OBJETIVOS</h3>
             <p style={{ textAlign: 'justify' }}>Por medio de este Proceso, la Titular pretende seleccionar una empresa para contratar el suministro y despacho de suministro o servicios para Sodimac, suscribir una carta de adjudicación y/o contrato para la entrega de suministros o servicios en los términos establecidos en esta base especial y base general.</p>
 
-            <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>ALCANCE DEL PROCESO</h3>
-            <div style={{ backgroundColor: '#fffbe6', padding: '15px', border: '1px dashed #ffd700', color: '#856404', fontStyle: 'italic', marginBottom: '20px', whiteSpace: 'pre-wrap' }}>
-              {alcanceGenerado}
+            {/* SECCIÓN DEL ALCANCE CON LA FUNCIÓN DE NEGRITAS INYECTADA */}
+            <div style={{ backgroundColor: '#fffbe6', padding: '15px', border: '1px dashed #ffd700', color: '#856404', fontStyle: 'normal', marginBottom: '20px' }}>
+              {renderTextoConNegritas(alcanceGenerado)}
             </div>
 
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>CONSULTAS Y ACLARACIONES</h3>
