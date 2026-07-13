@@ -84,7 +84,7 @@ export default function GeneradorRFP() {
     });
   };
 
-  // --- EXPORTACIÓN A PDF DINÁMICA (SIN NPM INSTALL) ---
+  // --- EXPORTACIÓN A PDF DINÁMICA (Carga la librería sin romper Vercel) ---
   const exportarPDF = async () => {
     if (!window.html2pdf) {
       await new Promise((resolve, reject) => {
@@ -106,7 +106,7 @@ export default function GeneradorRFP() {
     window.html2pdf().set(opciones).from(elemento).save();
   };
 
-  // --- CONEXIÓN DIRECTA CON GEMINI IA (TEXTO LEGAL BLINDADO) ---
+  // --- CONEXIÓN DIRECTA CON GEMINI IA (TEXTO LEGAL BLINDADO Y SEGURO) ---
   const procesarConIA = async () => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) return alert("❌ Error: Vercel no está leyendo la API Key.");
@@ -182,56 +182,21 @@ export default function GeneradorRFP() {
     }
   };
 
-  // --- FUNCIÓN TRADUCTORA DE MARKDOWN A CÓDIGO NATIVO DE WORD (OOXML) ---
-  const convertirMarkdownAOOXML = (texto) => {
-    if (!texto) return '';
-    const lineas = texto.split('\n');
-    let xml = '';
-    
-    lineas.forEach(linea => {
-      // Si la línea está vacía, creamos un párrafo en blanco para el espaciado
-      if (linea.trim() === '') {
-        xml += '<w:p><w:r><w:t></w:t></w:r></w:p>';
-        return;
-      }
-
-      let runXml = '';
-      const partes = linea.split(/(\*\*.*?\*\*)/g);
-      
-      partes.forEach(parte => {
-        if (parte.startsWith('**') && parte.endsWith('**')) {
-          const textoNegrita = parte.slice(2, -2).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          runXml += `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${textoNegrita}</w:t></w:r>`;
-        } else if (parte) {
-          const textoNormal = parte.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          runXml += `<w:r><w:t xml:space="preserve">${textoNormal}</w:t></w:r>`;
-        }
-      });
-      
-      // Envolvemos la línea en un párrafo nativo alineado obligatoriamente a la izquierda
-      xml += `<w:p><w:pPr><w:jc w:val="left"/></w:pPr>${runXml}</w:p>`;
-    });
-    
-    return xml;
-  };
-
-  // --- MOTOR DE FUSIÓN HACKEADO ---
+  // --- MOTOR DE FUSIÓN DE WORD (TEXTO PLANO LIMPIO Y SEGURO) ---
   const generarWordFinal = async () => {
     try {
       const response = await fetch(URL_PLANTILLA);
       const content = await response.arrayBuffer();
       const zip = new PizZip(content);
-
-      // 🔥 TRUCO NIVEL DIOS: Alterar la plantilla en Memoria RAM sin tocar Supabase.
-      // Entramos al esqueleto del Word y transformamos {alcance_ia} en {@alcance_ia}
-      let docXml = zip.file("word/document.xml").asText();
-      docXml = docXml.replace('{alcance_ia}', '{@alcance_ia}');
-      zip.file("word/document.xml", docXml);
-
       const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
-      // Convertimos el texto generado a código de Microsoft Word
-      const xmlWordCode = convertirMarkdownAOOXML(alcanceGenerado);
+      // Limpiamos los asteriscos de la IA y agregamos el tabulador (\t) para
+      // evitar que Word estire forzosamente los párrafos cortos si la plantilla está justificada.
+      const alcanceLimpioParaWord = alcanceGenerado
+        .replace(/\*\*/g, '')
+        .split('\n')
+        .map(linea => linea.trim() + '\t')
+        .join('\n');
 
       doc.setData({
         administrador_nombre: adminSeleccionado.nombre,
@@ -239,7 +204,7 @@ export default function GeneradorRFP() {
         val_seriedad: valSeriedad,
         val_fiel: valFiel,
         val_vigencia_fiel: valVigenciaFiel,
-        alcance_ia: xmlWordCode, // <-- Inyectamos el código nativo
+        alcance_ia: alcanceLimpioParaWord, // Inyectamos el texto plano seguro
         cal_liberacion: calLiberacion ? new Date(calLiberacion).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_consultas: calLimiteConsultas ? new Date(calLimiteConsultas).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_respuestas: calRespuestas ? new Date(calRespuestas).toLocaleDateString('es-CL') : '[Sin Fecha]',
@@ -265,6 +230,7 @@ export default function GeneradorRFP() {
     }
   };
 
+  // --- RENDERIZADO WEB (MANTIENE LA VISTA BONITA EN PANTALLA) ---
   const renderTextoConNegritas = (texto) => {
     if (!texto) return null;
     return texto.split(/(\*\*.*?\*\*)/g).map((parte, index) => {
@@ -280,7 +246,7 @@ export default function GeneradorRFP() {
       <div style={{ width: '450px', flexShrink: 0, backgroundColor: 'white', padding: '25px', borderRadius: '8px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
         <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>Configuración de Bases RFP</h2>
         
-        {/* FICHA RESUMEN */}
+        {/* 1. FICHA RESUMEN */}
         <div style={{ marginBottom: '25px' }}>
           <h3 style={{ fontSize: '16px', color: '#333' }}>1. Ficha Resumen</h3>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px' }}>Administrador del Proceso</label>
@@ -316,15 +282,16 @@ export default function GeneradorRFP() {
           </div>
         </div>
 
-        {/* INTEGRACIÓN CON IA */}
+        {/* 2. ALCANCE E IA CON CONEXIÓN ACTIVA OCULTA */}
         <div style={{ marginBottom: '25px', backgroundColor: '#eef2f7', padding: '15px', borderRadius: '6px', border: '1px solid #cce5ff' }}>
           <h3 style={{ fontSize: '16px', color: '#004A99', marginTop: 0 }}>2. Contexto para IA (Alcance)</h3>
           
+          <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Ingresa detalles o adjunta antecedentes técnicos de referencia (PDF) para que Gemini redacte.</p>
           <textarea rows="3" placeholder="Ej: Servicio de mantenimiento correctivo..." value={contextoIA} onChange={e => setContextoIA(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}></textarea>
           
           <div style={{ marginTop: '10px', padding: '12px', backgroundColor: 'white', borderRadius: '4px', border: '1px dashed #004A99' }}>
             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', display: 'flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
-              <span style={{ backgroundColor: '#17a2b8', color: 'white', padding: '6px 10px', borderRadius: '4px', marginRight: '10px' }}>📎 Adjuntar Archivos</span>
+              <span style={{ backgroundColor: '#17a2b8', color: 'white', padding: '6px 10px', borderRadius: '4px', marginRight: '10px' }}>📎 Adjuntar Archivo</span>
               <span style={{ color: '#666', fontWeight: 'normal' }}>(Soporta PDF, TXT o Imágenes)</span>
               <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" onChange={manejarCargaArchivos} style={{ display: 'none' }} />
             </label>
@@ -345,11 +312,11 @@ export default function GeneradorRFP() {
           </div>
 
           <button onClick={procesarConIA} disabled={cargandoIA} style={{ width: '100%', padding: '12px', marginTop: '15px', backgroundColor: cargandoIA ? '#ccc' : '#6f42c1', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: cargandoIA ? 'not-allowed' : 'pointer', transition: '0.3s' }}>
-            {cargandoIA ? '⏳ Analizando y redactando...' : '✨ Redactar Alcance Contextualizado'}
+            {cargandoIA ? '⏳ Conectando y redactando con Gemini...' : '✨ Generar Alcance con Gemini IA'}
           </button>
         </div>
 
-        {/* CALENDARIO */}
+        {/* 3. CALENDARIO */}
         <div style={{ marginBottom: '25px' }}>
           <h3 style={{ fontSize: '16px', color: '#333' }}>3. Calendario del Proceso</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
@@ -362,7 +329,7 @@ export default function GeneradorRFP() {
           </div>
         </div>
 
-        {/* CLÁUSULAS ESPECÍFICAS */}
+        {/* 4. CLÁUSULAS ESPECÍFICAS */}
         <div style={{ marginBottom: '25px' }}>
           <h3 style={{ fontSize: '16px', color: '#333' }}>4. Cláusulas Contractuales</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
@@ -373,7 +340,7 @@ export default function GeneradorRFP() {
           </div>
         </div>
 
-        {/* DESPACHO */}
+        {/* 5. DESPACHO */}
         <div style={{ marginBottom: '25px' }}>
           <h3 style={{ fontSize: '16px', color: '#333' }}>5. Lugares de Despacho</h3>
           {lugaresDespacho.map((lugar) => (
@@ -399,7 +366,7 @@ export default function GeneradorRFP() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px', minWidth: 0 }}>
         
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-          <button onClick={generarWordFinal} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>📄 Descargar Word con Formato (Supabase)</button>
+          <button onClick={generarWordFinal} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>📄 Descargar en Word Oficial</button>
           <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Descargar Vista como PDF</button>
         </div>
 
