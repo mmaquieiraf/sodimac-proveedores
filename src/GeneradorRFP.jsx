@@ -106,7 +106,7 @@ export default function GeneradorRFP() {
     window.html2pdf().set(opciones).from(elemento).save();
   };
 
-  // --- CONEXIÓN DIRECTA CON GEMINI IA (TEXTO LEGAL BLINDADO Y SEGURO) ---
+  // --- CONEXIÓN DIRECTA CON GEMINI IA (TEXTOS LEGALES MULTIPLES BLINDADOS) ---
   const procesarConIA = async () => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) return alert("❌ Error: Vercel no está leyendo la API Key.");
@@ -119,10 +119,10 @@ export default function GeneradorRFP() {
         return { inlineData: { mimeType: archivo.type, data: base64Data } };
       }));
 
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO'. REGLA ABSOLUTA DE CUMPLIMIENTO: Los primeros 3 párrafos introductorios y el punto 3.7 son TEXTOS LEGALES INMUTABLES. Debes copiarlos exactamente palabra por palabra de la estructura que te doy. Tu libertad creativa y técnica aplica ÚNICAMENTE a los puntos 3.2, 3.3, 3.4, 3.5 y 3.6 según el contexto del usuario.\n\nFORMATO: Usa **asteriscos dobles** para títulos y listados. Separa TODO párrafo con doble salto de línea.";
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO'. REGLA ABSOLUTA DE CUMPLIMIENTO: Debes COPIAR EXACTAMENTE Y PALABRA POR PALABRA los textos fijos que te entrego en la plantilla, incluyendo introducciones y cierres de puntos. Tu labor consiste ÚNICAMENTE en generar los listados técnicos en los espacios indicados con corchetes [ ] basándote en el contexto.\n\nFORMATO: Usa **asteriscos dobles** para títulos y listados. Separa TODO párrafo o viñeta con un doble salto de línea.";
 
       const promptEstructurado = `
-      Redacta el ALCANCE DEL PROCESO adaptando el contexto técnico, PERO MANTENIENDO INTACTA LA INTRODUCCIÓN Y EL PUNTO 3.7.
+      Redacta el ALCANCE DEL PROCESO adaptando el contexto técnico. DEBES COPIAR EXACTAMENTE EL TEXTO FUERA DE LOS CORCHETES Y SOLO GENERAR EL CONTENIDO DENTRO DE LOS CORCHETES [ ].
 
       --- ESTRUCTURA DE CUMPLIMIENTO OBLIGATORIO ---
 
@@ -138,16 +138,30 @@ export default function GeneradorRFP() {
       [Adapta y redacta técnicamente las letras a), b), c)... basándote en el contexto]
 
       **3.3 Alcances Complementarios**
-      [Genera el texto técnico basándote en el contexto]
+      Sin perjuicio de las actividades específicas descritas en los antecedentes técnicos, el adjudicatario deberá considerar dentro del alcance del servicio todas aquellas labores que resulten necesarias para:
+
+      [Genera aquí el listado de puntos técnicos complementarios basándote en el contexto]
+
+      La Contratante no reconocerá costos adicionales derivados de actividades que, aun cuando no hayan sido expresamente mencionadas en las Bases, sean inherentes, complementarias o necesarias para la correcta ejecución del servicio.
 
       **3.4 Condiciones de Ejecución**
-      [Genera el texto técnico basándote en el contexto]
+      Los servicios deberán ejecutarse en estricto cumplimiento de las disposiciones contenidas en las presentes Bases, los antecedentes técnicos del proceso, la oferta adjudicada, la normativa legal vigente y las instrucciones impartidas por la Contratante.
+      
+      El adjudicatario será responsable de proporcionar la totalidad de los recursos requeridos para la ejecución del servicio, incluyendo, entre otros:
+
+      [Genera aquí el listado de puntos con los recursos requeridos basándote en el contexto]
+
+      Toda coordinación operacional deberá realizarse con la contraparte designada por la Contratante, respetando las restricciones de acceso, horarios, condiciones de operación y medidas de seguridad definidas para cada instalación.
 
       **3.5 Obligaciones del Adjudicatario**
-      [Genera el texto técnico basándote en el contexto]
+      Serán obligaciones esenciales del proveedor adjudicado, entre otras:
+
+      [Genera aquí el listado técnico de obligaciones basándote en el contexto]
 
       **3.6 Entregables**
-      [Genera la lista técnica de entregables basándote en el contexto]
+      El adjudicatario deberá proporcionar todos los antecedentes de respaldo requeridos para acreditar la correcta ejecución de los servicios, incluyendo, cuando corresponda:
+
+      [Genera aquí el listado de puntos con los entregables basándote en el contexto]
 
       **3.7 Interpretación del Alcance**
       El alcance definido en las presentes Bases deberá interpretarse de manera amplia y suficiente para cumplir íntegramente el objeto de la contratación.
