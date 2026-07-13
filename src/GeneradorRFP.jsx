@@ -129,14 +129,14 @@ export default function GeneradorRFP() {
       );
 
       // Instrucción de candado corporativo
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Debes redactar el ALCANCE DEL PROCESO usando la estructura tipo proporcionada. NO modifiques el lenguaje tipo, solo rellena los corchetes [] con el contexto técnico del usuario. IMPORTANTE: Aplica formato de negrita usando asteriscos dobles (ej: **3.2 ...**) a todos los encabezados de sección desde el 3.2 hasta el 3.7 para que resalten visualmente.";
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Debes redactar el ALCANCE DEL PROCESO usando la estructura tipo proporcionada. NO modifiques el lenguaje tipo, solo rellena los corchetes [] con el contexto técnico del usuario.";
 
       const promptEstructurado = `
       Genera el cuerpo del ALCANCE DEL PROCESO siguiendo ESTRICTAMENTE esta estructura. Rellena los campos entre corchetes [ ] basándote en el contexto técnico proporcionado.
 
       --- TEXTO TIPO (NO MODIFICAR ESTRUCTURA NI LENGUAJE BASE): ---
 
-
+      
       El presente Proceso de Licitación tiene por objeto la contratación de los servicios de [DESCRIBIR SERVICIO O ACTIVIDAD PRINCIPAL], a ejecutarse en [UBICACIÓN O INSTALACIONES OBJETO DEL SERVICIO], conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
       La prestación requerida comprenderá la totalidad de las actividades, recursos, suministros, medios humanos, equipos, herramientas, materiales, transportes, coordinaciones, permisos, documentación y demás elementos necesarios para la correcta, completa y oportuna ejecución del servicio, aun cuando éstos no se encuentren expresamente señalados en los documentos del proceso, pero resulten razonablemente necesarios para el cumplimiento de su objeto.
       La sola presentación de una oferta implicará que el oferente declara conocer y aceptar íntegramente las condiciones del proceso, habiendo considerado en su propuesta todos los recursos, riesgos, costos directos e indirectos, obligaciones y exigencias necesarias para la ejecución del servicio.
