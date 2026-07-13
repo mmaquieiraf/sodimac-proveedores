@@ -129,7 +129,7 @@ export default function GeneradorRFP() {
       );
 
       // Instrucción de candado corporativo
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Debes redactar el ALCANCE DEL PROCESO usando la estructura tipo proporcionada. NO modifiques el lenguaje tipo, solo rellena los corchetes [] con el contexto técnico del usuario.";
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Debes redactar el ALCANCE DEL PROCESO usando la estructura tipo proporcionada. NO modifiques el lenguaje tipo, solo rellena los corchetes [] con el contexto técnico del usuario. IMPORTANTE: Aplica formato de negrita usando asteriscos dobles (ej: **3.2 ...**) a todos los encabezados de sección desde el 3.2 hasta el 3.7 para que resalten visualmente.";
 
       const promptEstructurado = `
       Genera el cuerpo del ALCANCE DEL PROCESO siguiendo ESTRICTAMENTE esta estructura. Rellena los campos entre corchetes [ ] basándote en el contexto técnico proporcionado.
