@@ -87,82 +87,137 @@ export default function GeneradorRFP() {
     return `${meses[parseInt(month)-1]} ${year}`;
   };
 
-  // --- EXPORTACIÓN DE PDF DE LA VISTA ---
   const exportarPDF = () => {
     window.print(); 
   };
 
-  // --- TRUCO TÉCNICO: CONVERTIR ARCHIVOS LOCALES A BASE64 PARA LA IA ---
   const transformarArchivoBase64 = (archivo) => {
     return new Promise((resolve, reject) => {
       const lector = new FileReader();
       lector.readAsDataURL(archivo);
-      lector.onload = () => {
-        const cadenaBase64 = lector.result.split(',')[1];
-        resolve(cadenaBase64);
-      };
+      lector.onload = () => resolve(lector.result.split(',')[1]);
       lector.onerror = (error) => reject(error);
     });
   };
 
-  // --- CONEXIÓN DIRECTA CON GEMINI IA (ROBUSTA Y CON MANEJO DE ERRORES) ---
+  // --- CONEXIÓN DIRECTA CON GEMINI IA (CON ESTRUCTURA ESTRICTA) ---
   const procesarConIA = async () => {
-    // Leemos la clave secreta desde las variables de Vercel
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-    // 1. Verificación de Vercel
     if (!apiKey) {
-      alert("❌ Error: Vercel no está leyendo la API Key. \n\nEsto sucede porque tu variable VITE_GEMINI_API_KEY está configurada solo para 'Production' y estás viendo una URL de 'Preview'. Ve a Vercel, edita la variable para que marque las casillas 'Preview' y 'Development' también, y redespliega.");
+      alert("❌ Error: Vercel no está leyendo la API Key. Asegúrate de haber guardado VITE_GEMINI_API_KEY y hecho un Redeploy.");
       return;
     }
 
     setCargandoIA(true);
 
     try {
-      // 2. Filtro de archivos (Solo dejamos pasar lo que Gemini entiende nativamente por web)
       const archivosValidos = archivosContexto.filter(f => 
-        f.type === 'application/pdf' || 
-        f.type.startsWith('image/') || 
-        f.type.startsWith('text/')
+        f.type === 'application/pdf' || f.type.startsWith('image/') || f.type.startsWith('text/')
       );
 
       const archivosInvalidos = archivosContexto.filter(f => !archivosValidos.includes(f));
-
       if (archivosInvalidos.length > 0) {
-        alert(`⚠️ Atención: Archivos como Excel o Word (${archivosInvalidos.map(a => a.name).join(', ')}) no son legibles directamente por la IA sin un servidor intermedio.\n\nEl sistema ignorará estos archivos y continuará generando el texto con lo que escribiste en el cuadro y los PDF/Imágenes que hayas subido.\n\n*Consejo: Guarda tus Word/Excel como PDF si quieres que la IA los lea.*`);
+        alert(`⚠️ Atención: Archivos como Excel o Word (${archivosInvalidos.map(a => a.name).join(', ')}) no son legibles directamente por la IA web. El sistema los ignorará. Por favor, súbelos en PDF si deseas que sean analizados.`);
       }
 
       const partesDocumentos = await Promise.all(
         archivosValidos.map(async (archivo) => {
           const base64Data = await transformarArchivoBase64(archivo);
-          return {
-            inlineData: {
-              mimeType: archivo.type,
-              data: base64Data
-            }
-          };
+          return { inlineData: { mimeType: archivo.type, data: base64Data } };
         })
       );
 
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones y redacción de bases técnicas de licitación (RFP) para Sodimac Chile. Tu tarea es redactar el cuerpo del 'ALCANCE DEL PROCESO' correspondiente a los puntos del 3.2 al 3.7. Debes utilizar un tono técnico, sumamente riguroso, formal y preciso en español de Chile corporativo. Explica el despliegue, la ejecución, las obligaciones operativas del contratista y los niveles de servicio esperados.";
+      // Instrucción de candado corporativo
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac Chile. Tu única tarea es inyectar contexto técnico dentro de una estructura de bases de licitación (RFP) ya definida. NO puedes inventar secciones nuevas, NO puedes cambiar el tono corporativo y NO debes asumir compra de equipos nuevos, ya que se trata de mantenimiento correctivo.";
 
-      const promptEstructurado = `Genera un alcance técnico completo y robusto para una propuesta RFP basado en las siguientes especificaciones:\n\nDetalles ingresados por el administrador:\n${contextoIA}\n\nInstrucciones críticas:\n- Lee minuciosamente todos los documentos adjuntos (si existen) y extrae sus pautas técnicas como contexto matriz.\n- Redacta de corrido y estructuradamente con párrafos bien diferenciados.\n- No repitas títulos generales ni introducciones genéricas, ve directo al desarrollo del clausulado de alcance.\n- Respeta la separación de párrafos usando saltos de línea claros.`;
+      // El Molde Exacto del usuario
+      const promptEstructurado = `
+      Genera el cuerpo del ALCANCE DEL PROCESO utilizando ESTRICTAMENTE la siguiente plantilla. 
+      Rellena las etiquetas [INSERTAR DETALLE AQUÍ] con la información proporcionada por el administrador y los anexos técnicos, pero NO modifiques las palabras base, ni borres las viñetas originales. El punto 3.3 y 3.7 NO SE TOCAN.
+
+      Estructura Obligatoria:
+
+      3.2 Alcance de los Servicios
+      El proveedor adjudicado deberá ejecutar la totalidad de las actividades contempladas en el alcance definido para el proceso, incluyendo aquellas labores complementarias, accesorias o necesarias para la correcta materialización del servicio contratado. Dependiendo de la naturaleza de la contratación, el alcance podrá considerar una o más de las siguientes actividades:
+      a) Levantamiento y Diagnóstico Inicial
+      Cuando corresponda, el adjudicatario deberá efectuar un levantamiento técnico previo de los equipos, instalaciones, activos o elementos objeto de intervención, verificando su estado, ubicación, cantidad, condiciones de operación y cualquier otra información relevante para la adecuada planificación y ejecución de los trabajos. El levantamiento deberá quedar respaldado mediante registros documentales y/o fotográficos. [INSERTAR DETALLE AQUÍ: Especifica qué equipos o áreas particulares se deben diagnosticar según el contexto].
+      b) Desinstalación, Desmontaje o Retiro
+      El adjudicatario deberá ejecutar las labores de desmontaje, desinstalación, desconexión, retiro, segregación y manejo de los equipos, componentes o elementos comprendidos dentro del alcance del proceso, considerando todas las actividades necesarias para su correcta ejecución. Salvo indicación expresa en contrario, se entenderá que forman parte del alcance todas aquellas estructuras, fijaciones, soportes, accesorios, canalizaciones, conexiones y elementos asociados que resulten necesarios de retirar para completar adecuadamente la intervención. [INSERTAR DETALLE AQUÍ: Añade especificaciones técnicas si el contexto lo requiere].
+      c) Embalaje, Identificación y Acondicionamiento
+      Cuando el servicio contemple el retiro o traslado de activos, el adjudicatario será responsable de su adecuado acondicionamiento, protección, embalaje, rotulación, identificación, consolidación y preparación para transporte o almacenamiento. La metodología utilizada deberá asegurar la conservación, integridad, trazabilidad y resguardo de los activos durante todas las etapas del servicio.
+      d) Transporte y Logística
+      Cuando corresponda, el adjudicatario deberá ejecutar todas las actividades asociadas a la carga, transporte, descarga, traslado, almacenamiento temporal y entrega de los bienes o materiales comprendidos dentro del alcance contractual. Todos los costos asociados a estas actividades deberán considerarse incluidos en la oferta económica, salvo que las Bases establezcan expresamente una condición distinta.
+      e) Reinstalación o Puesta en Servicio
+      Cuando así se establezca en las Especificaciones Técnicas, el alcance podrá contemplar la reinstalación, montaje, conexión, configuración, pruebas funcionales, puesta en marcha o cualquier otra actividad necesaria para restituir la operación de los equipos o sistemas intervenidos. [INSERTAR DETALLE AQUÍ: Especifica labores de mantenimiento correctivo y puesta en marcha según el contexto].
+
+      3.3 Alcances Complementarios
+      Sin perjuicio de las actividades específicas descritas en los antecedentes técnicos, el adjudicatario deberá considerar dentro del alcance del servicio todas aquellas labores que resulten necesarias para:
+      - Garantizar la correcta ejecución de los trabajos. 
+      - Mantener la continuidad operacional de las instalaciones cuando corresponda. 
+      - Resguardar la seguridad de las personas y bienes involucrados. 
+      - Proteger la infraestructura existente. 
+      - Cumplir con la normativa legal y reglamentaria aplicable. 
+      - Dar cumplimiento a las exigencias de calidad definidas por la Contratante. 
+      La Contratante no reconocerá costos adicionales derivados de actividades que, aun cuando no hayan sido expresamente mencionadas en las Bases, sean inherentes, complementarias o necesarias para la correcta ejecución del servicio.
+
+      3.4 Condiciones de Ejecución
+      Los servicios deberán ejecutarse en estricto cumplimiento de las disposiciones contenidas en las presentes Bases, los antecedentes técnicos del proceso, la oferta adjudicada, la normativa legal vigente y las instrucciones impartidas por la Contratante. El adjudicatario será responsable de proporcionar la totalidad de los recursos requeridos para la ejecución del servicio, incluyendo, entre otros:
+      - Personal calificado y competente. 
+      - Supervisión técnica. 
+      - Herramientas y equipos de trabajo. 
+      - Equipos especiales de apoyo. 
+      - Vehículos y medios de transporte. 
+      - Equipos de izaje y elevación. 
+      - Señalización y segregación de áreas. 
+      - Elementos de Protección Personal (EPP). 
+      - Documentación técnica y administrativa. 
+      - Permisos, certificaciones y autorizaciones que resulten exigibles.
+      [INSERTAR DETALLE AQUÍ: Agrega viñetas adicionales de recursos exigidos por el contexto si las hay]. 
+      Toda coordinación operacional deberá realizarse con la contraparte designada por la Contratante, respetando las restricciones de acceso, horarios, condiciones de operación y medidas de seguridad definidas para cada instalación.
+
+      3.5 Obligaciones del Adjudicatario
+      Serán obligaciones esenciales del proveedor adjudicado, entre otras:
+      a) Ejecutar íntegramente el servicio contratado conforme a las condiciones establecidas en el proceso.
+      b) Mantener durante toda la ejecución personal competente y recursos suficientes para asegurar el cumplimiento de los plazos comprometidos.
+      c) Cumplir con toda la normativa laboral, previsional, tributaria, ambiental, sanitaria y de seguridad aplicable.
+      d) Adoptar las medidas necesarias para prevenir daños a personas, infraestructura, equipos, mercaderías o activos de terceros.
+      e) Informar oportunamente cualquier desviación, interferencia, hallazgo o situación que pueda afectar el desarrollo normal de los trabajos.
+      f) Entregar la totalidad de los informes, registros, certificados, respaldos y demás documentos exigidos por la Contratante.
+      g) Mantener la debida coordinación con la contraparte técnica designada durante toda la vigencia del servicio.
+      [INSERTAR DETALLE AQUÍ: Añade obligaciones adicionales según el contexto proporcionado].
+
+      3.6 Entregables
+      El adjudicatario deberá proporcionar todos los antecedentes de respaldo requeridos para acreditar la correcta ejecución de los servicios, incluyendo, cuando corresponda:
+      - Informes técnicos. 
+      - Actas de inicio y término. 
+      - Registros fotográficos. 
+      - Inventarios. 
+      - Protocolos de ejecución. 
+      - Certificados de recepción. 
+      - Guías de despacho. 
+      - Documentación de transporte. 
+      - Informes de cierre. 
+      - Cualquier otro antecedente exigido en las Bases Técnicas o solicitado fundadamente por la Contratante.
+      [INSERTAR DETALLE AQUÍ: Añade informes o entregables adicionales solicitados en el contexto].
+
+      3.7 Interpretación del Alcance
+      El alcance definido en las presentes Bases deberá interpretarse de manera amplia y suficiente para cumplir íntegramente el objeto de la contratación.
+      En consecuencia, se entenderán incorporadas al servicio todas aquellas actividades, recursos, materiales, equipos, medios auxiliares y acciones que, aun cuando no se encuentren expresamente indicados en los documentos del proceso, resulten necesarios para la correcta, segura, completa y oportuna ejecución de los trabajos.
+      La eventual omisión de alguna actividad en la oferta del adjudicatario no lo eximirá de su obligación de ejecutarla cuando ésta resulte indispensable para el cumplimiento del objeto contractual, sin que ello genere derecho a cobros, compensaciones o reajustes adicionales para la Contratante.
+
+      -----------------------------------------
+      DATOS DEL ADMINISTRADOR (CONTEXTO TÉCNICO A INYECTAR):
+      ${contextoIA}
+      `;
 
       const payload = {
-        contents: [
-          {
-            parts: [
-              { text: promptEstructurado },
-              ...partesDocumentos
-            ]
-          }
-        ],
-        systemInstruction: {
-          parts: [{ text: instruccionesSistema }]
-        }
+        contents: [{ parts: [{ text: promptEstructurado }, ...partesDocumentos] }],
+        systemInstruction: { parts: [{ text: instruccionesSistema }] }
       };
 
-      const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+      // USANDO EL ENDPOINT LATEST PARA EVITAR EL ERROR 404
+      const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -170,21 +225,20 @@ export default function GeneradorRFP() {
 
       const datosRecibidos = await respuestaApi.json();
 
-      // 3. Interceptor del error real de Google
       if (!respuestaApi.ok) {
         console.error("Error devuelto por Google:", datosRecibidos);
-        throw new Error(datosRecibidos.error?.message || `Google rechazó la conexión. Código: ${respuestaApi.status}`);
+        throw new Error(datosRecibidos.error?.message || `Código: ${respuestaApi.status}`);
       }
 
       if (datosRecibidos.candidates && datosRecibidos.candidates[0]?.content?.parts[0]?.text) {
         setAlcanceGenerado(datosRecibidos.candidates[0].content.parts[0].text);
       } else {
-        throw new Error("La IA no devolvió un formato de texto válido.");
+        throw new Error("La IA no devolvió texto.");
       }
 
     } catch (error) {
-      console.error("Fallo de ejecución:", error);
-      alert(`⚠️ Fallo en conexión con Gemini:\n\n${error.message}`);
+      console.error("Fallo:", error);
+      alert(`⚠️ Fallo de conexión:\n\n${error.message}`);
     } finally {
       setCargandoIA(false);
     }
@@ -226,7 +280,7 @@ export default function GeneradorRFP() {
       saveAs(out, `Bases_RFP_${adminSeleccionado.nombre.replace(' ', '_')}.docx`);
     } catch (error) {
       console.error(error);
-      alert("Error al generar Word. Verifica que las llaves del Word coincidan con el motor de render.");
+      alert("Error al generar Word. Verifica las llaves en la plantilla.");
     }
   };
 
@@ -278,7 +332,7 @@ export default function GeneradorRFP() {
           <h3 style={{ fontSize: '16px', color: '#004A99', marginTop: 0 }}>2. Contexto para IA (Alcance)</h3>
           
           <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Ingresa detalles o adjunta antecedentes técnicos de referencia (PDF) para que Gemini redacte.</p>
-          <textarea rows="3" placeholder="Ej: Servicio de instalación de cámaras CCTV..." value={contextoIA} onChange={e => setContextoIA(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}></textarea>
+          <textarea rows="3" placeholder="Ej: Servicio de mantenimiento correctivo..." value={contextoIA} onChange={e => setContextoIA(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}></textarea>
           
           <div style={{ marginTop: '10px', padding: '12px', backgroundColor: 'white', borderRadius: '4px', border: '1px dashed #004A99' }}>
             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', display: 'flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
