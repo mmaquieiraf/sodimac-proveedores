@@ -126,7 +126,7 @@ export default function GeneradorRFP() {
 
       --- ESTRUCTURA DE CUMPLIMIENTO OBLIGATORIO ---
 
-      ALCANCE DEL PROCESO
+      
       
       El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[INSERTA AQUÍ EL SERVICIO DEL CONTEXTO]**, a ejecutarse en **[INSERTA AQUÍ LA UBICACIÓN DEL CONTEXTO]**, conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
       
