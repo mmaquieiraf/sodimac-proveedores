@@ -217,7 +217,7 @@ export default function GeneradorRFP() {
       };
 
       // USANDO EL ENDPOINT LATEST PARA EVITAR EL ERROR 404
-      const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+      const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
