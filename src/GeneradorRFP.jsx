@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
-import html2pdf from 'html2pdf.js';
 
 // URL de tu plantilla base en el Storage público de Supabase
 const URL_PLANTILLA = "https://zpxptembhqlmpkbctvml.supabase.co/storage/v1/object/public/plantillas/plantilla-rfp-sodimac.docx";
@@ -85,6 +84,7 @@ export default function GeneradorRFP() {
     });
   };
 
+  // --- EXPORTACIÓN A PDF DINÁMICA (SIN NPM INSTALL) ---
   const exportarPDF = async () => {
     if (!window.html2pdf) {
       await new Promise((resolve, reject) => {
@@ -106,6 +106,7 @@ export default function GeneradorRFP() {
     window.html2pdf().set(opciones).from(elemento).save();
   };
 
+  // --- CONEXIÓN DIRECTA CON GEMINI IA (TEXTO LEGAL BLINDADO) ---
   const procesarConIA = async () => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) return alert("❌ Error: Vercel no está leyendo la API Key.");
@@ -118,34 +119,44 @@ export default function GeneradorRFP() {
         return { inlineData: { mimeType: archivo.type, data: base64Data } };
       }));
 
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar TODO el 'ALCANCE DEL PROCESO', desde la introducción hasta el punto 3.7. Debes usar la estructura base proporcionada, pero ADAPTANDO Y EXPANDIENDO el contenido según los archivos técnicos entregados. \n\nREGLAS DE FORMATO OBLIGATORIAS:\n1. Usa **asteriscos dobles** para las negritas en los títulos.\n2. Usa **asteriscos dobles** en los listados hasta los dos puntos.\n3. Separa CADA párrafo con un DOBLE SALTO DE LÍNEA.";
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO'. REGLA ABSOLUTA DE CUMPLIMIENTO: Los primeros 3 párrafos introductorios y el punto 3.7 son TEXTOS LEGALES INMUTABLES. Debes copiarlos exactamente palabra por palabra de la estructura que te doy. Tu libertad creativa y técnica aplica ÚNICAMENTE a los puntos 3.2, 3.3, 3.4, 3.5 y 3.6 según el contexto del usuario.\n\nFORMATO: Usa **asteriscos dobles** para títulos y listados. Separa TODO párrafo con doble salto de línea.";
 
       const promptEstructurado = `
-      Basándote en el siguiente contexto y en los documentos adjuntos, redacta el texto completo del ALCANCE DEL PROCESO. 
-      Toma esta estructura base y expande sus puntos para que calcen con el servicio licitado:
-      
+      Redacta el ALCANCE DEL PROCESO adaptando el contexto técnico, PERO MANTENIENDO INTACTA LA INTRODUCCIÓN Y EL PUNTO 3.7.
+
+      --- ESTRUCTURA DE CUMPLIMIENTO OBLIGATORIO ---
+
       ALCANCE DEL PROCESO
-      El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[ADAPTAR SERVICIO]**, a ejecutarse en **[ADAPTAR UBICACIÓN]**... [Mantén la legalidad introductoria]
       
+      El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[INSERTA AQUÍ EL SERVICIO DEL CONTEXTO]**, a ejecutarse en **[INSERTA AQUÍ LA UBICACIÓN DEL CONTEXTO]**, conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
+      
+      La prestación requerida comprenderá la totalidad de las actividades, recursos, suministros, medios humanos, equipos, herramientas, materiales, transportes, coordinaciones, permisos, documentación y demás elementos necesarios para la correcta, completa y oportuna ejecución del servicio, aun cuando éstos no se encuentren expresamente señalados en los documentos del proceso, pero resulten razonablemente necesarios para el cumplimiento de su objeto.
+      
+      La sola presentación de una oferta implicará que el oferente declara conocer y aceptar íntegramente las condiciones del proceso, habiendo considerado en su propuesta todos los recursos, riesgos, costos directos e indirectos, obligaciones y exigencias necesarias para la ejecución del servicio.
+
       **3.2 Alcance de los Servicios**
-      [Adapta y genera las letras a), b), c)... según el servicio técnico específico]
-      
+      [Adapta y redacta técnicamente las letras a), b), c)... basándote en el contexto]
+
       **3.3 Alcances Complementarios**
-      [Mantén la base de continuidad y agrega lo que exija el contexto]
-      
+      [Genera el texto técnico basándote en el contexto]
+
       **3.4 Condiciones de Ejecución**
-      [Agrega normativas, herramientas o personal especializado]
-      
+      [Genera el texto técnico basándote en el contexto]
+
       **3.5 Obligaciones del Adjudicatario**
-      [Expande sumando responsabilidades operativas]
-      
+      [Genera el texto técnico basándote en el contexto]
+
       **3.6 Entregables**
-      [Modifica y expande la lista de entregables]
-      
+      [Genera la lista técnica de entregables basándote en el contexto]
+
       **3.7 Interpretación del Alcance**
-      [Mantén texto legal estándar]
+      El alcance definido en las presentes Bases deberá interpretarse de manera amplia y suficiente para cumplir íntegramente el objeto de la contratación.
+
+      En consecuencia, se entenderán incorporadas al servicio todas aquellas actividades, recursos, materiales, equipos, medios auxiliares y acciones que, aun cuando no se encuentren expresamente indicados en los documentos del proceso, resulten necesarios para la correcta, segura, completa y oportuna ejecución de los trabajos.
+
+      La eventual omisión de alguna actividad en la oferta del adjudicatario no lo eximirá de su obligación de ejecutarla cuando ésta resulte indispensable para el cumplimiento del objeto contractual, sin que ello genere derecho a cobros, compensaciones o reajustes adicionales para la Contratante.
       
-      --- CONTEXTO TÉCNICO ---
+      --- CONTEXTO TÉCNICO A ANALIZAR ---
       ${contextoIA}
       `;
 
@@ -189,7 +200,6 @@ export default function GeneradorRFP() {
       
       partes.forEach(parte => {
         if (parte.startsWith('**') && parte.endsWith('**')) {
-          // Limpiamos caracteres especiales y aplicamos etiqueta de Negrita (<w:b/>)
           const textoNegrita = parte.slice(2, -2).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           runXml += `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${textoNegrita}</w:t></w:r>`;
         } else if (parte) {
@@ -199,7 +209,6 @@ export default function GeneradorRFP() {
       });
       
       // Envolvemos la línea en un párrafo nativo alineado obligatoriamente a la izquierda
-      // Esto previene que Microsoft Word estire las letras
       xml += `<w:p><w:pPr><w:jc w:val="left"/></w:pPr>${runXml}</w:p>`;
     });
     
@@ -215,7 +224,6 @@ export default function GeneradorRFP() {
 
       // 🔥 TRUCO NIVEL DIOS: Alterar la plantilla en Memoria RAM sin tocar Supabase.
       // Entramos al esqueleto del Word y transformamos {alcance_ia} en {@alcance_ia}
-      // El "@" le dice a la librería que inyectaremos código de diseño de Word, no texto plano.
       let docXml = zip.file("word/document.xml").asText();
       docXml = docXml.replace('{alcance_ia}', '{@alcance_ia}');
       zip.file("word/document.xml", docXml);
@@ -434,6 +442,7 @@ export default function GeneradorRFP() {
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>OBJETIVOS</h3>
             <p style={{ textAlign: 'justify' }}>Por medio de este Proceso, la Titular pretende seleccionar una empresa para contratar el suministro y despacho de suministro o servicios para Sodimac, suscribir una carta de adjudicación y/o contrato para la entrega de suministros o servicios en los términos establecidos en esta base especial y base general.</p>
 
+            {/* SECCIÓN DEL ALCANCE CON LA FUNCIÓN DE NEGRITAS INYECTADA */}
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px', marginTop: '20px' }}>ALCANCE DEL PROCESO</h3>
             <div style={{ backgroundColor: '#fffbe6', padding: '15px', border: '1px dashed #ffd700', color: '#333', fontStyle: 'normal', marginBottom: '20px' }}>
               {renderTextoConNegritas(alcanceGenerado)}
