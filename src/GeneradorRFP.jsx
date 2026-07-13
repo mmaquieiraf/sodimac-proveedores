@@ -27,7 +27,7 @@ export default function GeneradorRFP() {
   // --- ESTADOS PARA ALCANCE E INTEGRACIÓN CON GEMINI IA ---
   const [contextoIA, setContextoIA] = useState('');
   const [archivosContexto, setArchivosContexto] = useState([]);
-  const [alcanceGenerado, setAlcanceGenerado] = useState('El alcance detallado será generado por la IA en base a los antecedentes proporcionados en esta sección...');
+  const [alcanceGenerado, setAlcanceGenerado] = useState('El alcance detallado será generado por la IA integrando los aspectos técnicos de sus anexos...');
   const [cargandoIA, setCargandoIA] = useState(false);
 
   // --- ESTADOS PARA EL CALENDARIO ---
@@ -87,10 +87,6 @@ export default function GeneradorRFP() {
     return `${meses[parseInt(month)-1]} ${year}`;
   };
 
-  const exportarPDF = () => {
-    window.print(); 
-  };
-
   const transformarArchivoBase64 = (archivo) => {
     return new Promise((resolve, reject) => {
       const lector = new FileReader();
@@ -100,12 +96,38 @@ export default function GeneradorRFP() {
     });
   };
 
-  // --- CONEXIÓN DIRECTA CON GEMINI IA (CON ESTRUCTURA ESTRICTA Y NEGRITAS) ---
+  // --- EXPORTACIÓN A PDF DINÁMICA (SIN NPM INSTALL) ---
+  const exportarPDF = async () => {
+    // Si la librería no está cargada en el navegador, la inyectamos en vivo desde internet
+    if (!window.html2pdf) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    // Una vez cargada, tomamos la "foto" del documento y generamos el PDF
+    const elemento = document.getElementById('documento-rfp');
+    const opciones = {
+      margin:       [15, 15, 15, 15], 
+      filename:     `Bases_RFP_${adminSeleccionado.nombre.replace(' ', '_')}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true }, 
+      jsPDF:        { unit: 'mm', format: 'letter', orientation: 'portrait' }
+    };
+
+    window.html2pdf().set(opciones).from(elemento).save();
+  };
+
+  // --- CONEXIÓN DIRECTA CON GEMINI IA (TEXTO LIBRE, FORMATO ESTRICTO) ---
   const procesarConIA = async () => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
     if (!apiKey) {
-      alert("❌ Error: Vercel no está leyendo la API Key. Asegúrate de haber guardado VITE_GEMINI_API_KEY y hecho un Redeploy.");
+      alert("❌ Error: Vercel no está leyendo la API Key.");
       return;
     }
 
@@ -116,11 +138,6 @@ export default function GeneradorRFP() {
         f.type === 'application/pdf' || f.type.startsWith('image/') || f.type.startsWith('text/')
       );
 
-      const archivosInvalidos = archivosContexto.filter(f => !archivosValidos.includes(f));
-      if (archivosInvalidos.length > 0) {
-        alert(`⚠️ Atención: Archivos como Excel o Word (${archivosInvalidos.map(a => a.name).join(', ')}) no son legibles directamente por la IA web. El sistema los ignorará. Por favor, súbelos en PDF si deseas que sean analizados.`);
-      }
-
       const partesDocumentos = await Promise.all(
         archivosValidos.map(async (archivo) => {
           const base64Data = await transformarArchivoBase64(archivo);
@@ -128,137 +145,38 @@ export default function GeneradorRFP() {
         })
       );
 
-      // Instrucción estricta para formato y saltos de línea
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Debes redactar el ALCANCE DEL PROCESO usando la estructura tipo proporcionada. IMPORTANTE: Usa formato Markdown para las negritas (**texto**) y deja OBLIGATORIAMENTE un salto de línea en blanco (doble enter) entre cada párrafo, título e ítem de las listas para dar el espaciado correcto.";
+      // Instrucción maestra: Libertad contextual, pero esclavitud al formato
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar TODO el 'ALCANCE DEL PROCESO', desde la introducción hasta el punto 3.7. Debes usar la estructura base proporcionada, pero ADAPTANDO, EXPANDIENDO Y MODIFICANDO el contenido de todos los puntos (3.2, 3.3, 3.4, 3.5, 3.6) según los archivos y el contexto técnico entregado. \n\nREGLAS DE FORMATO OBLIGATORIAS:\n1. Usa **asteriscos dobles** para las negritas en los títulos (ej: **3.2 Alcance de los Servicios**).\n2. Usa **asteriscos dobles** en las letras o viñetas de los listados hasta los dos puntos (ej: **a) Instalación y Configuración:**).\n3. Separa CADA párrafo y elemento de lista con un DOBLE SALTO DE LÍNEA (línea en blanco) para asegurar el espaciado correcto en el documento final.";
 
       const promptEstructurado = `
-      Genera el cuerpo del ALCANCE DEL PROCESO siguiendo ESTRICTAMENTE esta estructura. 
-      REGLAS DE FORMATO:
-      1. Usa negritas (**texto**) para el servicio y la ubicación en el primer párrafo.
-      2. Usa negritas para los encabezados numerados (ej: **3.2 Alcance de los Servicios**).
-      3. Usa negritas en los listados solo hasta los dos puntos (ej: **a) Levantamiento y Diagnóstico Inicial:**).
-      4. Deja SIEMPRE una línea en blanco entre cada párrafo, título y letra del listado.
-
-      --- TEXTO TIPO (NO MODIFICAR ESTRUCTURA NI LENGUAJE BASE): ---
-
-      ALCANCE DEL PROCESO
+      Basándote en el siguiente contexto y en los documentos técnicos adjuntos, redacta el texto completo del ALCANCE DEL PROCESO. 
       
-      El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[INSERTA DESCRIBIR SERVICIO O ACTIVIDAD PRINCIPAL]**, a ejecutarse en **[INSERTA UBICACIÓN O INSTALACIONES OBJETO DEL SERVICIO]**, conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
+      Debes tomar esta estructura base y reescribir/expandir sus puntos para que calcen perfectamente con el servicio que se está licitando (añadiendo obligaciones técnicas, entregables, condiciones de ejecución específicas, etc. que se mencionen en el contexto).
       
-      La prestación requerida comprenderá la totalidad de las actividades, recursos, suministros, medios humanos, equipos, herramientas, materiales, transportes, coordinaciones, permisos, documentación y demás elementos necesarios para la correcta, completa y oportuna ejecución del servicio, aun cuando éstos no se encuentren expresamente señalados en los documentos del proceso, pero resulten razonablemente necesarios para el cumplimiento de su objeto.
+      ESTRUCTURA BASE A ADAPTAR Y EXPANDIR INTEGRAMENTE:
       
-      La sola presentación de una oferta implicará que el oferente declara conocer y aceptar íntegramente las condiciones del proceso, habiendo considerado en su propuesta todos los recursos, riesgos, costos directos e indirectos, obligaciones y exigencias necesarias para la ejecución del servicio.
-
+  
+      El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[ADAPTAR SERVICIO]**, a ejecutarse en **[ADAPTAR UBICACIÓN]**... [Mantén la legalidad de los párrafos introductorios base]
+      
       **3.2 Alcance de los Servicios**
+      [Adapta y genera las letras a), b), c)... según el servicio técnico específico del contexto. No olvides poner en negrita hasta los dos puntos]
       
-      El proveedor adjudicado deberá ejecutar la totalidad de las actividades contempladas en el alcance definido para el proceso, incluyendo aquellas labores complementarias, accesorias o necesarias para la correcta materialización del servicio contratado. Dependiendo de la naturaleza de la contratación, el alcance podrá considerar una o más de las siguientes actividades:
-      
-      **a) Levantamiento y Diagnóstico Inicial:** Cuando corresponda, el adjudicatario deberá efectuar un levantamiento técnico previo de los equipos, instalaciones, activos o elementos objeto de intervención, verificando su estado, ubicación, cantidad, condiciones de operación y cualquier otra información relevante para la adecuada planificación y ejecución de los trabajos. El levantamiento deberá quedar respaldado mediante registros documentales y/o fotográficos, los cuales podrán ser requeridos por la Contratante como condición previa al inicio de las actividades.
-      
-      **b) Desinstalación, Desmontaje o Retiro:** El adjudicatario deberá ejecutar las labores de desmontaje, desinstalación, desconexión, retiro, segregación y manejo de los equipos, componentes o elementos comprendidos dentro del alcance del proceso. Salvo indicación expresa en contrario, se entenderá que forman parte del alcance todas aquellas estructuras, fijaciones, soportes, accesorios, canalizaciones, conexiones y elementos asociados que resulten necesarios de retirar para completar adecuadamente la intervención.
-      
-      **c) Embalaje, Identificación y Acondicionamiento:** Cuando el servicio contemple el retiro o traslado de activos, el adjudicatario será responsable de su adecuado acondicionamiento, protección, embalaje, rotulación, identificación, consolidación y preparación para transporte o almacenamiento. La metodología utilizada deberá asegurar la conservación, integridad, trazabilidad y resguardo de los activos durante todas las etapas del servicio.
-      
-      **d) Transporte y Logística:** Cuando corresponda, el adjudicatario deberá ejecutar todas las actividades asociadas a la carga, transporte, descarga, traslado, almacenamiento temporal y entrega de los bienes o materiales comprendidos dentro del alcance contractual. Todos los costos asociados a estas actividades deberán considerarse incluidos en la oferta económica, salvo que las Bases establezcan expresamente una condición distinta.
-      
-      **e) Reinstalación o Puesta en Servicio:** Cuando así se establezca en las Especificaciones Técnicas, el alcance podrá contemplar la reinstalación, montaje, conexión, configuración, pruebas funcionales, puesta en marcha o cualquier otra actividad necesaria para restituir la operación de los equipos o sistemas intervenidos.
-
       **3.3 Alcances Complementarios**
+      [Mantén la base de continuidad operacional y resguardo, pero agrega cualquier otro alcance complementario que exija el contexto técnico]
       
-      Sin perjuicio de las actividades específicas descritas en los antecedentes técnicos, el adjudicatario deberá considerar dentro del alcance del servicio todas aquellas labores que resulten necesarias para:
-      
-      - Garantizar la correcta ejecución de los trabajos. 
-      
-      - Mantener la continuidad operacional de las instalaciones cuando corresponda. 
-      
-      - Resguardar la seguridad de las personas y bienes involucrados. 
-      
-      - Proteger la infraestructura existente. 
-      
-      - Cumplir con la normativa legal y reglamentaria aplicable. 
-      
-      - Dar cumplimiento a las exigencias de calidad definidas por la Contratante. 
-      
-      La Contratante no reconocerá costos adicionales derivados de actividades que, aun cuando no hayan sido expresamente mencionadas en las Bases, sean inherentes, complementarias o necesarias para la correcta ejecución del servicio.
-
       **3.4 Condiciones de Ejecución**
+      [Agrega aquí normativas específicas, certificaciones, herramientas o personal especializado que el proveedor haya puesto en sus anexos técnicos]
       
-      Los servicios deberán ejecutarse en estricto cumplimiento de las disposiciones contenidas en las presentes Bases, los antecedentes técnicos del proceso, la oferta adjudicada, la normativa legal vigente y las instrucciones impartidas por la Contratante. El adjudicatario será responsable de proporcionar la totalidad de los recursos requeridos para la ejecución del servicio, incluyendo, entre otros:
-      
-      - Personal calificado y competente. 
-      
-      - Supervisión técnica. 
-      
-      - Herramientas y equipos de trabajo. 
-      
-      - Equipos especiales de apoyo. 
-      
-      - Vehículos y medios de transporte. 
-      
-      - Equipos de izaje y elevación. 
-      
-      - Señalización y segregación de áreas. 
-      
-      - Elementos de Protección Personal (EPP). 
-      
-      - Documentación técnica y administrativa. 
-      
-      - Permisos, certificaciones y autorizaciones que resulten exigibles.
-      
-      Toda coordinación operacional deberá realizarse con la contraparte designada por la Contratante, respetando las restricciones de acceso, horarios, condiciones de operación y medidas de seguridad definidas para cada instalación.
-
       **3.5 Obligaciones del Adjudicatario**
+      [Expande las obligaciones a), b), c)... sumando las responsabilidades operativas derivadas del contexto]
       
-      Serán obligaciones esenciales del proveedor adjudicado, entre otras:
-      
-      **a)** Ejecutar íntegramente el servicio contratado conforme a las condiciones establecidas en el proceso.
-      
-      **b)** Mantener durante toda la ejecución personal competente y recursos suficientes para asegurar el cumplimiento de los plazos comprometidos.
-      
-      **c)** Cumplir con toda la normativa laboral, previsional, tributaria, ambiental, sanitaria y de seguridad aplicable.
-      
-      **d)** Adoptar las medidas necesarias para prevenir daños a personas, infraestructura, equipos, mercaderías o activos de terceros.
-      
-      **e)** Informar oportunamente cualquier desviación, interferencia, hallazgo o situación que pueda afectar el desarrollo normal de los trabajos.
-      
-      **f)** Entregar la totalidad de los informes, registros, certificados, respaldos y demás documentos exigidos por la Contratante.
-      
-      **g)** Mantener la debida coordinación con la contraparte técnica designada durante toda la vigencia del servicio.
-
       **3.6 Entregables**
+      [Modifica y expande la lista de entregables según lo que el servicio requiera (ej: reportes técnicos, actas, garantías de software, protocolos, etc.)]
       
-      El adjudicatario deberá proporcionar todos los antecedentes de respaldo requeridos para acreditar la correcta ejecución de los servicios, incluyendo, cuando corresponda:
-      
-      - Informes técnicos. 
-      
-      - Actas de inicio y término. 
-      
-      - Registros fotográficos. 
-      
-      - Inventarios. 
-      
-      - Protocolos de ejecución. 
-      
-      - Certificados de recepción. 
-      
-      - Guías de despacho. 
-      
-      - Documentación de transporte. 
-      
-      - Informes de cierre. 
-      
-      - Cualquier otro antecedente exigido en las Bases Técnicas o solicitado fundadamente por la Contratante.
-
       **3.7 Interpretación del Alcance**
+      [Mantén este punto con su texto legal estándar sin modificar]
       
-      El alcance definido en las presentes Bases deberá interpretarse de manera amplia y suficiente para cumplir íntegramente el objeto de la contratación.
-      
-      En consecuencia, se entenderán incorporadas al servicio todas aquellas actividades, recursos, materiales, equipos, medios auxiliares y acciones que, aun cuando no se encuentren expresamente indicados en los documentos del proceso, resulten necesarios para la correcta, segura, completa y oportuna ejecución de los trabajos.
-      
-      La eventual omisión de alguna actividad en la oferta del adjudicatario no lo eximirá de su obligación de ejecutarla cuando ésta resulte indispensable para el cumplimiento del objeto contractual, sin que ello genere derecho a cobros, compensaciones o reajustes adicionales para la Contratante.
-
-      -----------------------------------------
-      CONTEXTO TÉCNICO PROPORCIONADO POR EL ADMINISTRADOR A INYECTAR:
+      --- CONTEXTO TÉCNICO A INYECTAR Y ANALIZAR ---
       ${contextoIA}
       `;
 
@@ -302,10 +220,12 @@ export default function GeneradorRFP() {
       const zip = new PizZip(content);
       const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
-      // 🔥 EL TRUCO MAGICO: Borramos los asteriscos invisiblemente solo para el Word.
-      // La pantalla web mantiene sus negritas, pero el documento de Word bajará limpio, 
-      // ordenado, con sus saltos de línea intactos y sin "sopa de símbolos".
-      const alcanceLimpioParaWord = alcanceGenerado.replace(/\*/g, '');
+      // Eliminamos los asteriscos y aplicamos el salto de tabulador para evitar la sopa de letras en Word
+      const alcanceLimpioParaWord = alcanceGenerado
+        .replace(/\*\*/g, '')
+        .split('\n')
+        .map(linea => linea.trim() + '\t')
+        .join('\n');
 
       doc.setData({
         administrador_nombre: adminSeleccionado.nombre,
@@ -313,7 +233,7 @@ export default function GeneradorRFP() {
         val_seriedad: valSeriedad,
         val_fiel: valFiel,
         val_vigencia_fiel: valVigenciaFiel,
-        alcance_ia: alcanceLimpioParaWord,
+        alcance_ia: alcanceLimpioParaWord, 
         cal_liberacion: calLiberacion ? new Date(calLiberacion).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_consultas: calLimiteConsultas ? new Date(calLimiteConsultas).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_respuestas: calRespuestas ? new Date(calRespuestas).toLocaleDateString('es-CL') : '[Sin Fecha]',
@@ -339,7 +259,7 @@ export default function GeneradorRFP() {
     }
   };
 
-  // --- FUNCIÓN NATIVA PARA RENDERIZAR NEGRITAS DE LA IA ---
+  // --- FUNCIÓN NATIVA PARA RENDERIZAR NEGRITAS EN LA PANTALLA ---
   const renderTextoConNegritas = (texto) => {
     if (!texto) return null;
     return texto.split(/(\*\*.*?\*\*)/g).map((parte, index) => {
@@ -397,12 +317,12 @@ export default function GeneradorRFP() {
         <div style={{ marginBottom: '25px', backgroundColor: '#eef2f7', padding: '15px', borderRadius: '6px', border: '1px solid #cce5ff' }}>
           <h3 style={{ fontSize: '16px', color: '#004A99', marginTop: 0 }}>2. Contexto para IA (Alcance)</h3>
           
-          <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Ingresa detalles o adjunta antecedentes técnicos de referencia (PDF) para que Gemini redacte.</p>
-          <textarea rows="3" placeholder="Ej: Servicio de mantenimiento correctivo..." value={contextoIA} onChange={e => setContextoIA(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}></textarea>
+          <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Ingresa detalles o adjunta antecedentes técnicos de referencia (PDF) para que Gemini redacte todo el alcance contextualizado.</p>
+          <textarea rows="3" placeholder="Ej: Bases para sistema de seguridad. El proveedor debe instalar cámaras, capacitar al personal en el uso del software y realizar visitas mensuales..." value={contextoIA} onChange={e => setContextoIA(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}></textarea>
           
           <div style={{ marginTop: '10px', padding: '12px', backgroundColor: 'white', borderRadius: '4px', border: '1px dashed #004A99' }}>
             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', display: 'flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
-              <span style={{ backgroundColor: '#17a2b8', color: 'white', padding: '6px 10px', borderRadius: '4px', marginRight: '10px' }}>📎 Adjuntar Archivo</span>
+              <span style={{ backgroundColor: '#17a2b8', color: 'white', padding: '6px 10px', borderRadius: '4px', marginRight: '10px' }}>📎 Adjuntar Archivos</span>
               <span style={{ color: '#666', fontWeight: 'normal' }}>(Soporta PDF, TXT o Imágenes)</span>
               <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" onChange={manejarCargaArchivos} style={{ display: 'none' }} />
             </label>
@@ -423,7 +343,7 @@ export default function GeneradorRFP() {
           </div>
 
           <button onClick={procesarConIA} disabled={cargandoIA} style={{ width: '100%', padding: '12px', marginTop: '15px', backgroundColor: cargandoIA ? '#ccc' : '#6f42c1', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: cargandoIA ? 'not-allowed' : 'pointer', transition: '0.3s' }}>
-            {cargandoIA ? '⏳ Conectando y redactando con Gemini...' : '✨ Generar Alcance con Gemini IA'}
+            {cargandoIA ? '⏳ Analizando y redactando...' : '✨ Redactar Alcance Contextualizado'}
           </button>
         </div>
 
@@ -476,10 +396,10 @@ export default function GeneradorRFP() {
       {/* PANEL DERECHO: VISUALIZADOR INTEGRO Y ACCIONES DE EXPORTACIÓN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px', minWidth: 0 }}>
         
-        {/* BARRA DE BOTONES */}
+        {/* BARRA DE BOTONES: Ahora son más claros respecto a su función */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-          <button onClick={generarWordFinal} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>📄 Descargar en Word Oficial (Supabase)</button>
-          <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Guardar vista como PDF</button>
+          <button onClick={generarWordFinal} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>📄 Descargar Word Oficial (Texto Plano)</button>
+          <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Generar y Descargar PDF</button>
         </div>
 
         {/* VISUALIZADOR DEL DOCUMENTO */}
@@ -523,7 +443,8 @@ export default function GeneradorRFP() {
             <p style={{ textAlign: 'justify' }}>Por medio de este Proceso, la Titular pretende seleccionar una empresa para contratar el suministro y despacho de suministro o servicios para Sodimac, suscribir una carta de adjudicación y/o contrato para la entrega de suministros o servicios en los términos establecidos en esta base especial y base general.</p>
 
             {/* SECCIÓN DEL ALCANCE CON LA FUNCIÓN DE NEGRITAS INYECTADA */}
-            <div style={{ backgroundColor: '#fffbe6', padding: '15px', border: '1px dashed #ffd700', color: '#856404', fontStyle: 'normal', marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px', marginTop: '20px' }}>ALCANCE DEL PROCESO</h3>
+            <div style={{ backgroundColor: '#fffbe6', padding: '15px', border: '1px dashed #ffd700', color: '#333', fontStyle: 'normal', marginBottom: '20px' }}>
               {renderTextoConNegritas(alcanceGenerado)}
             </div>
 
