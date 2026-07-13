@@ -129,27 +129,25 @@ export default function GeneradorRFP() {
       );
 
       // Instrucción de candado corporativo
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac Chile. Tu única tarea es inyectar contexto técnico dentro de una estructura de bases de licitación (RFP) ya definida. NO puedes inventar secciones nuevas, NO puedes cambiar el tono corporativo y NO debes asumir compra de equipos nuevos, ya que se trata de mantenimiento correctivo.";
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Debes redactar el ALCANCE DEL PROCESO usando la estructura tipo proporcionada. NO modifiques el lenguaje tipo, solo rellena los corchetes [] con el contexto técnico del usuario.";
 
-      // El Molde Exacto del usuario
       const promptEstructurado = `
-      Genera el cuerpo del ALCANCE DEL PROCESO utilizando ESTRICTAMENTE la siguiente plantilla. 
-      Rellena las etiquetas [INSERTAR DETALLE AQUÍ] con la información proporcionada por el administrador y los anexos técnicos, pero NO modifiques las palabras base, ni borres las viñetas originales. El punto 3.3 y 3.7 NO SE TOCAN.
+      Genera el cuerpo del ALCANCE DEL PROCESO siguiendo ESTRICTAMENTE esta estructura. Rellena los campos entre corchetes [ ] basándote en el contexto técnico proporcionado.
 
-      Estructura Obligatoria:
+      --- TEXTO TIPO (NO MODIFICAR ESTRUCTURA NI LENGUAJE BASE): ---
+
+      ALCANCE DEL PROCESO
+      El presente Proceso de Licitación tiene por objeto la contratación de los servicios de [DESCRIBIR SERVICIO O ACTIVIDAD PRINCIPAL], a ejecutarse en [UBICACIÓN O INSTALACIONES OBJETO DEL SERVICIO], conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
+      La prestación requerida comprenderá la totalidad de las actividades, recursos, suministros, medios humanos, equipos, herramientas, materiales, transportes, coordinaciones, permisos, documentación y demás elementos necesarios para la correcta, completa y oportuna ejecución del servicio, aun cuando éstos no se encuentren expresamente señalados en los documentos del proceso, pero resulten razonablemente necesarios para el cumplimiento de su objeto.
+      La sola presentación de una oferta implicará que el oferente declara conocer y aceptar íntegramente las condiciones del proceso, habiendo considerado en su propuesta todos los recursos, riesgos, costos directos e indirectos, obligaciones y exigencias necesarias para la ejecución del servicio.
 
       3.2 Alcance de los Servicios
       El proveedor adjudicado deberá ejecutar la totalidad de las actividades contempladas en el alcance definido para el proceso, incluyendo aquellas labores complementarias, accesorias o necesarias para la correcta materialización del servicio contratado. Dependiendo de la naturaleza de la contratación, el alcance podrá considerar una o más de las siguientes actividades:
-      a) Levantamiento y Diagnóstico Inicial
-      Cuando corresponda, el adjudicatario deberá efectuar un levantamiento técnico previo de los equipos, instalaciones, activos o elementos objeto de intervención, verificando su estado, ubicación, cantidad, condiciones de operación y cualquier otra información relevante para la adecuada planificación y ejecución de los trabajos. El levantamiento deberá quedar respaldado mediante registros documentales y/o fotográficos. [INSERTAR DETALLE AQUÍ: Especifica qué equipos o áreas particulares se deben diagnosticar según el contexto].
-      b) Desinstalación, Desmontaje o Retiro
-      El adjudicatario deberá ejecutar las labores de desmontaje, desinstalación, desconexión, retiro, segregación y manejo de los equipos, componentes o elementos comprendidos dentro del alcance del proceso, considerando todas las actividades necesarias para su correcta ejecución. Salvo indicación expresa en contrario, se entenderá que forman parte del alcance todas aquellas estructuras, fijaciones, soportes, accesorios, canalizaciones, conexiones y elementos asociados que resulten necesarios de retirar para completar adecuadamente la intervención. [INSERTAR DETALLE AQUÍ: Añade especificaciones técnicas si el contexto lo requiere].
-      c) Embalaje, Identificación y Acondicionamiento
-      Cuando el servicio contemple el retiro o traslado de activos, el adjudicatario será responsable de su adecuado acondicionamiento, protección, embalaje, rotulación, identificación, consolidación y preparación para transporte o almacenamiento. La metodología utilizada deberá asegurar la conservación, integridad, trazabilidad y resguardo de los activos durante todas las etapas del servicio.
-      d) Transporte y Logística
-      Cuando corresponda, el adjudicatario deberá ejecutar todas las actividades asociadas a la carga, transporte, descarga, traslado, almacenamiento temporal y entrega de los bienes o materiales comprendidos dentro del alcance contractual. Todos los costos asociados a estas actividades deberán considerarse incluidos en la oferta económica, salvo que las Bases establezcan expresamente una condición distinta.
-      e) Reinstalación o Puesta en Servicio
-      Cuando así se establezca en las Especificaciones Técnicas, el alcance podrá contemplar la reinstalación, montaje, conexión, configuración, pruebas funcionales, puesta en marcha o cualquier otra actividad necesaria para restituir la operación de los equipos o sistemas intervenidos. [INSERTAR DETALLE AQUÍ: Especifica labores de mantenimiento correctivo y puesta en marcha según el contexto].
+      a) Levantamiento y Diagnóstico Inicial: Cuando corresponda, el adjudicatario deberá efectuar un levantamiento técnico previo de los equipos, instalaciones, activos o elementos objeto de intervención, verificando su estado, ubicación, cantidad, condiciones de operación y cualquier otra información relevante para la adecuada planificación y ejecución de los trabajos. El levantamiento deberá quedar respaldado mediante registros documentales y/o fotográficos, los cuales podrán ser requeridos por la Contratante como condición previa al inicio de las actividades.
+      b) Desinstalación, Desmontaje o Retiro: El adjudicatario deberá ejecutar las labores de desmontaje, desinstalación, desconexión, retiro, segregación y manejo de los equipos, componentes o elementos comprendidos dentro del alcance del proceso. Salvo indicación expresa en contrario, se entenderá que forman parte del alcance todas aquellas estructuras, fijaciones, soportes, accesorios, canalizaciones, conexiones y elementos asociados que resulten necesarios de retirar para completar adecuadamente la intervención.
+      c) Embalaje, Identificación y Acondicionamiento: Cuando el servicio contemple el retiro o traslado de activos, el adjudicatario será responsable de su adecuado acondicionamiento, protección, embalaje, rotulación, identificación, consolidación y preparación para transporte o almacenamiento. La metodología utilizada deberá asegurar la conservación, integridad, trazabilidad y resguardo de los activos durante todas las etapas del servicio.
+      d) Transporte y Logística: Cuando corresponda, el adjudicatario deberá ejecutar todas las actividades asociadas a la carga, transporte, descarga, traslado, almacenamiento temporal y entrega de los bienes o materiales comprendidos dentro del alcance contractual. Todos los costos asociados a estas actividades deberán considerarse incluidos en la oferta económica, salvo que las Bases establezcan expresamente una condición distinta.
+      e) Reinstalación o Puesta en Servicio: Cuando así se establezca en las Especificaciones Técnicas, el alcance podrá contemplar la reinstalación, montaje, conexión, configuración, pruebas funcionales, puesta en marcha o cualquier otra actividad necesaria para restituir la operación de los equipos o sistemas intervenidos.
 
       3.3 Alcances Complementarios
       Sin perjuicio de las actividades específicas descritas en los antecedentes técnicos, el adjudicatario deberá considerar dentro del alcance del servicio todas aquellas labores que resulten necesarias para:
@@ -173,7 +171,6 @@ export default function GeneradorRFP() {
       - Elementos de Protección Personal (EPP). 
       - Documentación técnica y administrativa. 
       - Permisos, certificaciones y autorizaciones que resulten exigibles.
-      [INSERTAR DETALLE AQUÍ: Agrega viñetas adicionales de recursos exigidos por el contexto si las hay]. 
       Toda coordinación operacional deberá realizarse con la contraparte designada por la Contratante, respetando las restricciones de acceso, horarios, condiciones de operación y medidas de seguridad definidas para cada instalación.
 
       3.5 Obligaciones del Adjudicatario
@@ -185,7 +182,6 @@ export default function GeneradorRFP() {
       e) Informar oportunamente cualquier desviación, interferencia, hallazgo o situación que pueda afectar el desarrollo normal de los trabajos.
       f) Entregar la totalidad de los informes, registros, certificados, respaldos y demás documentos exigidos por la Contratante.
       g) Mantener la debida coordinación con la contraparte técnica designada durante toda la vigencia del servicio.
-      [INSERTAR DETALLE AQUÍ: Añade obligaciones adicionales según el contexto proporcionado].
 
       3.6 Entregables
       El adjudicatario deberá proporcionar todos los antecedentes de respaldo requeridos para acreditar la correcta ejecución de los servicios, incluyendo, cuando corresponda:
@@ -199,7 +195,6 @@ export default function GeneradorRFP() {
       - Documentación de transporte. 
       - Informes de cierre. 
       - Cualquier otro antecedente exigido en las Bases Técnicas o solicitado fundadamente por la Contratante.
-      [INSERTAR DETALLE AQUÍ: Añade informes o entregables adicionales solicitados en el contexto].
 
       3.7 Interpretación del Alcance
       El alcance definido en las presentes Bases deberá interpretarse de manera amplia y suficiente para cumplir íntegramente el objeto de la contratación.
@@ -207,7 +202,7 @@ export default function GeneradorRFP() {
       La eventual omisión de alguna actividad en la oferta del adjudicatario no lo eximirá de su obligación de ejecutarla cuando ésta resulte indispensable para el cumplimiento del objeto contractual, sin que ello genere derecho a cobros, compensaciones o reajustes adicionales para la Contratante.
 
       -----------------------------------------
-      DATOS DEL ADMINISTRADOR (CONTEXTO TÉCNICO A INYECTAR):
+      CONTEXTO TÉCNICO PROPORCIONADO POR EL ADMINISTRADOR:
       ${contextoIA}
       `;
 
