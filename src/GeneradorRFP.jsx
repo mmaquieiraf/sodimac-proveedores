@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
+import html2pdf from 'html2pdf.js';
 
 // URL de tu plantilla base en el Storage público de Supabase
 const URL_PLANTILLA = "https://zpxptembhqlmpkbctvml.supabase.co/storage/v1/object/public/plantillas/plantilla-rfp-sodimac.docx";
@@ -15,7 +16,6 @@ const administradores = [
 ];
 
 export default function GeneradorRFP() {
-  // --- ESTADOS PARA LA FICHA RESUMEN ---
   const [adminSeleccionado, setAdminSeleccionado] = useState(administradores[0]);
   const [reqSeriedad, setReqSeriedad] = useState('No');
   const [valSeriedad, setValSeriedad] = useState('No aplica');
@@ -23,36 +23,25 @@ export default function GeneradorRFP() {
   const [valFiel, setValFiel] = useState('No aplica');
   const [reqVigenciaFiel, setReqVigenciaFiel] = useState('No');
   const [valVigenciaFiel, setValVigenciaFiel] = useState('No aplica');
-
-  // --- ESTADOS PARA ALCANCE E INTEGRACIÓN CON GEMINI IA ---
   const [contextoIA, setContextoIA] = useState('');
   const [archivosContexto, setArchivosContexto] = useState([]);
   const [alcanceGenerado, setAlcanceGenerado] = useState('El alcance detallado será generado por la IA integrando los aspectos técnicos de sus anexos...');
   const [cargandoIA, setCargandoIA] = useState(false);
-
-  // --- ESTADOS PARA EL CALENDARIO ---
   const [calLiberacion, setCalLiberacion] = useState('');
   const [calLimiteConsultas, setCalLimiteConsultas] = useState('');
   const [calRespuestas, setCalRespuestas] = useState('');
   const [calEnvioOfertas, setCalEnvioOfertas] = useState('');
   const [calMesAdjudicacion, setCalMesAdjudicacion] = useState('');
   const [calMesServicio, setCalMesServicio] = useState('');
-
-  // --- ESTADOS PARA CLÁUSULAS ESPECÍFICAS ---
   const [vigenciaMeses, setVigenciaMeses] = useState('3');
   const [inicioSubgerencia, setInicioSubgerencia] = useState('Prevención');
   const [inicioMes, setInicioMes] = useState('junio');
   const [garantiaDias, setGarantiaDias] = useState('30');
-
-  // --- ESTADOS PARA DESPACHO ---
-  const [lugaresDespacho, setLugaresDespacho] = useState([
-    { id: 1, punto: 'HC Quinta Vergara', direccion: 'Av. Valparaíso 1070', comuna: 'Viña del Mar' }
-  ]);
+  const [lugaresDespacho, setLugaresDespacho] = useState([{ id: 1, punto: 'HC Quinta Vergara', direccion: 'Av. Valparaíso 1070', comuna: 'Viña del Mar' }]);
   const [despachoCargo, setDespachoCargo] = useState('Jefa de Seguridad Electrónica');
   const [despachoNombre, setDespachoNombre] = useState('Cristian Reyes');
   const [despachoEmail, setDespachoEmail] = useState('creyesb@sodimac.cl');
 
-  // --- FUNCIONES MANEJADORAS GENERALES ---
   const handleAdminChange = (e) => {
     const admin = administradores.find(a => a.nombre === e.target.value);
     if(admin) setAdminSeleccionado(admin);
@@ -96,9 +85,7 @@ export default function GeneradorRFP() {
     });
   };
 
-  // --- EXPORTACIÓN A PDF DINÁMICA (SIN NPM INSTALL) ---
   const exportarPDF = async () => {
-    // Si la librería no está cargada en el navegador, la inyectamos en vivo desde internet
     if (!window.html2pdf) {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
@@ -108,75 +95,57 @@ export default function GeneradorRFP() {
         document.head.appendChild(script);
       });
     }
-
-    // Una vez cargada, tomamos la "foto" del documento y generamos el PDF
     const elemento = document.getElementById('documento-rfp');
     const opciones = {
-      margin:       [15, 15, 15, 15], 
-      filename:     `Bases_RFP_${adminSeleccionado.nombre.replace(' ', '_')}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true }, 
-      jsPDF:        { unit: 'mm', format: 'letter', orientation: 'portrait' }
+      margin: [15, 15, 15, 15], 
+      filename: `Bases_RFP_${adminSeleccionado.nombre.replace(' ', '_')}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true }, 
+      jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' }
     };
-
     window.html2pdf().set(opciones).from(elemento).save();
   };
 
-  // --- CONEXIÓN DIRECTA CON GEMINI IA (TEXTO LIBRE, FORMATO ESTRICTO) ---
   const procesarConIA = async () => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-    if (!apiKey) {
-      alert("❌ Error: Vercel no está leyendo la API Key.");
-      return;
-    }
-
+    if (!apiKey) return alert("❌ Error: Vercel no está leyendo la API Key.");
     setCargandoIA(true);
 
     try {
-      const archivosValidos = archivosContexto.filter(f => 
-        f.type === 'application/pdf' || f.type.startsWith('image/') || f.type.startsWith('text/')
-      );
+      const archivosValidos = archivosContexto.filter(f => f.type === 'application/pdf' || f.type.startsWith('image/') || f.type.startsWith('text/'));
+      const partesDocumentos = await Promise.all(archivosValidos.map(async (archivo) => {
+        const base64Data = await transformarArchivoBase64(archivo);
+        return { inlineData: { mimeType: archivo.type, data: base64Data } };
+      }));
 
-      const partesDocumentos = await Promise.all(
-        archivosValidos.map(async (archivo) => {
-          const base64Data = await transformarArchivoBase64(archivo);
-          return { inlineData: { mimeType: archivo.type, data: base64Data } };
-        })
-      );
-
-      // Instrucción maestra: Libertad contextual, pero esclavitud al formato
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar TODO el 'ALCANCE DEL PROCESO', desde la introducción hasta el punto 3.7. Debes usar la estructura base proporcionada, pero ADAPTANDO, EXPANDIENDO Y MODIFICANDO el contenido de todos los puntos (3.2, 3.3, 3.4, 3.5, 3.6) según los archivos y el contexto técnico entregado. \n\nREGLAS DE FORMATO OBLIGATORIAS:\n1. Usa **asteriscos dobles** para las negritas en los títulos (ej: **3.2 Alcance de los Servicios**).\n2. Usa **asteriscos dobles** en las letras o viñetas de los listados hasta los dos puntos (ej: **a) Instalación y Configuración:**).\n3. Separa CADA párrafo y elemento de lista con un DOBLE SALTO DE LÍNEA (línea en blanco) para asegurar el espaciado correcto en el documento final.";
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar TODO el 'ALCANCE DEL PROCESO', desde la introducción hasta el punto 3.7. Debes usar la estructura base proporcionada, pero ADAPTANDO Y EXPANDIENDO el contenido según los archivos técnicos entregados. \n\nREGLAS DE FORMATO OBLIGATORIAS:\n1. Usa **asteriscos dobles** para las negritas en los títulos.\n2. Usa **asteriscos dobles** en los listados hasta los dos puntos.\n3. Separa CADA párrafo con un DOBLE SALTO DE LÍNEA.";
 
       const promptEstructurado = `
-      Basándote en el siguiente contexto y en los documentos técnicos adjuntos, redacta el texto completo del ALCANCE DEL PROCESO. 
+      Basándote en el siguiente contexto y en los documentos adjuntos, redacta el texto completo del ALCANCE DEL PROCESO. 
+      Toma esta estructura base y expande sus puntos para que calcen con el servicio licitado:
       
-      Debes tomar esta estructura base y reescribir/expandir sus puntos para que calcen perfectamente con el servicio que se está licitando (añadiendo obligaciones técnicas, entregables, condiciones de ejecución específicas, etc. que se mencionen en el contexto).
-      
-      ESTRUCTURA BASE A ADAPTAR Y EXPANDIR INTEGRAMENTE:
-      
-  
-      El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[ADAPTAR SERVICIO]**, a ejecutarse en **[ADAPTAR UBICACIÓN]**... [Mantén la legalidad de los párrafos introductorios base]
+      ALCANCE DEL PROCESO
+      El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[ADAPTAR SERVICIO]**, a ejecutarse en **[ADAPTAR UBICACIÓN]**... [Mantén la legalidad introductoria]
       
       **3.2 Alcance de los Servicios**
-      [Adapta y genera las letras a), b), c)... según el servicio técnico específico del contexto. No olvides poner en negrita hasta los dos puntos]
+      [Adapta y genera las letras a), b), c)... según el servicio técnico específico]
       
       **3.3 Alcances Complementarios**
-      [Mantén la base de continuidad operacional y resguardo, pero agrega cualquier otro alcance complementario que exija el contexto técnico]
+      [Mantén la base de continuidad y agrega lo que exija el contexto]
       
       **3.4 Condiciones de Ejecución**
-      [Agrega aquí normativas específicas, certificaciones, herramientas o personal especializado que el proveedor haya puesto en sus anexos técnicos]
+      [Agrega normativas, herramientas o personal especializado]
       
       **3.5 Obligaciones del Adjudicatario**
-      [Expande las obligaciones a), b), c)... sumando las responsabilidades operativas derivadas del contexto]
+      [Expande sumando responsabilidades operativas]
       
       **3.6 Entregables**
-      [Modifica y expande la lista de entregables según lo que el servicio requiera (ej: reportes técnicos, actas, garantías de software, protocolos, etc.)]
+      [Modifica y expande la lista de entregables]
       
       **3.7 Interpretación del Alcance**
-      [Mantén este punto con su texto legal estándar sin modificar]
+      [Mantén texto legal estándar]
       
-      --- CONTEXTO TÉCNICO A INYECTAR Y ANALIZAR ---
+      --- CONTEXTO TÉCNICO ---
       ${contextoIA}
       `;
 
@@ -192,40 +161,69 @@ export default function GeneradorRFP() {
       });
 
       const datosRecibidos = await respuestaApi.json();
-
-      if (!respuestaApi.ok) {
-        console.error("Error devuelto por Google:", datosRecibidos);
-        throw new Error(datosRecibidos.error?.message || `Código: ${respuestaApi.status}`);
-      }
-
-      if (datosRecibidos.candidates && datosRecibidos.candidates[0]?.content?.parts[0]?.text) {
-        setAlcanceGenerado(datosRecibidos.candidates[0].content.parts[0].text);
-      } else {
-        throw new Error("La IA no devolvió texto.");
-      }
-
+      if (!respuestaApi.ok) throw new Error(datosRecibidos.error?.message);
+      
+      setAlcanceGenerado(datosRecibidos.candidates[0].content.parts[0].text);
     } catch (error) {
-      console.error("Fallo:", error);
-      alert(`⚠️ Fallo de conexión:\n\n${error.message}`);
+      alert(`⚠️ Fallo: ${error.message}`);
     } finally {
       setCargandoIA(false);
     }
   };
 
-  // --- MOTOR DE FUSIÓN CON TU PLANTILLA WORD DE SUPABASE ---
+  // --- FUNCIÓN TRADUCTORA DE MARKDOWN A CÓDIGO NATIVO DE WORD (OOXML) ---
+  const convertirMarkdownAOOXML = (texto) => {
+    if (!texto) return '';
+    const lineas = texto.split('\n');
+    let xml = '';
+    
+    lineas.forEach(linea => {
+      // Si la línea está vacía, creamos un párrafo en blanco para el espaciado
+      if (linea.trim() === '') {
+        xml += '<w:p><w:r><w:t></w:t></w:r></w:p>';
+        return;
+      }
+
+      let runXml = '';
+      const partes = linea.split(/(\*\*.*?\*\*)/g);
+      
+      partes.forEach(parte => {
+        if (parte.startsWith('**') && parte.endsWith('**')) {
+          // Limpiamos caracteres especiales y aplicamos etiqueta de Negrita (<w:b/>)
+          const textoNegrita = parte.slice(2, -2).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          runXml += `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${textoNegrita}</w:t></w:r>`;
+        } else if (parte) {
+          const textoNormal = parte.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          runXml += `<w:r><w:t xml:space="preserve">${textoNormal}</w:t></w:r>`;
+        }
+      });
+      
+      // Envolvemos la línea en un párrafo nativo alineado obligatoriamente a la izquierda
+      // Esto previene que Microsoft Word estire las letras
+      xml += `<w:p><w:pPr><w:jc w:val="left"/></w:pPr>${runXml}</w:p>`;
+    });
+    
+    return xml;
+  };
+
+  // --- MOTOR DE FUSIÓN HACKEADO ---
   const generarWordFinal = async () => {
     try {
       const response = await fetch(URL_PLANTILLA);
       const content = await response.arrayBuffer();
       const zip = new PizZip(content);
+
+      // 🔥 TRUCO NIVEL DIOS: Alterar la plantilla en Memoria RAM sin tocar Supabase.
+      // Entramos al esqueleto del Word y transformamos {alcance_ia} en {@alcance_ia}
+      // El "@" le dice a la librería que inyectaremos código de diseño de Word, no texto plano.
+      let docXml = zip.file("word/document.xml").asText();
+      docXml = docXml.replace('{alcance_ia}', '{@alcance_ia}');
+      zip.file("word/document.xml", docXml);
+
       const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
-      // Eliminamos los asteriscos y aplicamos el salto de tabulador para evitar la sopa de letras en Word
-      const alcanceLimpioParaWord = alcanceGenerado
-        .replace(/\*\*/g, '')
-        .split('\n')
-        .map(linea => linea.trim() + '\t')
-        .join('\n');
+      // Convertimos el texto generado a código de Microsoft Word
+      const xmlWordCode = convertirMarkdownAOOXML(alcanceGenerado);
 
       doc.setData({
         administrador_nombre: adminSeleccionado.nombre,
@@ -233,7 +231,7 @@ export default function GeneradorRFP() {
         val_seriedad: valSeriedad,
         val_fiel: valFiel,
         val_vigencia_fiel: valVigenciaFiel,
-        alcance_ia: alcanceLimpioParaWord, 
+        alcance_ia: xmlWordCode, // <-- Inyectamos el código nativo
         cal_liberacion: calLiberacion ? new Date(calLiberacion).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_consultas: calLimiteConsultas ? new Date(calLimiteConsultas).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_respuestas: calRespuestas ? new Date(calRespuestas).toLocaleDateString('es-CL') : '[Sin Fecha]',
@@ -259,13 +257,10 @@ export default function GeneradorRFP() {
     }
   };
 
-  // --- FUNCIÓN NATIVA PARA RENDERIZAR NEGRITAS EN LA PANTALLA ---
   const renderTextoConNegritas = (texto) => {
     if (!texto) return null;
     return texto.split(/(\*\*.*?\*\*)/g).map((parte, index) => {
-      if (parte.startsWith('**') && parte.endsWith('**')) {
-        return <strong key={index}>{parte.slice(2, -2)}</strong>;
-      }
+      if (parte.startsWith('**') && parte.endsWith('**')) return <strong key={index}>{parte.slice(2, -2)}</strong>;
       return <span key={index}>{parte}</span>;
     });
   };
@@ -277,7 +272,7 @@ export default function GeneradorRFP() {
       <div style={{ width: '450px', flexShrink: 0, backgroundColor: 'white', padding: '25px', borderRadius: '8px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
         <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>Configuración de Bases RFP</h2>
         
-        {/* 1. FICHA RESUMEN */}
+        {/* FICHA RESUMEN */}
         <div style={{ marginBottom: '25px' }}>
           <h3 style={{ fontSize: '16px', color: '#333' }}>1. Ficha Resumen</h3>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px' }}>Administrador del Proceso</label>
@@ -313,12 +308,11 @@ export default function GeneradorRFP() {
           </div>
         </div>
 
-        {/* 2. ALCANCE E IA CON CONEXIÓN ACTIVA OCULTA */}
+        {/* INTEGRACIÓN CON IA */}
         <div style={{ marginBottom: '25px', backgroundColor: '#eef2f7', padding: '15px', borderRadius: '6px', border: '1px solid #cce5ff' }}>
           <h3 style={{ fontSize: '16px', color: '#004A99', marginTop: 0 }}>2. Contexto para IA (Alcance)</h3>
           
-          <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Ingresa detalles o adjunta antecedentes técnicos de referencia (PDF) para que Gemini redacte todo el alcance contextualizado.</p>
-          <textarea rows="3" placeholder="Ej: Bases para sistema de seguridad. El proveedor debe instalar cámaras, capacitar al personal en el uso del software y realizar visitas mensuales..." value={contextoIA} onChange={e => setContextoIA(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}></textarea>
+          <textarea rows="3" placeholder="Ej: Servicio de mantenimiento correctivo..." value={contextoIA} onChange={e => setContextoIA(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', resize: 'vertical' }}></textarea>
           
           <div style={{ marginTop: '10px', padding: '12px', backgroundColor: 'white', borderRadius: '4px', border: '1px dashed #004A99' }}>
             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#333', display: 'flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
@@ -347,7 +341,7 @@ export default function GeneradorRFP() {
           </button>
         </div>
 
-        {/* 3. CALENDARIO */}
+        {/* CALENDARIO */}
         <div style={{ marginBottom: '25px' }}>
           <h3 style={{ fontSize: '16px', color: '#333' }}>3. Calendario del Proceso</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
@@ -360,7 +354,7 @@ export default function GeneradorRFP() {
           </div>
         </div>
 
-        {/* 4. CLÁUSULAS ESPECÍFICAS */}
+        {/* CLÁUSULAS ESPECÍFICAS */}
         <div style={{ marginBottom: '25px' }}>
           <h3 style={{ fontSize: '16px', color: '#333' }}>4. Cláusulas Contractuales</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
@@ -371,7 +365,7 @@ export default function GeneradorRFP() {
           </div>
         </div>
 
-        {/* 5. DESPACHO */}
+        {/* DESPACHO */}
         <div style={{ marginBottom: '25px' }}>
           <h3 style={{ fontSize: '16px', color: '#333' }}>5. Lugares de Despacho</h3>
           {lugaresDespacho.map((lugar) => (
@@ -396,13 +390,11 @@ export default function GeneradorRFP() {
       {/* PANEL DERECHO: VISUALIZADOR INTEGRO Y ACCIONES DE EXPORTACIÓN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px', minWidth: 0 }}>
         
-        {/* BARRA DE BOTONES: Ahora son más claros respecto a su función */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-          <button onClick={generarWordFinal} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>📄 Descargar Word Oficial (Texto Plano)</button>
-          <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Generar y Descargar PDF</button>
+          <button onClick={generarWordFinal} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>📄 Descargar Word con Formato (Supabase)</button>
+          <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Descargar Vista como PDF</button>
         </div>
 
-        {/* VISUALIZADOR DEL DOCUMENTO */}
         <div style={{ flex: 1, backgroundColor: '#e5e5e5', padding: '20px', borderRadius: '8px', overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
           <div id="documento-rfp" style={{ backgroundColor: 'white', width: '21cm', minHeight: '29.7cm', padding: '2.5cm', boxShadow: '0 4px 10px rgba(0,0,0,0.15)', fontFamily: 'Arial, sans-serif', fontSize: '10pt', color: '#333', lineHeight: '1.5', textAlign: 'left', whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
             
@@ -442,7 +434,6 @@ export default function GeneradorRFP() {
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>OBJETIVOS</h3>
             <p style={{ textAlign: 'justify' }}>Por medio de este Proceso, la Titular pretende seleccionar una empresa para contratar el suministro y despacho de suministro o servicios para Sodimac, suscribir una carta de adjudicación y/o contrato para la entrega de suministros o servicios en los términos establecidos en esta base especial y base general.</p>
 
-            {/* SECCIÓN DEL ALCANCE CON LA FUNCIÓN DE NEGRITAS INYECTADA */}
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px', marginTop: '20px' }}>ALCANCE DEL PROCESO</h3>
             <div style={{ backgroundColor: '#fffbe6', padding: '15px', border: '1px dashed #ffd700', color: '#333', fontStyle: 'normal', marginBottom: '20px' }}>
               {renderTextoConNegritas(alcanceGenerado)}
