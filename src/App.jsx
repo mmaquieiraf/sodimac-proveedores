@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import { categoriasSodimac as catSodimacOriginal, formatearRUT, validarRUT } from './datosSodimac';
 import GeneradorRFP from './GeneradorRFP';
 import GeneradorRFQ from './GeneradorRFQ';
+import GeneradorFT from './GeneradorFT';
 
 const categoriasSodimac = JSON.parse(JSON.stringify(catSodimacOriginal));
 
@@ -1425,6 +1426,7 @@ export default function App() {
             <h2 onClick={() => setTabAdmin('crear_admin')} style={{ color: tabAdmin === 'crear_admin' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>Admin / Roles</h2>
             <h2 onClick={() => setTabAdmin('generador_rfp')} style={{ color: tabAdmin === 'generador_rfp' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>📄 Generador RFP</h2>
             <h2 onClick={() => setTabAdmin('generador_rfq')} style={{ color: tabAdmin === 'generador_rfq' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '1px solid #ddd', paddingLeft: '15px' }}>🛒 Generador RFQ</h2>
+            <h2 onClick={() => setTabAdmin('generador_ft')} style={{ color: tabAdmin === 'generador_ft' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '1px solid #ddd', paddingLeft: '15px' }}>🖼️ Fichas Técnicas</h2>
             {usuarioActual?.usuario === 'mmaquieira' && (
               <h2 onClick={() => { setTabAdmin('auditoria'); cargarLogsAuditoria(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>🛡️ Auditoría</h2>
             )}
@@ -2196,6 +2198,9 @@ export default function App() {
 
           {/* === MÓDULO GENERADOR RFQ (COMPRA DE BIENES) === */}
           {tabAdmin === 'generador_rfq' && <GeneradorRFQ />}
+
+          {/* === MÓDULO FICHAS TÉCNICAS === */}
+          {tabAdmin === 'generador_ft' && <GeneradorFT />}
 
           {/* 🛡️ PESTAÑA DE AUDITORÍA SOLO PARA MMAQUIEIRA */}
           {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
