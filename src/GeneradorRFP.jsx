@@ -32,10 +32,13 @@ export default function GeneradorRFP() {
   const [calEnvioOfertas, setCalEnvioOfertas] = useState('');
   const [calMesAdjudicacion, setCalMesAdjudicacion] = useState('');
   const [calMesServicio, setCalMesServicio] = useState('');
-  const [vigenciaMeses, setVigenciaMeses] = useState('3');
+  
+  // MEJORA: Campos de texto libre para permitir "3 meses" o "15 días"
+  const [vigenciaAcuerdo, setVigenciaAcuerdo] = useState('3 meses');
   const [inicioSubgerencia, setInicioSubgerencia] = useState('Prevención');
   const [inicioMes, setInicioMes] = useState('junio');
-  const [garantiaDias, setGarantiaDias] = useState('30');
+  const [garantiaProducto, setGarantiaProducto] = useState('30 días');
+  
   const [lugaresDespacho, setLugaresDespacho] = useState([{ id: 1, punto: 'HC Quinta Vergara', direccion: 'Av. Valparaíso 1070', comuna: 'Viña del Mar' }]);
   const [despachoCargo, setDespachoCargo] = useState('Jefa de Seguridad Electrónica');
   const [despachoNombre, setDespachoNombre] = useState('Cristian Reyes');
@@ -126,6 +129,7 @@ export default function GeneradorRFP() {
 
       --- ESTRUCTURA DE CUMPLIMIENTO OBLIGATORIO ---
 
+      ALCANCE DEL PROCESO
       
       El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[INSERTA AQUÍ EL SERVICIO DEL CONTEXTO]**, a ejecutarse en **[INSERTA AQUÍ LA UBICACIÓN DEL CONTEXTO]**, conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
       
@@ -217,17 +221,17 @@ export default function GeneradorRFP() {
         val_seriedad: valSeriedad,
         val_fiel: valFiel,
         val_vigencia_fiel: valVigenciaFiel,
-        alcance_ia: alcanceLimpioParaWord, // Inyectamos el texto plano seguro
+        alcance_ia: alcanceLimpioParaWord, 
         cal_liberacion: calLiberacion ? new Date(calLiberacion).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_consultas: calLimiteConsultas ? new Date(calLimiteConsultas).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_respuestas: calRespuestas ? new Date(calRespuestas).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_ofertas: calEnvioOfertas ? new Date(calEnvioOfertas).toLocaleDateString('es-CL') : '[Sin Fecha]',
         cal_adjudicacion: formatearMesAno(calMesAdjudicacion),
         cal_servicio: formatearMesAno(calMesServicio),
-        vigencia_meses: vigenciaMeses,
+        vigencia_meses: vigenciaAcuerdo || '[Indicar vigencia]', // MEJORA: mapeo dinámico
         inicio_subgerencia: inicioSubgerencia,
         inicio_mes: inicioMes,
-        garantia_dias: garantiaDias,
+        garantia_dias: garantiaProducto || '[Indicar garantía]', // MEJORA: mapeo dinámico
         despacho_cargo: despachoCargo,
         despacho_nombre: despachoNombre,
         despacho_email: despachoEmail,
@@ -295,7 +299,7 @@ export default function GeneradorRFP() {
           </div>
         </div>
 
-        {/* 2. ALCANCE E IA CON CONEXIÓN ACTIVA OCULTA */}
+        {/* 2. ALCANCE E IA */}
         <div style={{ marginBottom: '25px', backgroundColor: '#eef2f7', padding: '15px', borderRadius: '6px', border: '1px solid #cce5ff' }}>
           <h3 style={{ fontSize: '16px', color: '#004A99', marginTop: 0 }}>2. Contexto para IA (Alcance)</h3>
           
@@ -342,14 +346,14 @@ export default function GeneradorRFP() {
           </div>
         </div>
 
-        {/* 4. CLÁUSULAS ESPECÍFICAS */}
+        {/* 4. CLÁUSULAS ESPECÍFICAS - MEJORADAS PARA TEXTO LIBRE */}
         <div style={{ marginBottom: '25px' }}>
           <h3 style={{ fontSize: '16px', color: '#333' }}>4. Cláusulas Contractuales</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            <div><label style={{ fontSize: '12px' }}>Vigencia Acuerdo (Meses)</label><input type="number" value={vigenciaMeses} onChange={e => setVigenciaMeses(e.target.value)} style={{ width: '100%', padding: '6px' }} /></div>
+            <div><label style={{ fontSize: '12px' }}>Vigencia Acuerdo</label><input type="text" placeholder="Ej: 3 meses o 15 días" value={vigenciaAcuerdo} onChange={e => setVigenciaAcuerdo(e.target.value)} style={{ width: '100%', padding: '6px' }} /></div>
             <div><label style={{ fontSize: '12px' }}>Subgerencia a Coordinar</label><input type="text" value={inicioSubgerencia} onChange={e => setInicioSubgerencia(e.target.value)} style={{ width: '100%', padding: '6px' }} /></div>
             <div><label style={{ fontSize: '12px' }}>Mes inicio servicio</label><input type="text" value={inicioMes} onChange={e => setInicioMes(e.target.value)} style={{ width: '100%', padding: '6px' }} /></div>
-            <div><label style={{ fontSize: '12px' }}>Días Garantía Producto</label><input type="number" value={garantiaDias} onChange={e => setGarantiaDias(e.target.value)} style={{ width: '100%', padding: '6px' }} /></div>
+            <div><label style={{ fontSize: '12px' }}>Garantía Producto</label><input type="text" placeholder="Ej: 30 días" value={garantiaProducto} onChange={e => setGarantiaProducto(e.target.value)} style={{ width: '100%', padding: '6px' }} /></div>
           </div>
         </div>
 
@@ -379,8 +383,8 @@ export default function GeneradorRFP() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px', minWidth: 0 }}>
         
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-          <button onClick={generarWordFinal} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>📄 Descargar en Word Oficial</button>
-          <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Descargar Vista como PDF</button>
+          <button onClick={generarWordFinal} disabled={cargandoIA} style={{ padding: '8px 15px', backgroundColor: cargandoIA ? '#ccc' : '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: cargandoIA ? 'not-allowed' : 'pointer' }}>📄 Descargar en Word Oficial</button>
+          <button onClick={exportarPDF} disabled={cargandoIA} style={{ padding: '8px 15px', backgroundColor: cargandoIA ? '#ccc' : '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: cargandoIA ? 'not-allowed' : 'pointer' }}>🖨️ Descargar Vista como PDF</button>
         </div>
 
         <div style={{ flex: 1, backgroundColor: '#e5e5e5', padding: '20px', borderRadius: '8px', overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
@@ -451,7 +455,8 @@ export default function GeneradorRFP() {
             </table>
 
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>VIGENCIA DEL ACUERDO</h3>
-            <p style={{ textAlign: 'justify' }}>El precio adjudicado en el marco de la presente solicitud de propuestas tendrá una vigencia inicial de <strong>{vigenciaMeses || '[X]'} meses</strong>, contados desde la fecha de suscripción del contrato o emisión de la respectiva orden de compra, según corresponda. Dicho período podrá renovarse automáticamente por períodos sucesivos.</p>
+            {/* SE ACTUALIZA LA VISTA CON LA VARIABLE DE TEXTO DE VIGENCIA */}
+            <p style={{ textAlign: 'justify' }}>El precio adjudicado en el marco de la presente solicitud de propuestas tendrá una vigencia inicial de <strong>{vigenciaAcuerdo || '[Indicar vigencia]'}</strong>, contados desde la fecha de suscripción del contrato o emisión de la respectiva orden de compra, según corresponda. Dicho período podrá renovarse automáticamente por períodos sucesivos.</p>
 
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>OBLIGACIONES LABORALES Y BOLETA DE GARANTÍA</h3>
             <p style={{ textAlign: 'justify' }}>El Adjudicatario será exclusivamente responsable del cumplimiento de todas las obligaciones laborales previsionales, asistenciales, tributarias y demás relacionadas a las personas que emplee para el cumplimiento del servicio. Asimismo, el Adjudicatario deberá entregar una Boleta de Garantía Bancaria emitida por una institución financiera legalmente constituida pagadera a la vista e irrevocable.</p>
@@ -461,7 +466,8 @@ export default function GeneradorRFP() {
             <p style={{ textAlign: 'justify' }}>Se espera que los servicios puedan ser ejecutados en dependencias de Sodimac durante el mes de <strong>{inicioMes || '[Mes]'}</strong> o a coordinar con mandante.</p>
 
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px', marginTop: '20px' }}>GARANTÍA DEL PRODUCTO</h3>
-            <p style={{ textAlign: 'justify' }}>El adjudicatario deberá procurar, con el mayor esfuerzo posible, realizar todas las acciones necesarias para corregir las falencias detectadas en el producto terminado instalado. Además, se requiere que se garantice la "calidad" de el o los productos adjudicados a lo menos <strong>"{garantiaDias || '[X]'} días"</strong> desde la recepción del producto en tienda.</p>
+            {/* SE ACTUALIZA LA VISTA CON LA VARIABLE DE TEXTO DE GARANTIA */}
+            <p style={{ textAlign: 'justify' }}>El adjudicatario deberá procurar, con el mayor esfuerzo posible, realizar todas las acciones necesarias para corregir las falencias detectadas en el producto terminado instalado. Además, se requiere que se garantice la "calidad" de el o los productos adjudicados a lo menos <strong>{garantiaProducto || '[Indicar garantía]'}</strong> desde la recepción del producto en tienda.</p>
 
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px', marginTop: '20px' }}>DESPACHO</h3>
             <p style={{ textAlign: 'justify' }}>El Prestador deberá considerar el despacho de los elementos requeridos a la siguiente dirección definida por Contratante:</p>
