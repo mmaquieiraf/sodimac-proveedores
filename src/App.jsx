@@ -1444,7 +1444,7 @@ export default function App() {
                   <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{proveedoresAprobados.length}</p>
                 </div>
                 <div style={{ backgroundColor: '#ffc107', color: '#333', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
-                  <h3 style={{ margin: '0', fontSize: '14px', textTransform: 'uppercase' }}>Requieren Actualización (>90 días)</h3>
+                  <h3 style={{ margin: '0', fontSize: '14px', textTransform: 'uppercase' }}>Requieren Actualización (&gt;90 días)</h3>
                   <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{stats.renovaciones.length}</p>
                 </div>
               </div>
