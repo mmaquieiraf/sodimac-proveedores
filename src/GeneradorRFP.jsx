@@ -182,18 +182,51 @@ export default function GeneradorRFP() {
         systemInstruction: { parts: [{ text: instruccionesSistema }] }
       };
 
-      const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      // CONFIGURACIÓN DE RESPALDO MULTI-MODELO PARA EVITAR SATURACIÓN (FALLBACK CASCADA)
+      const modelosDisponibles = [
+        'gemini-3.5-flash',
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-flash'
+      ];
 
-      const datosRecibidos = await respuestaApi.json();
-      if (!respuestaApi.ok) throw new Error(datosRecibidos.error?.message);
-      
-      setAlcanceGenerado(datosRecibidos.candidates[0].content.parts[0].text);
+      let exito = false;
+      let textoGenerado = '';
+
+      for (const modelo of modelosDisponibles) {
+        try {
+          const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const datosRecibidos = await respuestaApi.json();
+
+          // Si el modelo devuelve código 429 por alta demanda en el plan libre, pasa al siguiente de inmediato
+          if (respuestaApi.status === 429) {
+            console.warn(`⚠️ Servidor ${modelo} congestionado por tráfico global. Saltando al siguiente respaldo...`);
+            continue; 
+          }
+
+          if (!respuestaApi.ok) throw new Error(datosRecibidos.error?.message);
+          
+          textoGenerado = datosRecibidos.candidates[0].content.parts[0].text;
+          exito = true;
+          break; // Salimos del bucle al conseguir una generación exitosa
+
+        } catch (errInterno) {
+          console.error(`Intento fallido con el modelo ${modelo}:`, errInterno);
+        }
+      }
+
+      if (!exito || !textoGenerado) {
+        throw new Error("Todos los servidores de procesamiento técnico gratuitos están experimentando una alta demanda en este momento. Por favor, reintenta en unos instantes.");
+      }
+
+      setAlcanceGenerado(textoGenerado);
+
     } catch (error) {
-      alert(`⚠️ Fallo: ${error.message}`);
+      alert(`⚠️ Fallo de IA: ${error.message}`);
     } finally {
       setCargandoIA(false);
     }

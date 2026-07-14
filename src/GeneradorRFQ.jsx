@@ -103,9 +103,10 @@ export default function GeneradorRFQ() {
   };
 
   // --- CONEXIÓN DIRECTA CON GEMINI IA (LÓGICA RFQ) ---
-  const procesarConIA = async () => {
+ const procesarConIA = async () => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) return alert("❌ Error: Vercel no está leyendo la API Key.");
+    
     setCargandoIA(true);
 
     try {
@@ -139,18 +140,50 @@ export default function GeneradorRFQ() {
         systemInstruction: { parts: [{ text: instruccionesSistema }] }
       };
 
-      const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      // LISTA DE CONTINGENCIA
+      const modelosDisponibles = [
+        'gemini-3.5-flash',
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-flash'
+      ];
 
-      const datosRecibidos = await respuestaApi.json();
-      if (!respuestaApi.ok) throw new Error(datosRecibidos.error?.message);
-      
-      setAlcanceGenerado(datosRecibidos.candidates[0].content.parts[0].text);
+      let exito = false;
+      let textoGenerado = '';
+
+      for (const modelo of modelosDisponibles) {
+        try {
+          const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const datosRecibidos = await respuestaApi.json();
+
+          if (respuestaApi.status === 429) {
+            console.warn(`⚠️ Modelo ${modelo} saturado por alta demanda. Intentando con el siguiente...`);
+            continue; 
+          }
+
+          if (!respuestaApi.ok) throw new Error(datosRecibidos.error?.message);
+          
+          textoGenerado = datosRecibidos.candidates[0].content.parts[0].text;
+          exito = true;
+          break; 
+
+        } catch (errInterno) {
+          console.error(`Fallo temporal con el modelo ${modelo}:`, errInterno);
+        }
+      }
+
+      if (!exito || !textoGenerado) {
+        throw new Error("Todos los servidores gratuitos están experimentando una alta demanda en este momento. Por favor, reintenta en unos instantes.");
+      }
+
+      setAlcanceGenerado(textoGenerado);
+
     } catch (error) {
-      alert(`⚠️ Fallo: ${error.message}`);
+      alert(`⚠️ Fallo de IA: ${error.message}`);
     } finally {
       setCargandoIA(false);
     }

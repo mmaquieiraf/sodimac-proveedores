@@ -102,7 +102,7 @@ export default function GeneradorFT() {
   };
 
   // --- LÓGICA DE EXTRACCIÓN CON IA ---
-  const procesarConIA = async () => {
+const procesarConIA = async () => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) return alert("❌ Error: Vercel no está leyendo la API Key.");
     if (archivosContexto.length === 0) return alert("⚠️ Adjunta al menos un archivo técnico en PDF para analizar.");
@@ -120,28 +120,26 @@ export default function GeneradorFT() {
       const promptEstructurado = `
       Analiza los documentos técnicos adjuntos y extrae la información para crear una Ficha Técnica.
       Debes devolver EXCLUSIVAMENTE un objeto JSON válido con esta estructura exacta:
-
       {
         "titulo": "NOMBRE DEL PRODUCTO EN MAYÚSCULAS",
-        "subtitulo": "ATRIBUTO PRINCIPAL O MODELO EN MAYÚSCULAS (Ej: 80 LITROS - 3 MOTORES)",
+        "subtitulo": "ATRIBUTO PRINCIPAL O MODELO EN MAYÚSCULAS",
         "descripcion": "Párrafo breve y comercial describiendo el uso principal del producto.",
         "caracteristicas": [
-          { "titulo": "BENEFICIO 1 EN MAYÚSCULAS", "texto": "Descripción breve del beneficio." },
-          { "titulo": "BENEFICIO 2 EN MAYÚSCULAS", "texto": "Descripción breve del beneficio." },
-          { "titulo": "BENEFICIO 3 EN MAYÚSCULAS", "texto": "Descripción breve del beneficio." }
+          { "titulo": "BENEFICIO 1 EN MAYÚSCULAS", "texto": "Descripción." },
+          { "titulo": "BENEFICIO 2 EN MAYÚSCULAS", "texto": "Descripción." },
+          { "titulo": "BENEFICIO 3 EN MAYÚSCULAS", "texto": "Descripción." }
         ],
         "datosTecnicos": [
           { "parametro": "Nombre de especificación", "valor": "Valor y unidad de medida" },
           { "parametro": "Nombre de especificación 2", "valor": "Valor y unidad de medida" }
         ],
         "usos": ["USO 1", "USO 2", "USO 3"],
-        "categoriaPie": "CATEGORÍA DEL PRODUCTO (Ej: HERRAMIENTAS ELÉCTRICAS)"
+        "categoriaPie": "CATEGORÍA DEL PRODUCTO"
       }
-      
       Reglas Estrictas:
       1. Extrae máximo 3 características principales.
-      2. Extrae máximo 10 datos técnicos relevantes. Los nombres de las especificaciones deben ser precisos y cortos.
-      3. Extrae máximo 4 usos recomendados. MUY IMPORTANTE: Los usos deben ser palabras cortas o frases de MÁXIMO 3 PALABRAS (Ej: "SISTEMAS CRÍTICOS" en vez de "Ideal para aplicaciones en sistemas críticos").
+      2. Extrae máximo 10 datos técnicos relevantes.
+      3. Extrae máximo 4 usos recomendados (MÁXIMO 3 PALABRAS por uso).
       `;
 
       const payload = {
@@ -149,21 +147,58 @@ export default function GeneradorFT() {
         systemInstruction: { parts: [{ text: instruccionesSistema }] }
       };
 
-      const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      // LISTA DE MODELOS A PROBAR EN ORDEN DE PRIORIDAD
+      const modelosDisponibles = [
+        'gemini-3.5-flash',
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-flash'
+      ];
 
-      const datosRecibidos = await respuestaApi.json();
-      if (!respuestaApi.ok) throw new Error(datosRecibidos.error?.message);
-      
-      const textoSocio = datosRecibidos.candidates[0].content.parts[0].text.trim();
-      const nuevoJson = JSON.parse(textoSocio.replace(/```json/g, '').replace(/```/g, ''));
+      let exito = false;
+      let nuevoJson = null;
+
+      // CICLO DE FALLBACK (SI UNO FALLA POR DEMANDA, PRUEBA EL SIGUIENTE)
+      for (const modelo of modelosDisponibles) {
+        try {
+          const respuestaApi = await fetch(`[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){modelo}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const datosRecibidos = await respuestaApi.json();
+
+          // Si responde error 429 (Mucha Demanda), lanzamos error para que lo atrape el catch interno y pase al siguiente modelo
+          if (respuestaApi.status === 429) {
+            console.warn(`⚠️ Modelo ${modelo} saturado. Pasando al siguiente...`);
+            continue; 
+          }
+
+          // Si hay otro tipo de error grave (ej. API Key inválida)
+          if (!respuestaApi.ok) throw new Error(datosRecibidos.error?.message);
+          
+          // Si todo salió bien, procesamos los datos
+          const textoSocio = datosRecibidos.candidates[0].content.parts[0].text.trim();
+          nuevoJson = JSON.parse(textoSocio.replace(/```json/g, '').replace(/```/g, ''));
+          exito = true;
+          break; // Rompemos el ciclo de intentos porque ya conseguimos la info
+
+        } catch (errInterno) {
+          console.error(`Error procesando con ${modelo}:`, errInterno);
+          // Si es un error interno grave de lectura, sigue intentando con el próximo
+        }
+      }
+
+      // Si después de probar todos los modelos ninguno funcionó
+      if (!exito || !nuevoJson) {
+        throw new Error("Todos los servidores gratuitos están saturados en este momento. Por favor, intenta en 60 segundos.");
+      }
+
+      // Seteamos la información en la vista
       setFichaData(nuevoJson);
 
     } catch (error) {
-      alert(`⚠️ Fallo de IA: ${error.message} - Asegúrate de subir un archivo legible.`);
+      alert(`⚠️ Fallo de IA: ${error.message}`);
     } finally {
       setCargandoIA(false);
     }
