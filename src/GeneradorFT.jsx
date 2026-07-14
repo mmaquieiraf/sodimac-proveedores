@@ -195,23 +195,24 @@ export default function GeneradorFT() {
 
         <div style={{ flex: 1, width: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', paddingBottom: '20px' }}>
           
-          {/* LIENZO A4 DIGITAL ESTRICTO: Ajustado a 295mm para forzar una sola página en la exportación */}
+          {/* LIENZO A4 DIGITAL: Ajustado a 295mm para forzar una sola página */}
           <div id="lienzo-ficha-tecnica" style={{ backgroundColor: 'white', width: '210mm', height: '295mm', position: 'relative', fontFamily: 'Arial, sans-serif', color: '#333', overflow: 'hidden', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', boxSizing: 'border-box' }}>
             
-            {/* ENCABEZADO */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '25px 40px 10px 40px', borderBottom: '1px solid #E0E0E0' }}>
+            {/* ENCABEZADO PÍXEL-PERFECT (Posicionamiento Absoluto) */}
+            <div style={{ position: 'relative', width: '100%', height: '115px', borderBottom: '1px solid #E0E0E0', boxSizing: 'border-box' }}>
               
-              {/* LOGO: Mayor tamaño y alineado correctamente a la izquierda */}
-              <img src="/logo.png" alt="Sodimac Logo" style={{ height: '85px', width: '280px', objectFit: 'contain', objectPosition: 'left center' }} />
+              {/* LOGO SODIMAC CON MEDIDAS Y COORDENADAS EXACTAS (x:34px, y:43px, width:36%) */}
+              <img src="/logo.png" alt="Sodimac Logo" style={{ position: 'absolute', left: '34px', top: '43px', width: '36%', maxWidth: '380px', height: '62px', objectFit: 'contain', objectPosition: 'left center' }} />
               
-              {/* Bloque geométrico azul superior */}
-              <div style={{ backgroundColor: '#005AA9', color: 'white', padding: '12px 40px 12px 60px', fontSize: '24px', fontWeight: '900', clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0% 100%)', marginRight: '-40px', marginTop: '-10px', letterSpacing: '1px' }}>
+              {/* BLOQUE GEOMÉTRICO AZUL (Esquina Superior Derecha) */}
+              <div style={{ position: 'absolute', right: 0, top: 0, backgroundColor: '#005AA9', color: 'white', height: '80px', display: 'flex', alignItems: 'center', padding: '0 40px 0 60px', fontSize: '26px', fontWeight: '900', clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0% 100%)', letterSpacing: '1px' }}>
                 FICHA TÉCNICA
               </div>
             </div>
 
             {/* CUERPO PRINCIPAL DOS COLUMNAS */}
-            <div style={{ display: 'flex', padding: '30px 40px 120px 40px', gap: '35px', height: 'calc(295mm - 165px)', boxSizing: 'border-box' }}>
+            {/* Altura ajustada dinámicamente: 295mm totales - 115px header - 100px padding bottom extra de seguridad */}
+            <div style={{ display: 'flex', padding: '30px 40px 100px 40px', gap: '35px', height: 'calc(295mm - 115px)', boxSizing: 'border-box' }}>
               
               {/* COLUMNA IZQUIERDA (IMAGEN Y CARACTERÍSTICAS) */}
               <div style={{ flex: '0 0 35%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -229,6 +230,7 @@ export default function GeneradorFT() {
                 <div style={{ backgroundColor: '#F7F7F7', borderRadius: '15px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                   {fichaData.caracteristicas.map((carac, idx) => (
                     <div key={idx} style={{ display: 'flex', gap: '12px', borderBottom: idx !== fichaData.caracteristicas.length - 1 ? '1px solid #E5E5E5' : 'none', paddingBottom: idx !== fichaData.caracteristicas.length - 1 ? '15px' : '0' }}>
+                      
                       <div style={{ width: '36px', height: '36px', borderRadius: '50%', border: '2px solid #005AA9', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#005AA9', flexShrink: 0 }}>
                         {idx === 0 ? (
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -238,6 +240,7 @@ export default function GeneradorFT() {
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
                         )}
                       </div>
+                      
                       <div>
                         <h4 style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#222', fontWeight: '900', letterSpacing: '0.5px' }}>{carac.titulo}</h4>
                         <p style={{ margin: 0, fontSize: '11.5px', color: '#666', lineHeight: '1.4' }}>{carac.texto}</p>
@@ -260,6 +263,7 @@ export default function GeneradorFT() {
                   <h3 style={{ margin: 0, fontSize: '16px', color: '#222', fontWeight: '900' }}>DATOS TÉCNICOS</h3>
                 </div>
                 
+                {/* Tabla de Especificaciones */}
                 <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px' }}>
                   <tbody>
                     <tr style={{ borderTop: '2px solid #005AA9' }}></tr>
