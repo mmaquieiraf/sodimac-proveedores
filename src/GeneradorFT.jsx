@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import html2pdf from 'html2pdf.js';
 
 export default function GeneradorFT() {
   const [cargandoIA, setCargandoIA] = useState(false);
@@ -57,6 +56,7 @@ export default function GeneradorFT() {
   };
 
   const exportarPDF = async () => {
+    // Inyección dinámica de html2pdf para que Vercel no de error
     if (!window.html2pdf) {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
