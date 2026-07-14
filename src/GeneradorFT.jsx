@@ -68,7 +68,18 @@ export default function GeneradorFT() {
     }
     
     // Forzamos el scroll arriba para evitar cortes en la fotografía del canvas
-    window.scrollTo(0,0);
+    window.scrollTo(0,0);window.scrollTo(0,0);
+
+const imagenes = Array.from(elemento.querySelectorAll('img'));
+await Promise.all(
+  imagenes.map((img) => {
+    if (img.complete) return Promise.resolve();
+    return new Promise((resolve) => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+  })
+);
     
     const elemento = document.getElementById('lienzo-ficha-tecnica');
     const opciones = {
@@ -222,7 +233,7 @@ export default function GeneradorFT() {
                 }}
               >
                 <img
-                  src="/logo-sodimac-sin-margen.svg" // Asegúrate de tener este SVG en /public
+                  src="/logo-sodimac-sin-margen.png" // Asegúrate de tener este SVG en /public
                   alt="Sodimac"
                   style={{
                     display: 'block',
