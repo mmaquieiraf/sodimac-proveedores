@@ -67,9 +67,10 @@ export default function GeneradorFT() {
       });
     }
     
-    // Forzamos el scroll arriba para evitar cortes en la fotografía del canvas
+    // Forzamos el scroll arriba
     window.scrollTo(0,0);
 
+    // Buscamos el elemento a convertir
     const elemento = document.getElementById('lienzo-ficha-tecnica');
     
     // Promesa para asegurar que todas las imágenes (logo y producto) carguen antes de exportar
@@ -139,7 +140,7 @@ export default function GeneradorFT() {
       
       Reglas Estrictas:
       1. Extrae máximo 3 características principales.
-      2. Extrae máximo 10 datos técnicos relevantes.
+      2. Extrae máximo 10 datos técnicos relevantes. Los nombres de las especificaciones deben ser precisos y cortos.
       3. Extrae máximo 4 usos recomendados. MUY IMPORTANTE: Los usos deben ser palabras cortas o frases de MÁXIMO 3 PALABRAS (Ej: "SISTEMAS CRÍTICOS" en vez de "Ideal para aplicaciones en sistemas críticos").
       `;
 
@@ -214,12 +215,13 @@ export default function GeneradorFT() {
 
         <div style={{ flex: 1, width: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', paddingBottom: '20px' }}>
           
+          {/* LIENZO A4 DIGITAL ESTRICTO */}
           <div id="lienzo-ficha-tecnica" style={{ backgroundColor: 'white', width: '210mm', height: '295mm', position: 'relative', fontFamily: 'Arial, sans-serif', color: '#333', overflow: 'hidden', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', boxSizing: 'border-box' }}>
             
             {/* ENCABEZADO PÍXEL-PERFECT */}
             <div style={{ position: 'relative', width: '100%', height: '115px', borderBottom: '1px solid #E0E0E0', boxSizing: 'border-box' }}>
               
-              {/* LOGO SODIMAC SIN MÁRGENES Y TAMAÑO EXACTO */}
+              {/* LOGO SODIMAC SIN MÁRGENES */}
               <div
                 style={{
                   position: 'absolute',
@@ -257,6 +259,7 @@ export default function GeneradorFT() {
               {/* COLUMNA IZQUIERDA (IMAGEN Y CARACTERÍSTICAS) */}
               <div style={{ flex: '0 0 35%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 
+                {/* Cuadro de imagen */}
                 <div style={{ width: '100%', height: '320px', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
                   {imagenProducto ? (
                     <img src={imagenProducto} alt="Producto" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
@@ -265,6 +268,7 @@ export default function GeneradorFT() {
                   )}
                 </div>
 
+                {/* Tarjeta de Beneficios estilo industrial */}
                 <div style={{ backgroundColor: '#F7F7F7', borderRadius: '15px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                   {fichaData.caracteristicas.map((carac, idx) => (
                     <div key={idx} style={{ display: 'flex', gap: '12px', borderBottom: idx !== fichaData.caracteristicas.length - 1 ? '1px solid #E5E5E5' : 'none', paddingBottom: idx !== fichaData.caracteristicas.length - 1 ? '15px' : '0' }}>
@@ -301,13 +305,18 @@ export default function GeneradorFT() {
                   <h3 style={{ margin: 0, fontSize: '16px', color: '#222', fontWeight: '900' }}>DATOS TÉCNICOS</h3>
                 </div>
                 
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px' }}>
+                {/* Tabla de Especificaciones - CORRECCIÓN DE OVERLAP */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px', tableLayout: 'fixed' }}>
                   <tbody>
                     <tr style={{ borderTop: '2px solid #005AA9' }}></tr>
                     {fichaData.datosTecnicos.map((dato, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid #EBEBEB' }}>
-                        <td style={{ padding: '8px 5px', fontSize: '12px', fontWeight: 'bold', color: '#333', width: '45%' }}>{dato.parametro}</td>
-                        <td style={{ padding: '8px 5px', fontSize: '12px', color: '#555' }}>{dato.valor}</td>
+                        <td style={{ padding: '10px 5px', fontSize: '12px', fontWeight: 'bold', color: '#333', width: '50%', verticalAlign: 'top', lineHeight: '1.4', wordWrap: 'break-word' }}>
+                          {dato.parametro}
+                        </td>
+                        <td style={{ padding: '10px 5px', fontSize: '12px', color: '#555', width: '50%', verticalAlign: 'top', lineHeight: '1.4', wordWrap: 'break-word' }}>
+                          {dato.valor}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -340,7 +349,7 @@ export default function GeneradorFT() {
               </div>
             </div>
 
-            {/* PIE DE PÁGINA (Franja Diagonal Perfecta) */}
+            {/* PIE DE PÁGINA */}
             <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '24mm', background: 'linear-gradient(105deg, #005AA9 55%, #E31E24 55%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 40px', boxSizing: 'border-box', color: 'white' }}>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
