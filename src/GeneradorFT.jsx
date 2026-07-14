@@ -67,30 +67,32 @@ export default function GeneradorFT() {
       });
     }
     
-    // Forzamos el scroll arriba para evitar cortes en la fotografía del canvas
-    window.scrollTo(0,0);window.scrollTo(0,0);
+    // Forzamos el scroll arriba
+    window.scrollTo(0,0);
 
-const imagenes = Array.from(elemento.querySelectorAll('img'));
-await Promise.all(
-  imagenes.map((img) => {
-    if (img.complete) return Promise.resolve();
-    return new Promise((resolve) => {
-      img.onload = resolve;
-      img.onerror = resolve;
-    });
-  })
-);
-    
+    // CORRECCIÓN DEL BUG: Primero declaramos elemento, luego buscamos las imágenes
     const elemento = document.getElementById('lienzo-ficha-tecnica');
+    
+    const imagenes = Array.from(elemento.querySelectorAll('img'));
+    await Promise.all(
+      imagenes.map((img) => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      })
+    );
+    
     const opciones = {
       margin: 0,
       filename: `Ficha_Tecnica_${fichaData.titulo.replace(/\s+/g, '_')}.pdf`,
       image: { type: 'jpeg', quality: 1 },
       html2canvas: { 
-        scale: 3, // Escala aumentada a 3 para máxima nitidez
+        scale: 3, 
         useCORS: true, 
         scrollY: 0,
-        backgroundColor: '#ffffff' // Fondo blanco explícito
+        backgroundColor: '#ffffff' 
       }, 
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
@@ -217,14 +219,14 @@ await Promise.all(
             {/* ENCABEZADO PÍXEL-PERFECT (Posicionamiento Absoluto) */}
             <div style={{ position: 'relative', width: '100%', height: '115px', borderBottom: '1px solid #E0E0E0', boxSizing: 'border-box' }}>
               
-              {/* LOGO SODIMAC ENCAPSULADO (Corte Limpio sin márgenes transparentes) */}
+              {/* LOGO SODIMAC CORREGIDO A ESCALA REAL */}
               <div
                 style={{
                   position: 'absolute',
-                  left: '66px',
-                  top: '36px', // Ajuste fino
-                  width: '155px', // Ajuste fino (ligeramente más ancho si es necesario)
-                  height: '30px', // Ajuste fino
+                  left: '34px',
+                  top: '43px', 
+                  width: '380px', 
+                  height: '63px', 
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'flex-start',
@@ -233,12 +235,12 @@ await Promise.all(
                 }}
               >
                 <img
-                  src="/logo-sodimac-sin-margen.png" // Asegúrate de tener este SVG en /public
+                  src="/logo-sodimac-sin-margen.png" // O /logo.png
                   alt="Sodimac"
                   style={{
                     display: 'block',
-                    width: '155px',
-                    height: '30px',
+                    width: '100%',
+                    height: '100%',
                     objectFit: 'contain',
                     objectPosition: 'left center',
                     transform: 'none',
@@ -305,7 +307,6 @@ await Promise.all(
                   <h3 style={{ margin: 0, fontSize: '16px', color: '#222', fontWeight: '900' }}>DATOS TÉCNICOS</h3>
                 </div>
                 
-                {/* Tabla de Especificaciones */}
                 <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px' }}>
                   <tbody>
                     <tr style={{ borderTop: '2px solid #005AA9' }}></tr>
@@ -318,11 +319,10 @@ await Promise.all(
                   </tbody>
                 </table>
 
-                {/* USOS RECOMENDADOS (USANDO CSS GRID PARA ALINEACIÓN PERFECTA) */}
+                {/* USOS RECOMENDADOS */}
                 <div style={{ border: '1px solid #005AA9', borderRadius: '8px', padding: '15px' }}>
                   <h4 style={{ margin: '0 0 15px 0', color: '#005AA9', fontSize: '12px', fontWeight: '900' }}>USOS RECOMENDADOS</h4>
                   
-                  {/* Grid asegura columnas de igual tamaño, evitando desalineaciones */}
                   <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(fichaData.usos.length, 1)}, 1fr)`, gap: '10px', alignItems: 'start' }}>
                     {fichaData.usos.map((uso, i) => (
                       <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '8px' }}>
@@ -346,7 +346,7 @@ await Promise.all(
               </div>
             </div>
 
-            {/* PIE DE PÁGINA (Franja Diagonal Perfecta: Izquierda Azul, Derecha Roja) */}
+            {/* PIE DE PÁGINA */}
             <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '24mm', background: 'linear-gradient(105deg, #005AA9 55%, #E31E24 55%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 40px', boxSizing: 'border-box', color: 'white' }}>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
