@@ -139,7 +139,7 @@ export default function GeneradorRFQ() {
         systemInstruction: { parts: [{ text: instruccionesSistema }] }
       };
 
-      const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
+      const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
