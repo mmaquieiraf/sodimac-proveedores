@@ -156,16 +156,26 @@ export default function GeneradorRFQ() {
     }
   };
 
-  // --- MOTOR DE FUSIÓN DE WORD (TEXTO PLANO LIMPIO Y SEGURO PARA RFQ) ---
+  // --- MOTOR DE FUSIÓN DE WORD (AUTO-REPARADOR DE ETIQUETAS) ---
   const generarWordFinal = async () => {
     try {
       const response = await fetch(URL_PLANTILLA_RFQ);
       const content = await response.arrayBuffer();
       const zip = new PizZip(content);
+
+      // 🔥 TRUCO DE AUTO-REPARACIÓN EN MEMORIA RAM
+      // Si la plantilla de Supabase tiene el arroba ({@alcance_ia}), docxtemplater anulará el texto plano y lo dejará en blanco.
+      // Este código busca el archivo interno de Word, borra el arroba automáticamente, y lo devuelve a {alcance_ia}
+      let docXml = zip.file("word/document.xml").asText();
+      if (docXml.includes('{@alcance_ia}')) {
+        docXml = docXml.replace('{@alcance_ia}', '{alcance_ia}');
+        zip.file("word/document.xml", docXml);
+      }
+
       const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
-      // Filtro para texto plano en Word
-      const alcanceLimpioParaWord = alcanceGenerado.replace(/\*\*/g, '').split('\n').map(linea => linea.trim() + '\t').join('\n');
+      // Filtro para texto plano en Word: quitamos asteriscos y mantenemos los saltos de línea limpios
+      const alcanceLimpioParaWord = alcanceGenerado.replace(/\*\*/g, '');
 
       doc.setData({
         administrador_nombre: adminSeleccionado.nombre,
@@ -288,15 +298,15 @@ export default function GeneradorRFQ() {
               <button onClick={() => eliminarLugarDespacho(lugar.id)} style={{ padding: '6px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✖</button>
             </div>
           ))}
-          <button onClick={agregarLugarDespacho} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ Agregar dirección</button>
+          <button onClick={agregarLugarDespacho} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ Agregar Tienda</button>
         </div>
       </div>
 
       {/* PANEL DERECHO: VISUALIZADOR */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px', minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-          <button onClick={generarWordFinal} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>📄 Descargar RFQ en Word</button>
-          <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Descargar RFQ en PDF</button>
+          <button onClick={generarWordFinal} disabled={cargandoIA} style={{ padding: '8px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: cargandoIA ? 'not-allowed' : 'pointer' }}>📄 Descargar RFQ en Word</button>
+          <button onClick={exportarPDF} disabled={cargandoIA} style={{ padding: '8px 15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: cargandoIA ? 'not-allowed' : 'pointer' }}>🖨️ Descargar RFQ en PDF</button>
         </div>
 
         <div style={{ flex: 1, backgroundColor: '#e5e5e5', padding: '20px', borderRadius: '8px', overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
