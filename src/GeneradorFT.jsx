@@ -55,7 +55,7 @@ export default function GeneradorFT() {
     });
   };
 
-  // --- EXPORTACIÓN A PDF EXACTO (A4, 1 PÁGINA) ---
+  // --- EXPORTACIÓN A PDF EXACTO (A4, 1 PÁGINA SEGURA) ---
   const exportarPDF = async () => {
     if (!window.html2pdf) {
       await new Promise((resolve, reject) => {
@@ -118,10 +118,10 @@ export default function GeneradorFT() {
         "categoriaPie": "CATEGORÍA DEL PRODUCTO (Ej: HERRAMIENTAS ELÉCTRICAS)"
       }
       
-      Reglas:
+      Reglas Estrictas:
       1. Extrae máximo 3 características principales.
       2. Extrae máximo 10 datos técnicos relevantes.
-      3. Extrae máximo 4 usos recomendados en formato arreglo de strings cortos.
+      3. Extrae máximo 4 usos recomendados. MUY IMPORTANTE: Los usos deben ser palabras cortas o frases de MÁXIMO 3 PALABRAS (Ej: "SISTEMAS CRÍTICOS" en vez de "Ideal para aplicaciones en sistemas críticos").
       `;
 
       const payload = {
@@ -195,14 +195,14 @@ export default function GeneradorFT() {
 
         <div style={{ flex: 1, width: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', paddingBottom: '20px' }}>
           
-          {/* LIENZO A4 DIGITAL: Alto ajustado a 296.5mm para evitar el salto a la segunda página en el PDF */}
-          <div id="lienzo-ficha-tecnica" style={{ backgroundColor: 'white', width: '210mm', height: '296.5mm', position: 'relative', fontFamily: 'Arial, sans-serif', color: '#333', overflow: 'hidden', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', boxSizing: 'border-box' }}>
+          {/* LIENZO A4 DIGITAL ESTRICTO: Ajustado a 295mm para forzar una sola página en la exportación */}
+          <div id="lienzo-ficha-tecnica" style={{ backgroundColor: 'white', width: '210mm', height: '295mm', position: 'relative', fontFamily: 'Arial, sans-serif', color: '#333', overflow: 'hidden', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', boxSizing: 'border-box' }}>
             
             {/* ENCABEZADO */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '25px 40px 10px 40px', borderBottom: '1px solid #E0E0E0' }}>
               
-              {/* Logo más protagonista con objectPosition left center */}
-              <img src="/logo.png" alt="Sodimac Logo" style={{ height: '90px', width: '250px', objectFit: 'contain', objectPosition: 'left center' }} />
+              {/* LOGO: Mayor tamaño y alineado correctamente a la izquierda */}
+              <img src="/logo.png" alt="Sodimac Logo" style={{ height: '85px', width: '280px', objectFit: 'contain', objectPosition: 'left center' }} />
               
               {/* Bloque geométrico azul superior */}
               <div style={{ backgroundColor: '#005AA9', color: 'white', padding: '12px 40px 12px 60px', fontSize: '24px', fontWeight: '900', clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0% 100%)', marginRight: '-40px', marginTop: '-10px', letterSpacing: '1px' }}>
@@ -211,8 +211,7 @@ export default function GeneradorFT() {
             </div>
 
             {/* CUERPO PRINCIPAL DOS COLUMNAS */}
-            {/* Padding bottom amplio para no sobreponerse a la barra diagonal inferior */}
-            <div style={{ display: 'flex', padding: '30px 40px 120px 40px', gap: '35px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', padding: '30px 40px 120px 40px', gap: '35px', height: 'calc(295mm - 165px)', boxSizing: 'border-box' }}>
               
               {/* COLUMNA IZQUIERDA (IMAGEN Y CARACTERÍSTICAS) */}
               <div style={{ flex: '0 0 35%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -230,8 +229,6 @@ export default function GeneradorFT() {
                 <div style={{ backgroundColor: '#F7F7F7', borderRadius: '15px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                   {fichaData.caracteristicas.map((carac, idx) => (
                     <div key={idx} style={{ display: 'flex', gap: '12px', borderBottom: idx !== fichaData.caracteristicas.length - 1 ? '1px solid #E5E5E5' : 'none', paddingBottom: idx !== fichaData.caracteristicas.length - 1 ? '15px' : '0' }}>
-                      
-                      {/* Iconos lineales SVG genéricos pero corporativos */}
                       <div style={{ width: '36px', height: '36px', borderRadius: '50%', border: '2px solid #005AA9', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#005AA9', flexShrink: 0 }}>
                         {idx === 0 ? (
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -241,7 +238,6 @@ export default function GeneradorFT() {
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
                         )}
                       </div>
-                      
                       <div>
                         <h4 style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#222', fontWeight: '900', letterSpacing: '0.5px' }}>{carac.titulo}</h4>
                         <p style={{ margin: 0, fontSize: '11.5px', color: '#666', lineHeight: '1.4' }}>{carac.texto}</p>
@@ -264,7 +260,6 @@ export default function GeneradorFT() {
                   <h3 style={{ margin: 0, fontSize: '16px', color: '#222', fontWeight: '900' }}>DATOS TÉCNICOS</h3>
                 </div>
                 
-                {/* Tabla de Especificaciones Limpia */}
                 <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px' }}>
                   <tbody>
                     <tr style={{ borderTop: '2px solid #005AA9' }}></tr>
@@ -277,13 +272,15 @@ export default function GeneradorFT() {
                   </tbody>
                 </table>
 
-                {/* USOS RECOMENDADOS (Borde Azul Fino) */}
+                {/* USOS RECOMENDADOS (USANDO CSS GRID PARA ALINEACIÓN PERFECTA) */}
                 <div style={{ border: '1px solid #005AA9', borderRadius: '8px', padding: '15px' }}>
                   <h4 style={{ margin: '0 0 15px 0', color: '#005AA9', fontSize: '12px', fontWeight: '900' }}>USOS RECOMENDADOS</h4>
-                  <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+                  
+                  {/* Grid asegura columnas de igual tamaño, evitando desalineaciones */}
+                  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(fichaData.usos.length, 1)}, 1fr)`, gap: '10px', alignItems: 'start' }}>
                     {fichaData.usos.map((uso, i) => (
-                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ width: '36px', height: '36px', backgroundColor: '#005AA9', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px' }}>
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '8px' }}>
+                        <div style={{ width: '40px', height: '40px', backgroundColor: '#005AA9', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px', flexShrink: 0 }}>
                           {i === 0 ? (
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21V8l9-4l9 4v13"></path><rect x="6" y="12" width="3" height="3"></rect><rect x="15" y="12" width="3" height="3"></rect></svg>
                           ) : i === 1 ? (
@@ -294,10 +291,11 @@ export default function GeneradorFT() {
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
                           )}
                         </div>
-                        <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#005AA9', textTransform: 'uppercase', textAlign: 'center' }}>{uso}</span>
+                        <span style={{ fontSize: '8.5px', fontWeight: 'bold', color: '#005AA9', textTransform: 'uppercase', lineHeight: '1.2' }}>{uso}</span>
                       </div>
                     ))}
                   </div>
+
                 </div>
               </div>
             </div>
