@@ -75,7 +75,12 @@ export default function GeneradorFT() {
       margin: 0,
       filename: `Ficha_Tecnica_${fichaData.titulo.replace(/\s+/g, '_')}.pdf`,
       image: { type: 'jpeg', quality: 1 },
-      html2canvas: { scale: 2, useCORS: true, scrollY: 0 }, 
+      html2canvas: { 
+        scale: 3, // Escala aumentada a 3 para máxima nitidez
+        useCORS: true, 
+        scrollY: 0,
+        backgroundColor: '#ffffff' // Fondo blanco explícito
+      }, 
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
     window.html2pdf().set(opciones).from(elemento).save();
@@ -201,8 +206,35 @@ export default function GeneradorFT() {
             {/* ENCABEZADO PÍXEL-PERFECT (Posicionamiento Absoluto) */}
             <div style={{ position: 'relative', width: '100%', height: '115px', borderBottom: '1px solid #E0E0E0', boxSizing: 'border-box' }}>
               
-              {/* LOGO SODIMAC CORREGIDO: Alto exacto (62px) y Ancho en 'auto' para evitar deformaciones en el PDF */}
-              <img src="/logo.png" alt="Sodimac Logo" style={{ position: 'absolute', left: '34px', top: '43px', height: '62px', width: 'auto' }} />
+              {/* LOGO SODIMAC ENCAPSULADO (Corte Limpio sin márgenes transparentes) */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '66px',
+                  top: '36px', // Ajuste fino
+                  width: '155px', // Ajuste fino (ligeramente más ancho si es necesario)
+                  height: '30px', // Ajuste fino
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-start',
+                  overflow: 'hidden',
+                  lineHeight: 0,
+                }}
+              >
+                <img
+                  src="/logo-sodimac-sin-margen.svg" // Asegúrate de tener este SVG en /public
+                  alt="Sodimac"
+                  style={{
+                    display: 'block',
+                    width: '155px',
+                    height: '30px',
+                    objectFit: 'contain',
+                    objectPosition: 'left center',
+                    transform: 'none',
+                    imageRendering: 'auto',
+                  }}
+                />
+              </div>
               
               {/* BLOQUE GEOMÉTRICO AZUL (Esquina Superior Derecha) */}
               <div style={{ position: 'absolute', right: 0, top: 0, backgroundColor: '#005AA9', color: 'white', height: '80px', display: 'flex', alignItems: 'center', padding: '0 40px 0 60px', fontSize: '26px', fontWeight: '900', clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0% 100%)', letterSpacing: '1px' }}>
