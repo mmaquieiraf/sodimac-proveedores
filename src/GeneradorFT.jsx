@@ -5,7 +5,7 @@ export default function GeneradorFT() {
   const [archivosContexto, setArchivosContexto] = useState([]);
   const [imagenProducto, setImagenProducto] = useState(null);
 
-  // Estado inicial con la estructura de prueba (Mockup)
+  // Estado inicial con la estructura del template (Mockup)
   const [fichaData, setFichaData] = useState({
     titulo: "ASPIRADORA INDUSTRIAL DE POLVO Y AGUA",
     subtitulo: "80 LITROS - 3 MOTORES",
@@ -55,8 +55,8 @@ export default function GeneradorFT() {
     });
   };
 
+  // --- EXPORTACIÓN A PDF EXACTO (A4, 1 PÁGINA) ---
   const exportarPDF = async () => {
-    // Inyección dinámica de html2pdf para que Vercel no de error
     if (!window.html2pdf) {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
@@ -66,17 +66,22 @@ export default function GeneradorFT() {
         document.head.appendChild(script);
       });
     }
+    
+    // Forzamos el scroll arriba para evitar cortes raros en la "foto"
+    window.scrollTo(0,0);
+    
     const elemento = document.getElementById('lienzo-ficha-tecnica');
     const opciones = {
       margin: 0,
       filename: `Ficha_Tecnica_${fichaData.titulo.replace(/\s+/g, '_')}.pdf`,
       image: { type: 'jpeg', quality: 1 },
-      html2canvas: { scale: 3, useCORS: true }, 
+      html2canvas: { scale: 2, useCORS: true, scrollY: 0 }, 
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
     window.html2pdf().set(opciones).from(elemento).save();
   };
 
+  // --- LÓGICA DE EXTRACCIÓN CON IA ---
   const procesarConIA = async () => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) return alert("❌ Error: Vercel no está leyendo la API Key.");
@@ -145,19 +150,19 @@ export default function GeneradorFT() {
   };
 
   return (
-    <div style={{ display: 'flex', width: '100%', height: 'calc(100vh - 100px)', gap: '20px', padding: '15px', boxSizing: 'border-box', backgroundColor: '#f4f4f4', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', width: '100%', height: 'calc(100vh - 100px)', gap: '20px', padding: '15px', boxSizing: 'border-box', backgroundColor: '#e5e5e5', overflow: 'hidden' }}>
       
       {/* PANEL IZQUIERDO: CONTROLES */}
       <div style={{ width: '400px', flexShrink: 0, backgroundColor: 'white', padding: '25px', borderRadius: '8px', overflowY: 'auto', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-        <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>Generador Ficha Técnica</h2>
+        <h2 style={{ color: '#005AA9', marginTop: 0, borderBottom: '2px solid #E31E24', paddingBottom: '10px' }}>Generador Ficha Técnica</h2>
         
         <div style={{ marginBottom: '25px', backgroundColor: '#eef2f7', padding: '15px', borderRadius: '6px', border: '1px solid #cce5ff' }}>
-          <h3 style={{ fontSize: '15px', color: '#004A99', marginTop: 0 }}>1. Subir Especificaciones (PDF/TXT)</h3>
+          <h3 style={{ fontSize: '15px', color: '#005AA9', marginTop: 0 }}>1. Subir Especificaciones (PDF/TXT)</h3>
           <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>La IA leerá este documento para extraer los datos técnicos, la descripción y los usos.</p>
           
-          <div style={{ padding: '12px', backgroundColor: 'white', borderRadius: '4px', border: '1px dashed #004A99' }}>
+          <div style={{ padding: '12px', backgroundColor: 'white', borderRadius: '4px', border: '1px dashed #005AA9' }}>
             <label style={{ fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
-              <span style={{ backgroundColor: '#004A99', color: 'white', padding: '6px 10px', borderRadius: '4px', marginRight: '10px' }}>📎 Archivo Origen</span>
+              <span style={{ backgroundColor: '#005AA9', color: 'white', padding: '6px 10px', borderRadius: '4px', marginRight: '10px' }}>📎 Archivo Origen</span>
               <input type="file" multiple accept=".pdf,.txt" onChange={manejarCargaArchivos} style={{ display: 'none' }} />
             </label>
             {archivosContexto.length > 0 && (
@@ -170,62 +175,75 @@ export default function GeneradorFT() {
               </div>
             )}
           </div>
-          <button onClick={procesarConIA} disabled={cargandoIA} style={{ width: '100%', padding: '10px', marginTop: '10px', backgroundColor: cargandoIA ? '#ccc' : '#28a745', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: cargandoIA ? 'not-allowed' : 'pointer' }}>
+          <button onClick={procesarConIA} disabled={cargandoIA} style={{ width: '100%', padding: '10px', marginTop: '10px', backgroundColor: cargandoIA ? '#ccc' : '#005AA9', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: cargandoIA ? 'not-allowed' : 'pointer' }}>
             {cargandoIA ? '⏳ Analizando Datos...' : '✨ Autocompletar con IA'}
           </button>
         </div>
 
         <div style={{ marginBottom: '25px', backgroundColor: '#fff3f3', padding: '15px', borderRadius: '6px', border: '1px solid #ffcccc' }}>
-          <h3 style={{ fontSize: '15px', color: '#EE2D24', marginTop: 0 }}>2. Cargar Imagen del Producto</h3>
+          <h3 style={{ fontSize: '15px', color: '#E31E24', marginTop: 0 }}>2. Cargar Imagen del Producto</h3>
           <p style={{ fontSize: '11px', color: '#555', marginBottom: '10px' }}>Sube una imagen preferiblemente cuadrada y con fondo blanco o transparente.</p>
           <input type="file" accept="image/*" onChange={manejarCargaImagen} style={{ width: '100%', fontSize: '12px' }} />
         </div>
-
       </div>
 
       {/* PANEL DERECHO: VISUALIZADOR Y EXPORTACIÓN */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px', minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: 'white', padding: '15px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-          <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Descargar Ficha en PDF Oficial</button>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px', minWidth: 0, alignItems: 'center' }}>
+        <div style={{ width: '210mm', display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: 'white', padding: '10px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+          <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#E31E24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Descargar Ficha en PDF Oficial</button>
         </div>
 
-        <div style={{ flex: 1, backgroundColor: '#555', padding: '20px', borderRadius: '8px', overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ flex: 1, width: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', paddingBottom: '20px' }}>
           
-          {/* LIENZO A4 DIGITAL: DISEÑO CORPORATIVO SODIMAC */}
-          <div id="lienzo-ficha-tecnica" style={{ backgroundColor: 'white', width: '210mm', height: '297mm', position: 'relative', fontFamily: 'Arial, sans-serif', color: '#333', overflow: 'hidden', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' }}>
+          {/* LIENZO A4 DIGITAL ESTRICTO: 210x297mm con overflow oculto para evitar 2da hoja */}
+          <div id="lienzo-ficha-tecnica" style={{ backgroundColor: 'white', width: '210mm', height: '297mm', position: 'relative', fontFamily: 'Arial, sans-serif', color: '#333', overflow: 'hidden', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', boxSizing: 'border-box' }}>
             
             {/* ENCABEZADO */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 40px', borderBottom: '1px solid #eee' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <img src="/logo.png" alt="Sodimac Logo" style={{ height: '50px', objectFit: 'contain' }} />
-              </div>
-              <div style={{ backgroundColor: '#004A99', color: 'white', padding: '15px 40px', fontSize: '28px', fontWeight: 'bold', clipPath: 'polygon(10% 0, 100% 0, 100% 100%, 0% 100%)', marginRight: '-40px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '25px 40px 10px 40px', borderBottom: '1px solid #E0E0E0' }}>
+              {/* Logo más protagonista */}
+              <img src="/logo.png" alt="Sodimac Logo" style={{ height: '70px', objectFit: 'contain' }} />
+              
+              {/* Bloque geométrico azul superior */}
+              <div style={{ backgroundColor: '#005AA9', color: 'white', padding: '12px 40px 12px 60px', fontSize: '24px', fontWeight: '900', clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0% 100%)', marginRight: '-40px', marginTop: '-10px', letterSpacing: '1px' }}>
                 FICHA TÉCNICA
               </div>
             </div>
 
             {/* CUERPO PRINCIPAL DOS COLUMNAS */}
-            <div style={{ display: 'flex', padding: '30px 40px', gap: '30px' }}>
+            {/* Altura calculada para no chocar con el footer y mantener todo en 1 hoja */}
+            <div style={{ display: 'flex', padding: '30px 40px', gap: '35px', height: 'calc(297mm - 165px)', boxSizing: 'border-box' }}>
               
               {/* COLUMNA IZQUIERDA (IMAGEN Y CARACTERÍSTICAS) */}
               <div style={{ flex: '0 0 35%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ width: '100%', height: '300px', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+                
+                {/* Cuadro de imagen */}
+                <div style={{ width: '100%', height: '320px', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
                   {imagenProducto ? (
                     <img src={imagenProducto} alt="Producto" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                   ) : (
-                    <div style={{ color: '#ccc', textAlign: 'center', border: '2px dashed #ccc', padding: '40px', width: '80%' }}>[Sube una imagen]</div>
+                    <div style={{ color: '#ccc', textAlign: 'center', border: '2px dashed #ccc', padding: '40px', width: '80%', fontSize: '12px' }}>[Carga la imagen en el panel izquierdo]</div>
                   )}
                 </div>
 
-                <div style={{ backgroundColor: '#f8f9fa', borderRadius: '15px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Tarjeta de Beneficios estilo industrial */}
+                <div style={{ backgroundColor: '#F7F7F7', borderRadius: '15px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                   {fichaData.caracteristicas.map((carac, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '15px', borderBottom: idx !== fichaData.caracteristicas.length - 1 ? '1px solid #ddd' : 'none', paddingBottom: idx !== fichaData.caracteristicas.length - 1 ? '15px' : '0' }}>
-                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid #004A99', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#004A99', fontWeight: 'bold', fontSize: '18px', flexShrink: 0 }}>
-                        {idx === 0 ? '✓' : idx === 1 ? '⚡' : '★'}
+                    <div key={idx} style={{ display: 'flex', gap: '12px', borderBottom: idx !== fichaData.caracteristicas.length - 1 ? '1px solid #E5E5E5' : 'none', paddingBottom: idx !== fichaData.caracteristicas.length - 1 ? '15px' : '0' }}>
+                      
+                      {/* Iconos lineales SVG genéricos pero corporativos */}
+                      <div style={{ width: '36px', height: '36px', borderRadius: '50%', border: '2px solid #005AA9', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#005AA9', flexShrink: 0 }}>
+                        {idx === 0 ? (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        ) : idx === 1 ? (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                        ) : (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                        )}
                       </div>
+                      
                       <div>
-                        <h4 style={{ margin: '0 0 5px 0', fontSize: '13px', color: '#333' }}>{carac.titulo}</h4>
-                        <p style={{ margin: 0, fontSize: '12px', color: '#666', lineHeight: '1.4' }}>{carac.texto}</p>
+                        <h4 style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#222', fontWeight: '900', letterSpacing: '0.5px' }}>{carac.titulo}</h4>
+                        <p style={{ margin: 0, fontSize: '11.5px', color: '#666', lineHeight: '1.4' }}>{carac.texto}</p>
                       </div>
                     </div>
                   ))}
@@ -234,37 +252,48 @@ export default function GeneradorFT() {
 
               {/* COLUMNA DERECHA (TÍTULOS Y DATOS TÉCNICOS) */}
               <div style={{ flex: '1', display: 'flex', flexDirection: 'column' }}>
-                <h1 style={{ fontSize: '32px', margin: '0 0 5px 0', color: '#333', lineHeight: '1.1', textTransform: 'uppercase' }}>{fichaData.titulo}</h1>
-                <h2 style={{ fontSize: '20px', margin: '0 0 20px 0', color: '#004A99', fontWeight: 'bold' }}>{fichaData.subtitulo}</h2>
-                <p style={{ fontSize: '14px', color: '#555', lineHeight: '1.5', marginBottom: '30px' }}>{fichaData.descripcion}</p>
+                <h1 style={{ fontSize: '30px', margin: '0 0 5px 0', color: '#222', lineHeight: '1', textTransform: 'uppercase', fontFamily: 'Impact, Arial Narrow, sans-serif', letterSpacing: '0.5px' }}>{fichaData.titulo}</h1>
+                <h2 style={{ fontSize: '18px', margin: '0 0 15px 0', color: '#005AA9', fontWeight: '800', letterSpacing: '0.5px' }}>{fichaData.subtitulo}</h2>
+                <p style={{ fontSize: '13px', color: '#555', lineHeight: '1.5', marginBottom: '25px' }}>{fichaData.descripcion}</p>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-                  <div style={{ width: '35px', height: '35px', backgroundColor: '#004A99', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontSize: '16px' }}>⚙️</div>
-                  <h3 style={{ margin: 0, fontSize: '18px', color: '#333' }}>DATOS TÉCNICOS</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                  <div style={{ width: '28px', height: '28px', backgroundColor: '#005AA9', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: '16px', color: '#222', fontWeight: '900' }}>DATOS TÉCNICOS</h3>
                 </div>
                 
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+                {/* Tabla de Especificaciones Limpia */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px' }}>
                   <tbody>
-                    <tr style={{ borderTop: '2px solid #004A99' }}></tr>
+                    <tr style={{ borderTop: '2px solid #005AA9' }}></tr>
                     {fichaData.datosTecnicos.map((dato, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid #ddd' }}>
-                        <td style={{ padding: '10px 5px', fontSize: '13px', fontWeight: 'bold', color: '#444', width: '45%' }}>{dato.parametro}</td>
-                        <td style={{ padding: '10px 5px', fontSize: '13px', color: '#666' }}>{dato.valor}</td>
+                      <tr key={i} style={{ borderBottom: '1px solid #EBEBEB' }}>
+                        <td style={{ padding: '8px 5px', fontSize: '12px', fontWeight: 'bold', color: '#333', width: '45%' }}>{dato.parametro}</td>
+                        <td style={{ padding: '8px 5px', fontSize: '12px', color: '#555' }}>{dato.valor}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
-                {/* USOS RECOMENDADOS */}
-                <div style={{ border: '2px solid #b3d4ff', borderRadius: '8px', padding: '15px' }}>
-                  <h4 style={{ margin: '0 0 15px 0', color: '#004A99', fontSize: '13px' }}>USOS RECOMENDADOS</h4>
+                {/* USOS RECOMENDADOS (Borde Azul Fino) */}
+                <div style={{ border: '1px solid #005AA9', borderRadius: '8px', padding: '15px' }}>
+                  <h4 style={{ margin: '0 0 15px 0', color: '#005AA9', fontSize: '12px', fontWeight: '900' }}>USOS RECOMENDADOS</h4>
                   <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
                     {fichaData.usos.map((uso, i) => (
                       <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ width: '40px', height: '40px', backgroundColor: '#004A99', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '20px', borderRadius: '4px' }}>
-                          {i === 0 ? '🏭' : i === 1 ? '📦' : i === 2 ? '🏗️' : '🔧'}
+                        <div style={{ width: '36px', height: '36px', backgroundColor: '#005AA9', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '6px' }}>
+                          {i === 0 ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21V8l9-4l9 4v13"></path><rect x="6" y="12" width="3" height="3"></rect><rect x="15" y="12" width="3" height="3"></rect></svg>
+                          ) : i === 1 ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                          ) : i === 2 ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                          ) : (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                          )}
                         </div>
-                        <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#004A99' }}>{uso}</span>
+                        <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#005AA9', textTransform: 'uppercase' }}>{uso}</span>
                       </div>
                     ))}
                   </div>
@@ -272,22 +301,27 @@ export default function GeneradorFT() {
               </div>
             </div>
 
-            {/* PIE DE PÁGINA */}
-            <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', backgroundColor: '#004A99', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 40px', boxSizing: 'border-box' }}>
+            {/* PIE DE PÁGINA (Franja Diagonal Perfecta: Izquierda Azul, Derecha Roja) */}
+            <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '24mm', background: 'linear-gradient(105deg, #005AA9 55%, #E31E24 55%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 40px', boxSizing: 'border-box', color: 'white' }}>
+              
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <div style={{ fontSize: '30px' }}>⌂</div>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                 <div>
-                  <div style={{ fontSize: '11px', fontWeight: 'bold' }}>CATEGORÍA:</div>
-                  <div style={{ fontSize: '13px' }}>{fichaData.categoriaPie}</div>
+                  <div style={{ fontSize: '10px', fontWeight: 'bold', letterSpacing: '0.5px' }}>CATEGORÍA:</div>
+                  <div style={{ fontSize: '12px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>{fichaData.categoriaPie}</div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '30px', height: '30px', borderRadius: '50%', border: '2px solid white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold' }}>✓</div>
-                <div>
-                  <div style={{ fontSize: '12px', fontWeight: 'bold' }}>CALIDAD GARANTIZADA</div>
-                  <div style={{ fontSize: '10px' }}>Respaldado por Sodimac</div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1.5px solid white', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px' }}>CALIDAD GARANTIZADA</div>
+                  <div style={{ fontSize: '9.5px', opacity: 0.9 }}>Respaldado por Sodimac</div>
                 </div>
               </div>
+              
             </div>
 
           </div>
