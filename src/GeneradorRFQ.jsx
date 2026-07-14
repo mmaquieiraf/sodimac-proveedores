@@ -4,7 +4,7 @@ import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
 
 // ---> REEMPLAZA ESTA URL CON LA DE TU PLANTILLA RFQ DE SUPABASE <---
-const URL_PLANTILLA_RFQ = https://zpxptembhqlmpkbctvml.supabase.co/storage/v1/object/public/plantillas/plantilla-rfq.docx;
+const URL_PLANTILLA_RFQ = "https://zpxptembhqlmpkbctvml.supabase.co/storage/v1/object/public/plantillas/plantilla-rfq.docx";
 
 // Lista de administradores predefinidos
 const administradores = [
