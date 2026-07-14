@@ -89,11 +89,11 @@ export default function GeneradorFT() {
       filename: `Ficha_Tecnica_${fichaData.titulo.replace(/\s+/g, '_')}.pdf`,
       image: { type: 'jpeg', quality: 1 },
       html2canvas: { 
-        scale: 3, // Escala aumentada a 3 para máxima nitidez
+        scale: 3, 
         useCORS: true, 
         scrollY: 0,
-        backgroundColor: '#ffffff', // Fondo blanco explícito
-        imageTimeout: 0 // Evita errores de timeout al capturar imágenes
+        backgroundColor: '#ffffff',
+        imageTimeout: 0 
       }, 
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
@@ -214,43 +214,38 @@ export default function GeneradorFT() {
 
         <div style={{ flex: 1, width: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', paddingBottom: '20px' }}>
           
-          {/* LIENZO A4 DIGITAL ESTRICTO: Ajustado a 295mm para forzar una sola página */}
           <div id="lienzo-ficha-tecnica" style={{ backgroundColor: 'white', width: '210mm', height: '295mm', position: 'relative', fontFamily: 'Arial, sans-serif', color: '#333', overflow: 'hidden', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', boxSizing: 'border-box' }}>
             
-            {/* ENCABEZADO PÍXEL-PERFECT (Posicionamiento Absoluto) */}
+            {/* ENCABEZADO PÍXEL-PERFECT */}
             <div style={{ position: 'relative', width: '100%', height: '115px', borderBottom: '1px solid #E0E0E0', boxSizing: 'border-box' }}>
               
-              {/* LOGO SODIMAC CON RECORTE CSS: 
-                  El contenedor es del tamaño del logo visible (260x63),
-                  pero la imagen interna se fuerza a ser gigantesca (280%)
-                  para esconder sus enormes márgenes blancos.
-              */}
+              {/* LOGO SODIMAC SIN MÁRGENES Y TAMAÑO EXACTO */}
               <div
                 style={{
                   position: 'absolute',
-                  left: '34px',
-                  top: '43px', 
-                  width: '260px', 
-                  height: '63px', 
+                  left: '40px',
+                  top: '38px', 
+                  width: '160px', 
+                  height: '32px', 
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
+                  justifyContent: 'flex-start',
                 }}
               >
                 <img
                   src="/logo-sodimac-sin-margen.png"
                   alt="Sodimac"
                   style={{
-                    width: '280%', 
-                    height: 'auto',
-                    maxWidth: 'none',
-                    display: 'block'
+                    display: 'block',
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    objectPosition: 'left center',
                   }}
                 />
               </div>
               
-              {/* BLOQUE GEOMÉTRICO AZUL (Esquina Superior Derecha) */}
+              {/* BLOQUE GEOMÉTRICO AZUL */}
               <div style={{ position: 'absolute', right: 0, top: 0, backgroundColor: '#005AA9', color: 'white', height: '80px', display: 'flex', alignItems: 'center', padding: '0 40px 0 60px', fontSize: '26px', fontWeight: '900', clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0% 100%)', letterSpacing: '1px' }}>
                 FICHA TÉCNICA
               </div>
@@ -262,7 +257,6 @@ export default function GeneradorFT() {
               {/* COLUMNA IZQUIERDA (IMAGEN Y CARACTERÍSTICAS) */}
               <div style={{ flex: '0 0 35%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 
-                {/* Cuadro de imagen */}
                 <div style={{ width: '100%', height: '320px', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
                   {imagenProducto ? (
                     <img src={imagenProducto} alt="Producto" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
@@ -271,7 +265,6 @@ export default function GeneradorFT() {
                   )}
                 </div>
 
-                {/* Tarjeta de Beneficios estilo industrial */}
                 <div style={{ backgroundColor: '#F7F7F7', borderRadius: '15px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                   {fichaData.caracteristicas.map((carac, idx) => (
                     <div key={idx} style={{ display: 'flex', gap: '12px', borderBottom: idx !== fichaData.caracteristicas.length - 1 ? '1px solid #E5E5E5' : 'none', paddingBottom: idx !== fichaData.caracteristicas.length - 1 ? '15px' : '0' }}>
@@ -347,7 +340,7 @@ export default function GeneradorFT() {
               </div>
             </div>
 
-            {/* PIE DE PÁGINA */}
+            {/* PIE DE PÁGINA (Franja Diagonal Perfecta) */}
             <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '24mm', background: 'linear-gradient(105deg, #005AA9 55%, #E31E24 55%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 40px', boxSizing: 'border-box', color: 'white' }}>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
