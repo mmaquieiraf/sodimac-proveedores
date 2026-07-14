@@ -67,12 +67,12 @@ export default function GeneradorFT() {
       });
     }
     
-    // Forzamos el scroll arriba
+    // Forzamos el scroll arriba para evitar cortes en la fotografía del canvas
     window.scrollTo(0,0);
 
-    // CORRECCIÓN DEL BUG: Primero declaramos elemento, luego buscamos las imágenes
     const elemento = document.getElementById('lienzo-ficha-tecnica');
     
+    // Promesa para asegurar que todas las imágenes (logo y producto) carguen antes de exportar
     const imagenes = Array.from(elemento.querySelectorAll('img'));
     await Promise.all(
       imagenes.map((img) => {
@@ -83,16 +83,17 @@ export default function GeneradorFT() {
         });
       })
     );
-    
+
     const opciones = {
       margin: 0,
       filename: `Ficha_Tecnica_${fichaData.titulo.replace(/\s+/g, '_')}.pdf`,
       image: { type: 'jpeg', quality: 1 },
       html2canvas: { 
-        scale: 3, 
+        scale: 3, // Escala aumentada a 3 para máxima nitidez
         useCORS: true, 
         scrollY: 0,
-        backgroundColor: '#ffffff' 
+        backgroundColor: '#ffffff', // Fondo blanco explícito
+        imageTimeout: 0 // Evita errores de timeout al capturar imágenes
       }, 
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
@@ -219,32 +220,32 @@ export default function GeneradorFT() {
             {/* ENCABEZADO PÍXEL-PERFECT (Posicionamiento Absoluto) */}
             <div style={{ position: 'relative', width: '100%', height: '115px', borderBottom: '1px solid #E0E0E0', boxSizing: 'border-box' }}>
               
-              {/* LOGO SODIMAC CORREGIDO A ESCALA REAL */}
+              {/* LOGO SODIMAC CON RECORTE CSS: 
+                  El contenedor es del tamaño del logo visible (260x63),
+                  pero la imagen interna se fuerza a ser gigantesca (280%)
+                  para esconder sus enormes márgenes blancos.
+              */}
               <div
                 style={{
                   position: 'absolute',
                   left: '34px',
                   top: '43px', 
-                  width: '380px', 
+                  width: '260px', 
                   height: '63px', 
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'flex-start',
+                  justifyContent: 'center',
                   overflow: 'hidden',
-                  lineHeight: 0,
                 }}
               >
                 <img
-                  src="/logo-sodimac-sin-margen.png" // O /logo.png
+                  src="/logo-sodimac-sin-margen.png"
                   alt="Sodimac"
                   style={{
-                    display: 'block',
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    objectPosition: 'left center',
-                    transform: 'none',
-                    imageRendering: 'auto',
+                    width: '280%', 
+                    height: 'auto',
+                    maxWidth: 'none',
+                    display: 'block'
                   }}
                 />
               </div>
