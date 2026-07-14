@@ -195,14 +195,14 @@ export default function GeneradorFT() {
 
         <div style={{ flex: 1, width: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', paddingBottom: '20px' }}>
           
-          {/* LIENZO A4 DIGITAL: Ajustado a 295mm para forzar una sola página */}
+          {/* LIENZO A4 DIGITAL ESTRICTO: Ajustado a 295mm para forzar una sola página */}
           <div id="lienzo-ficha-tecnica" style={{ backgroundColor: 'white', width: '210mm', height: '295mm', position: 'relative', fontFamily: 'Arial, sans-serif', color: '#333', overflow: 'hidden', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', boxSizing: 'border-box' }}>
             
             {/* ENCABEZADO PÍXEL-PERFECT (Posicionamiento Absoluto) */}
             <div style={{ position: 'relative', width: '100%', height: '115px', borderBottom: '1px solid #E0E0E0', boxSizing: 'border-box' }}>
               
-              {/* LOGO SODIMAC CON MEDIDAS Y COORDENADAS EXACTAS (x:34px, y:43px, width:36%) */}
-              <img src="/logo.png" alt="Sodimac Logo" style={{ position: 'absolute', left: '34px', top: '43px', width: '36%', maxWidth: '380px', height: '62px', objectFit: 'contain', objectPosition: 'left center' }} />
+              {/* LOGO SODIMAC CORREGIDO: Alto exacto (62px) y Ancho en 'auto' para evitar deformaciones en el PDF */}
+              <img src="/logo.png" alt="Sodimac Logo" style={{ position: 'absolute', left: '34px', top: '43px', height: '62px', width: 'auto' }} />
               
               {/* BLOQUE GEOMÉTRICO AZUL (Esquina Superior Derecha) */}
               <div style={{ position: 'absolute', right: 0, top: 0, backgroundColor: '#005AA9', color: 'white', height: '80px', display: 'flex', alignItems: 'center', padding: '0 40px 0 60px', fontSize: '26px', fontWeight: '900', clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0% 100%)', letterSpacing: '1px' }}>
@@ -211,7 +211,6 @@ export default function GeneradorFT() {
             </div>
 
             {/* CUERPO PRINCIPAL DOS COLUMNAS */}
-            {/* Altura ajustada dinámicamente: 295mm totales - 115px header - 100px padding bottom extra de seguridad */}
             <div style={{ display: 'flex', padding: '30px 40px 100px 40px', gap: '35px', height: 'calc(295mm - 115px)', boxSizing: 'border-box' }}>
               
               {/* COLUMNA IZQUIERDA (IMAGEN Y CARACTERÍSTICAS) */}
