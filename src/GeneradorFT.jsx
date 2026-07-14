@@ -67,7 +67,7 @@ export default function GeneradorFT() {
       });
     }
     
-    // Forzamos el scroll arriba para evitar cortes raros en la "foto"
+    // Forzamos el scroll arriba para evitar cortes en la fotografía del canvas
     window.scrollTo(0,0);
     
     const elemento = document.getElementById('lienzo-ficha-tecnica');
@@ -195,13 +195,14 @@ export default function GeneradorFT() {
 
         <div style={{ flex: 1, width: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', paddingBottom: '20px' }}>
           
-          {/* LIENZO A4 DIGITAL ESTRICTO: 210x297mm con overflow oculto para evitar 2da hoja */}
-          <div id="lienzo-ficha-tecnica" style={{ backgroundColor: 'white', width: '210mm', height: '297mm', position: 'relative', fontFamily: 'Arial, sans-serif', color: '#333', overflow: 'hidden', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', boxSizing: 'border-box' }}>
+          {/* LIENZO A4 DIGITAL: Alto ajustado a 296.5mm para evitar el salto a la segunda página en el PDF */}
+          <div id="lienzo-ficha-tecnica" style={{ backgroundColor: 'white', width: '210mm', height: '296.5mm', position: 'relative', fontFamily: 'Arial, sans-serif', color: '#333', overflow: 'hidden', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', boxSizing: 'border-box' }}>
             
             {/* ENCABEZADO */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '25px 40px 10px 40px', borderBottom: '1px solid #E0E0E0' }}>
-              {/* Logo más protagonista */}
-              <img src="/logo.png" alt="Sodimac Logo" style={{ height: '70px', objectFit: 'contain' }} />
+              
+              {/* Logo más protagonista con objectPosition left center */}
+              <img src="/logo.png" alt="Sodimac Logo" style={{ height: '90px', width: '250px', objectFit: 'contain', objectPosition: 'left center' }} />
               
               {/* Bloque geométrico azul superior */}
               <div style={{ backgroundColor: '#005AA9', color: 'white', padding: '12px 40px 12px 60px', fontSize: '24px', fontWeight: '900', clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0% 100%)', marginRight: '-40px', marginTop: '-10px', letterSpacing: '1px' }}>
@@ -210,8 +211,8 @@ export default function GeneradorFT() {
             </div>
 
             {/* CUERPO PRINCIPAL DOS COLUMNAS */}
-            {/* Altura calculada para no chocar con el footer y mantener todo en 1 hoja */}
-            <div style={{ display: 'flex', padding: '30px 40px', gap: '35px', height: 'calc(297mm - 165px)', boxSizing: 'border-box' }}>
+            {/* Padding bottom amplio para no sobreponerse a la barra diagonal inferior */}
+            <div style={{ display: 'flex', padding: '30px 40px 120px 40px', gap: '35px', boxSizing: 'border-box' }}>
               
               {/* COLUMNA IZQUIERDA (IMAGEN Y CARACTERÍSTICAS) */}
               <div style={{ flex: '0 0 35%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -293,7 +294,7 @@ export default function GeneradorFT() {
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
                           )}
                         </div>
-                        <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#005AA9', textTransform: 'uppercase' }}>{uso}</span>
+                        <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#005AA9', textTransform: 'uppercase', textAlign: 'center' }}>{uso}</span>
                       </div>
                     ))}
                   </div>
