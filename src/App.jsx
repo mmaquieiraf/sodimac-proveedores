@@ -276,10 +276,14 @@ export default function App() {
   const manejarPreLogin = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado por 24 horas.");
-    if (preLoginPin === import.meta.env.VITE_PIN_ACCESO) {
+    
+    const pinAcceso = import.meta.env.VITE_PIN_ACCESO?.trim();
+    if (!pinAcceso) return alert("⚠️ Error Crítico: PIN de seguridad no inyectado desde Vercel.");
+
+    if (preLoginPin.trim() === pinAcceso) {
       await registrarAuditoria('Anónimo', 'Éxito', 'Acceso a PIN Público');
       setVista('login'); setPreLoginPin(''); setIntentosFallidos(0); 
-    } else { 
+    } else {
       await registrarAuditoria('Anónimo', 'Fallido', 'Acceso a PIN Público');
       const fueBloqueado = registrarIntentoFallido();
       if (!fueBloqueado) alert(`⚠️ Código incorrecto. Intentos restantes: ${3 - (intentosFallidos + 1)}`); 
