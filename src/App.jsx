@@ -724,18 +724,28 @@ export default function App() {
     const link = document.createElement("a"); link.href = url; link.setAttribute("download", "proveedores_aprobados.xls"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-  const [resetStep, setResetStep] = useState(1); const [resetData, setResetData] = useState({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null });
+  const [resetStep, setResetStep] = useState(1); 
+  const [resetData, setResetData] = useState({ correo: '' });
+  
   const buscarCorreo = async (e) => {
     e.preventDefault();
-    const { data, error } = await supabase.from('administradores').select('id').eq('correo', resetData.correo.replace(/[<>]/g, '').toLowerCase().trim()).maybeSingle();
-    if (error || !data) { await registrarAuditoria(resetData.correo, 'Fallido', 'Recuperar Pass'); registrarIntentoFallido(); alert("No encontrado."); } 
-    else { setResetData({ ...resetData, idUsuario: data.id }); setResetStep(2); setIntentosFallidos(0); }
+    const correoLimpio = resetData.correo.replace(/[<>]/g, '').toLowerCase().trim();
+    
+    // OWASP: Usamos la API nativa para no exponer si el correo existe o no a un atacante
+    const { error } = await supabase.auth.resetPasswordForEmail(correoLimpio);
+    
+    if (error) { 
+      await registrarAuditoria(correoLimpio, 'Fallido', 'Recuperar Pass Auth'); 
+      registrarIntentoFallido(); 
+      alert("Hubo un error al procesar la solicitud de recuperación."); 
+    } else { 
+      alert("✅ Si el correo está registrado, recibirás instrucciones seguras en tu bandeja de entrada."); 
+      setVista('login'); 
+      setResetData({ correo: '' }); 
+    }
   };
-  const actualizarPassword = async (e) => {
-    e.preventDefault();
-    const { error } = await supabase.from('administradores').update({ password: resetData.nuevaPass.replace(/[<>]/g, ''), pin: resetData.nuevoPin.replace(/[<>]/g, '') }).eq('id', resetData.idUsuario);
-    if (!error) { alert("✅ Actualizado."); setVista('login'); setResetStep(1); setResetData({ correo: '', nuevaPass: '', nuevoPin: '', idUsuario: null }); }
-  };
+  
+  // FUNCION ELIMINADA POR SEGURIDAD: actualizarPassword (Se hacía en texto plano).
 
   const proveedoresGestionFiltrados = proveedores.filter(p => {
     if (p.estado !== 'Aprobado') return false;
