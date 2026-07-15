@@ -184,7 +184,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira') cargarLogsAuditoria();
+    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl') cargarLogsAuditoria();
   }, [tabAdmin, usuarioActual]);
 
   const [formData, setFormData] = useState({
@@ -457,7 +457,7 @@ export default function App() {
 
   const descargarPlantillaProcesos = () => {
     let csvContent = "data:text/csv;charset=utf-8,\uFEFFNombre del Proceso,Clasificación,Subgerencia,Solicitante,Tipo de Proceso (RFI/Q/P),Tipo de Compra,Controller,Estado del proceso,Fecha de inicio (YYYY-MM-DD),Fecha de Término (YYYY-MM-DD),Baseline (Presupuesto Base $),Monto Final Adjudicado ($)\n";
-    csvContent += "Licitación Aseo,Opex,Operaciones,Juan Perez,RFP,Anualizado,mmaquieira,En Aprobación y Adjudicación,2025-01-01,2025-02-15,10000000,9500000\n";
+    csvContent += "Licitación Aseo,Opex,Operaciones,Juan Perez,RFP,Anualizado,mmaquieiraf@sodimac.cl,En Aprobación y Adjudicación,2025-01-01,2025-02-15,10000000,9500000\n";
     const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", "Plantilla_Carga_Procesos.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
@@ -662,7 +662,7 @@ export default function App() {
   };
 
   const eliminarAdmin = async (id, usuario) => {
-    if(usuarioActual.usuario !== 'mmaquieira' || usuario === 'mmaquieira') return;
+    if(usuarioActual.usuario !== 'mmaquieiraf@sodimac.cl' || usuario === 'mmaquieiraf@sodimac.cl') return;
     if(window.confirm(`¿Eliminar a ${usuario}?`)) { await supabase.from('administradores').delete().eq('id', id); cargarAdministradores(); }
   };
 
@@ -1445,7 +1445,7 @@ export default function App() {
             <h2 onClick={() => setTabAdmin('generador_rfp')} style={{ color: tabAdmin === 'generador_rfp' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>📄 Generador RFP</h2>
             <h2 onClick={() => setTabAdmin('generador_rfq')} style={{ color: tabAdmin === 'generador_rfq' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '1px solid #ddd', paddingLeft: '15px' }}>🛒 Generador RFQ</h2>
             <h2 onClick={() => setTabAdmin('generador_ft')} style={{ color: tabAdmin === 'generador_ft' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '1px solid #ddd', paddingLeft: '15px' }}>🖼️ Fichas Técnicas</h2>
-            {usuarioActual?.usuario === 'mmaquieira' && (
+            {usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl' && (
               <h2 onClick={() => { setTabAdmin('auditoria'); cargarLogsAuditoria(); }} style={{ color: tabAdmin === 'auditoria' ? '#004A99' : '#999', fontSize: '18px', margin: 0, cursor: 'pointer', whiteSpace: 'nowrap', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>🛡️ Auditoría</h2>
             )}
           </div>
@@ -2169,7 +2169,7 @@ export default function App() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #004A99', paddingBottom: '10px', marginBottom: '20px' }}>
                   <h3 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Gestión de Usuarios</h3>
-                  {usuarioActual?.usuario === 'mmaquieira' && <span style={{ fontSize: '11px', backgroundColor: '#EE2D24', color: 'white', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold' }}>👑 Modo SuperAdmin Activo</span>}
+                  {usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl' && <span style={{ fontSize: '11px', backgroundColor: '#EE2D24', color: 'white', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold' }}>👑 Modo SuperAdmin Activo</span>}
                 </div>
                 
                 <div style={{ overflowX: 'auto', border: '1px solid #eee', borderRadius: '8px' }}>
@@ -2178,7 +2178,7 @@ export default function App() {
                       <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
                         <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Nombre</th>
                         <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Usuario</th>
-                        {usuarioActual?.usuario === 'mmaquieira' && <th style={{ padding: '12px', borderBottom: '2px solid #ccc', textAlign: 'right' }}>Acciones</th>}
+                        {usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl' && <th style={{ padding: '12px', borderBottom: '2px solid #ccc', textAlign: 'right' }}>Acciones</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -2191,10 +2191,10 @@ export default function App() {
                           <td style={{ padding: '12px' }}>
                             <span style={{ backgroundColor: '#e2e8f0', padding: '3px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>{admin.usuario}</span>
                           </td>
-                          {usuarioActual?.usuario === 'mmaquieira' && (
+                          {usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl' && (
                             <td style={{ padding: '12px', textAlign: 'right' }}>
                               <button onClick={() => setAdminEditando(admin)} style={{ padding: '4px 8px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', marginRight: '5px' }}>Editar</button>
-                              {admin.usuario !== 'mmaquieira' && (
+                              {admin.usuario !== 'mmaquieiraf@sodimac.cl' && (
                                 <button onClick={() => eliminarAdmin(admin.id, admin.usuario)} style={{ padding: '4px 8px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Eliminar</button>
                               )}
                             </td>
@@ -2204,7 +2204,7 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
-                {usuarioActual?.usuario !== 'mmaquieira' && (
+                {usuarioActual?.usuario !== 'mmaquieiraf@sodimac.cl' && (
                   <p style={{ fontSize: '12px', color: '#888', marginTop: '15px', textAlign: 'center' }}>Solo el usuario principal puede editar o eliminar accesos.</p>
                 )}
               </div>
@@ -2220,7 +2220,7 @@ export default function App() {
           {/* === MÓDULO FICHAS TÉCNICAS === */}
           {tabAdmin === 'generador_ft' && <GeneradorFT />}
 
-          {/* 🛡️ PESTAÑA DE AUDITORÍA SOLO PARA MMAQUIEIRA */}
+          {/* 🛡️ PESTAÑA DE AUDITORÍA SOLO PARA mmaquieiraf@sodimac.cl */}
           {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>
