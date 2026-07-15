@@ -276,7 +276,7 @@ export default function App() {
   const manejarPreLogin = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado por 24 horas.");
-    if (preLoginPin === '171819') { 
+    if (preLoginPin === import.meta.env.VITE_PIN_ACCESO) {
       await registrarAuditoria('Anónimo', 'Éxito', 'Acceso a PIN Público');
       setVista('login'); setPreLoginPin(''); setIntentosFallidos(0); 
     } else { 
