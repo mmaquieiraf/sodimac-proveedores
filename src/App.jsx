@@ -660,28 +660,19 @@ export default function App() {
 
   const crearAdministrador = async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from('administradores').insert([{
-      usuario: nuevoAdmin.usuario.replace(/[<>]/g, '').trim(), password: nuevoAdmin.password.replace(/[<>]/g, ''), pin: nuevoAdmin.pin.replace(/[<>]/g, ''),
-      nombre_completo: sanitizarYCapitalizar(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`), correo: nuevoAdmin.correo.replace(/[<>]/g, '').toLowerCase().trim()
-    }]);
-    if (!error) { alert("✅ Creado."); setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' }); cargarAdministradores(); }
+    alert("🛑 Arquitectura Segura Activa: La creación de credenciales ahora se realiza exclusivamente desde el panel 'Authentication' en Supabase. El registro SQL ha sido deshabilitado.");
   };
 
   const eliminarAdmin = async (id, usuario) => {
     if(usuarioActual.usuario !== 'mmaquieiraf@sodimac.cl' || usuario === 'mmaquieiraf@sodimac.cl') return;
-    if(window.confirm(`¿Eliminar a ${usuario}?`)) { await supabase.from('administradores').delete().eq('id', id); cargarAdministradores(); }
+    alert("🛑 Arquitectura Segura Activa: Para eliminar un administrador, bórrelo desde el panel 'Authentication' en Supabase.");
   };
 
   const [adminEditando, setAdminEditando] = useState(null);
   const guardarEdicionAdmin = async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from('administradores').update({
-      nombre_completo: sanitizarYCapitalizar(adminEditando.nombre_completo), usuario: adminEditando.usuario.replace(/[<>]/g, '').trim(),
-      correo: adminEditando.correo.replace(/[<>]/g, '').toLowerCase().trim(), password: adminEditando.password.replace(/[<>]/g, ''), pin: adminEditando.pin.replace(/[<>]/g, '')
-    }).eq('id', adminEditando.id);
-    if (!error) { alert("✅ Actualizado."); setAdminEditando(null); cargarAdministradores(); }
+    alert("🛑 Arquitectura Segura Activa: La edición de credenciales SQL ha sido deshabilitada. Utilice la función 'Reset Password' de Supabase.");
   };
-
   const handleAgregarCategoria = (e) => { e.preventDefault(); const cat = sanitizarYCapitalizar(nuevaCatInput); if(cat && !categoriasDinamicas[cat]) { setCategoriasDinamicas({...categoriasDinamicas, [cat]: []}); setNuevaCatInput(''); } };
   const handleEliminarCategoria = (cat) => { if(window.confirm(`¿Eliminar "${cat}"?`)) { const copia = {...categoriasDinamicas}; delete copia[cat]; setCategoriasDinamicas(copia); } };
   const handleAgregarSubcategoria = (e, cat) => { e.preventDefault(); const sub = sanitizarYCapitalizar(nuevasSubInputs[cat]); if(sub && !categoriasDinamicas[cat].includes(sub)) { setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: [...categoriasDinamicas[cat], sub] }); setNuevasSubInputs({...nuevasSubInputs, [cat]: ''}); } };
