@@ -671,15 +671,17 @@ export default function App() {
   const crearAdministrador = async (e) => {
     e.preventDefault();
 
-    // 1. Verificación local (redundancia)
-    if (usuarioActual?.usuario !== 'mmaquieiraf@sodimac.cl') {
-      return alert("Acceso denegado: Solo el Super Admin puede crear credenciales.");
+    // 1. Verificación de Seguridad (Capa Frontend)
+    const esSuperAdmin = usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl' || usuarioActual?.usuario === 'matiasignaciof01@gmail.com';
+    
+    if (!esSuperAdmin) {
+      return alert("Acceso denegado: Solo los Super Administradores pueden crear credenciales.");
     }
 
     const emailLimpio = nuevoAdmin.correo.replace(/[<>]/g, '').toLowerCase().trim();
     const passLimpia = nuevoAdmin.password.replace(/[<>]/g, '');
 
-    // 2. Invocar la Edge Function para crear el usuario en Supabase Auth
+    // 2. Invocar la Edge Function en Supabase (Gestión Privilegiada)
     const { data: authData, error: authError } = await supabase.functions.invoke('crear-admin', {
       body: { email: emailLimpio, password: passLimpia }
     });
@@ -689,20 +691,20 @@ export default function App() {
       return alert(`❌ Error creando credencial: ${authError?.message || authData?.error}`);
     }
 
-    // 3. Registrar solo el perfil público en la base de datos (SIN contraseñas)
+    // 3. Registrar Perfil Público en SQL (SIN secretos)
     const { error: dbError } = await supabase.from('administradores').insert([{
-      usuario: nuevoAdmin.usuario.replace(/[<>]/g, '').trim(),
+      usuario: nuevoAdmin.usuario.replace(/[<>]/g, '').trim(), // Alias interno
       correo: emailLimpio,
       nombre_completo: sanitizarYCapitalizar(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`),
       password: 'ENCRIPTADA_EN_AUTH', // 🔒 Cero exposición SQL
-      pin: 'MÁSTER_VERCEL'            // 🔒 El PIN es gestionado por Vercel
+      pin: 'MÁSTER_VERCEL'            // 🔒 Ignorado, controlado por entorno
     }]);
 
     if (dbError) {
-      alert("⚠️ La credencial se creó en Auth, pero hubo un error al guardar su perfil en la tabla.");
+      alert("⚠️ La credencial se creó en Auth, pero hubo un error al guardar su perfil visual.");
     } else {
-      alert("✅ Nuevo administrador creado exitosamente. Las credenciales están protegidas en Supabase Auth.");
-      setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' });
+      alert("✅ Nuevo administrador creado exitosamente y protegido en Supabase Auth.");
+      setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '' });
       cargarAdministradores();
     }
   };
