@@ -2221,7 +2221,7 @@ export default function App() {
           {tabAdmin === 'generador_ft' && <GeneradorFT />}
 
           {/* 🛡️ PESTAÑA DE AUDITORÍA SOLO PARA mmaquieiraf@sodimac.cl */}
-          {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieira' && (
+          {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>
                 <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Registro de Auditoría de Accesos</h3>
