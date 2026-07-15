@@ -296,21 +296,39 @@ export default function App() {
   const manejarLogin = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado.");
+    
     const intentoUsuario = credenciales.usuario.replace(/[<>]/g, '').trim();
-    const { data, error } = await supabase.from('administradores').select('*')
-      .eq('usuario', intentoUsuario).eq('password', credenciales.password.replace(/[<>]/g, ''))
-      .eq('pin', credenciales.pin.replace(/[<>]/g, '')).maybeSingle();
+    
+    // 1. Validar el PIN interno como primera capa
+    const pinCorrecto = credenciales.pin.replace(/[<>]/g, '') === import.meta.env.VITE_PIN_ACCESO;
+    if (!pinCorrecto) {
+      await registrarAuditoria(intentoUsuario || 'Desconocido', 'Fallido', 'Error de PIN');
+      const fueBloqueado = registrarIntentoFallido();
+      if (!fueBloqueado) alert(`🔍 PIN incorrecto. Intentos restantes: ${3 - (intentosFallidos + 1)}`);
+      return;
+    }
 
-    if (!data) {
+    // 2. Login con Supabase Auth (Encriptado)
+    // ATENCIÓN: El campo "Usuario" en tu pantalla de login AHORA DEBE SER EL CORREO que creaste en el Paso 2.1
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: intentoUsuario,
+      password: credenciales.password.replace(/[<>]/g, '')
+    });
+
+    if (error || !data.user) {
       await registrarAuditoria(intentoUsuario || 'Desconocido', 'Fallido', 'Login Panel Admin');
       const fueBloqueado = registrarIntentoFallido();
       if (!fueBloqueado) alert(`🔍 Credenciales incorrectas. Intentos restantes: ${3 - (intentosFallidos + 1)}`);
       return;
     }
 
-    await registrarAuditoria(data.usuario, 'Éxito', 'Login Panel Admin');
-    setIntentosFallidos(0); setUsuarioActual(data); setVista('panel');
-    cargarProveedores(); cargarAdministradores(); cargarProcesos();
+    // 3. Login Exitoso
+    await registrarAuditoria(data.user.email, 'Éxito', 'Login Panel Admin');
+    setIntentosFallidos(0); 
+    setUsuarioActual({ usuario: data.user.email }); // Mantenemos tu estructura de estado
+    setVista('panel');
+    cargarProveedores(); 
+    cargarProcesos();
   };
 
   // REEMPLAZO DEFINITIVO: Rompe la barrera de los 1000 registros mediante bucle secuencial
