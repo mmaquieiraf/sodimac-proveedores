@@ -301,35 +301,37 @@ export default function App() {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado.");
     
-    const intentoUsuario = credenciales.usuario.replace(/[<>]/g, '').trim();
+    const emailLimpio = credenciales.usuario.replace(/[<>]/g, '').trim();
+    const pinAcceso = import.meta.env.VITE_PIN_ACCESO?.trim();
     
-    // 1. Validar el PIN interno como primera capa
-    const pinCorrecto = credenciales.pin.replace(/[<>]/g, '') === import.meta.env.VITE_PIN_ACCESO;
-    if (!pinCorrecto) {
-      await registrarAuditoria(intentoUsuario || 'Desconocido', 'Fallido', 'Error de PIN');
+    if (!pinAcceso) return alert("⚠️ Error de configuración en Vercel.");
+
+    // 1. Validación de PIN estricta
+    if (credenciales.pin.replace(/[<>]/g, '').trim() !== pinAcceso) {
+      await registrarAuditoria(emailLimpio || 'Desconocido', 'Fallido', 'Error de PIN');
       const fueBloqueado = registrarIntentoFallido();
       if (!fueBloqueado) alert(`🔍 PIN incorrecto. Intentos restantes: ${3 - (intentosFallidos + 1)}`);
       return;
     }
 
-    // 2. Login con Supabase Auth (Encriptado)
-    // ATENCIÓN: El campo "Usuario" en tu pantalla de login AHORA DEBE SER EL CORREO que creaste en el Paso 2.1
+    // 2. Autenticación EXCLUSIVA vía Supabase Auth (Cero consultas SQL)
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: intentoUsuario,
-      password: credenciales.password.replace(/[<>]/g, '')
+      email: emailLimpio,
+      password: credenciales.password
     });
 
     if (error || !data.user) {
-      await registrarAuditoria(intentoUsuario || 'Desconocido', 'Fallido', 'Login Panel Admin');
+      console.error("Fallo Auth:", error?.message);
+      await registrarAuditoria(emailLimpio || 'Desconocido', 'Fallido', 'Login Reject Auth');
       const fueBloqueado = registrarIntentoFallido();
-      if (!fueBloqueado) alert(`🔍 Credenciales incorrectas. Intentos restantes: ${3 - (intentosFallidos + 1)}`);
+      if (!fueBloqueado) alert(`🔍 Credenciales inválidas o usuario no registrado en Auth.`);
       return;
     }
 
     // 3. Login Exitoso
     await registrarAuditoria(data.user.email, 'Éxito', 'Login Panel Admin');
     setIntentosFallidos(0); 
-    setUsuarioActual({ usuario: data.user.email }); // Mantenemos tu estructura de estado
+    setUsuarioActual({ usuario: data.user.email }); 
     setVista('panel');
     cargarProveedores(); 
     cargarProcesos();
