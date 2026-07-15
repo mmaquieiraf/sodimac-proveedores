@@ -670,18 +670,52 @@ export default function App() {
 
   const crearAdministrador = async (e) => {
     e.preventDefault();
-    alert("🛑 Arquitectura Segura Activa: La creación de credenciales ahora se realiza exclusivamente desde el panel 'Authentication' en Supabase. El registro SQL ha sido deshabilitado.");
+
+    // 1. Verificación local (redundancia)
+    if (usuarioActual?.usuario !== 'mmaquieiraf@sodimac.cl') {
+      return alert("Acceso denegado: Solo el Super Admin puede crear credenciales.");
+    }
+
+    const emailLimpio = nuevoAdmin.correo.replace(/[<>]/g, '').toLowerCase().trim();
+    const passLimpia = nuevoAdmin.password.replace(/[<>]/g, '');
+
+    // 2. Invocar la Edge Function para crear el usuario en Supabase Auth
+    const { data: authData, error: authError } = await supabase.functions.invoke('crear-admin', {
+      body: { email: emailLimpio, password: passLimpia }
+    });
+
+    if (authError || (authData && authData.error)) {
+      console.error("Error del Servidor (Auth):", authError || authData?.error);
+      return alert(`❌ Error creando credencial: ${authError?.message || authData?.error}`);
+    }
+
+    // 3. Registrar solo el perfil público en la base de datos (SIN contraseñas)
+    const { error: dbError } = await supabase.from('administradores').insert([{
+      usuario: nuevoAdmin.usuario.replace(/[<>]/g, '').trim(),
+      correo: emailLimpio,
+      nombre_completo: sanitizarYCapitalizar(`${nuevoAdmin.nombre} ${nuevoAdmin.apellido}`),
+      password: 'ENCRIPTADA_EN_AUTH', // 🔒 Cero exposición SQL
+      pin: 'MÁSTER_VERCEL'            // 🔒 El PIN es gestionado por Vercel
+    }]);
+
+    if (dbError) {
+      alert("⚠️ La credencial se creó en Auth, pero hubo un error al guardar su perfil en la tabla.");
+    } else {
+      alert("✅ Nuevo administrador creado exitosamente. Las credenciales están protegidas en Supabase Auth.");
+      setNuevoAdmin({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' });
+      cargarAdministradores();
+    }
   };
 
   const eliminarAdmin = async (id, usuario) => {
     if(usuarioActual.usuario !== 'mmaquieiraf@sodimac.cl' || usuario === 'mmaquieiraf@sodimac.cl') return;
-    alert("🛑 Arquitectura Segura Activa: Para eliminar un administrador, bórrelo desde el panel 'Authentication' en Supabase.");
+    alert("🛑 Arquitectura Segura Activa: Para eliminar un administrador, bórrelo primero desde el panel 'Authentication > Users' en Supabase y luego elimine su registro aquí.");
   };
 
   const [adminEditando, setAdminEditando] = useState(null);
   const guardarEdicionAdmin = async (e) => {
     e.preventDefault();
-    alert("🛑 Arquitectura Segura Activa: La edición de credenciales SQL ha sido deshabilitada. Utilice la función 'Reset Password' de Supabase.");
+    alert("🛑 Arquitectura Segura Activa: La edición de contraseñas SQL ha sido deshabilitada. Utilice la función 'Reset Password' de Supabase.");
   };
   const handleAgregarCategoria = (e) => { e.preventDefault(); const cat = sanitizarYCapitalizar(nuevaCatInput); if(cat && !categoriasDinamicas[cat]) { setCategoriasDinamicas({...categoriasDinamicas, [cat]: []}); setNuevaCatInput(''); } };
   const handleEliminarCategoria = (cat) => { if(window.confirm(`¿Eliminar "${cat}"?`)) { const copia = {...categoriasDinamicas}; delete copia[cat]; setCategoriasDinamicas(copia); } };
