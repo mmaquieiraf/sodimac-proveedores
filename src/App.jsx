@@ -301,20 +301,22 @@ export default function App() {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado.");
     
-    const emailLimpio = credenciales.usuario.replace(/[<>]/g, '').trim();
-    const pinAcceso = import.meta.env.VITE_PIN_ACCESO?.trim();
+    // Normalizamos el correo para evitar errores por mayúsculas
+    const emailLimpio = credenciales.usuario.replace(/[<>]/g, '').trim().toLowerCase();
     
-    if (!pinAcceso) return alert("⚠️ Error de configuración en Vercel.");
+    // Obtenemos el PIN maestro desde las variables de entorno de Vite
+    const pinAcceso = import.meta.env.VITE_PIN_ACCESO?.trim();
+    if (!pinAcceso) return alert("⚠️ Error Crítico: PIN de seguridad no inyectado desde Vercel.");
 
-    // 1. Validación de PIN estricta
+    // 1. VALIDACIÓN DE PIN (El mismo de la pantalla anterior, sin tocar SQL)
     if (credenciales.pin.replace(/[<>]/g, '').trim() !== pinAcceso) {
-      await registrarAuditoria(emailLimpio || 'Desconocido', 'Fallido', 'Error de PIN');
+      await registrarAuditoria(emailLimpio || 'Desconocido', 'Fallido', 'Error de PIN Interno');
       const fueBloqueado = registrarIntentoFallido();
-      if (!fueBloqueado) alert(`🔍 PIN incorrecto. Intentos restantes: ${3 - (intentosFallidos + 1)}`);
+      if (!fueBloqueado) alert(`🔍 PIN Interno incorrecto. Intentos restantes: ${3 - (intentosFallidos + 1)}`);
       return;
     }
 
-    // 2. Autenticación EXCLUSIVA vía Supabase Auth (Cero consultas SQL)
+    // 2. AUTENTICACIÓN EXCLUSIVA VÍA SUPABASE AUTH
     const { data, error } = await supabase.auth.signInWithPassword({
       email: emailLimpio,
       password: credenciales.password
@@ -324,14 +326,22 @@ export default function App() {
       console.error("Fallo Auth:", error?.message);
       await registrarAuditoria(emailLimpio || 'Desconocido', 'Fallido', 'Login Reject Auth');
       const fueBloqueado = registrarIntentoFallido();
-      if (!fueBloqueado) alert(`🔍 Credenciales inválidas o usuario no registrado en Auth.`);
+      if (!fueBloqueado) alert(`🔍 Credenciales inválidas. Verifica tu usuario y contraseña.`);
       return;
     }
 
-    // 3. Login Exitoso
+    // 3. ASIGNACIÓN DE ROLES (Super Admin vs Admin normal)
+    const esSuperAdmin = data.user.email === 'mmaquieiraf@sodimac.cl';
+
     await registrarAuditoria(data.user.email, 'Éxito', 'Login Panel Admin');
     setIntentosFallidos(0); 
-    setUsuarioActual({ usuario: data.user.email }); 
+    
+    // Guardamos el usuario y su rol en el estado de React
+    setUsuarioActual({ 
+      usuario: data.user.email,
+      esSuperAdmin: esSuperAdmin 
+    }); 
+    
     setVista('panel');
     cargarProveedores(); 
     cargarProcesos();
