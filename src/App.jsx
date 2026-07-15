@@ -295,7 +295,7 @@ export default function App() {
   const [proveedores, setProveedores] = useState([]);
   const [administradoresDb, setAdministradoresDb] = useState([]);
   const [logsAuditoria, setLogsAuditoria] = useState([]);
-  const [nuevoAdmin, setNuevoAdmin] = useState({ nombre: '', apellido: '', usuario: '', correo: '', password: '', pin: '' });
+  const [nuevoAdmin, setNuevoAdmin] = useState({ nombre: '', apellido: '', usuario: '', correo: '', password: '' });
 
   const manejarLogin = async (e) => {
     e.preventDefault();
