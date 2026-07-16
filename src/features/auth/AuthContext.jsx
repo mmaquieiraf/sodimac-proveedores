@@ -13,7 +13,10 @@ export const AuthProvider = ({ children }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setUsuarioActual({
-          usuario: session.user.email,
+          id: session.user.id,
+          usuario: session.user.email, // <-- CORRECCIÓN APLICADA: Se asigna explícitamente el correo
+          correo: session.user.email,
+          nombre_completo: `${session.user.user_metadata?.nombre || ''} ${session.user.user_metadata?.apellido || ''}`.trim() || 'Administrador',
           esSuperAdmin: session.user.email === 'mmaquieiraf@sodimac.cl' || session.user.email === 'matiasignaciof01@gmail.com'
         });
       }
@@ -26,7 +29,10 @@ export const AuthProvider = ({ children }) => {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUsuarioActual({
-          usuario: session.user.email,
+          id: session.user.id,
+          usuario: session.user.email, // <-- CORRECCIÓN APLICADA: Se asigna explícitamente el correo
+          correo: session.user.email,
+          nombre_completo: `${session.user.user_metadata?.nombre || ''} ${session.user.user_metadata?.apellido || ''}`.trim() || 'Administrador',
           esSuperAdmin: session.user.email === 'mmaquieiraf@sodimac.cl' || session.user.email === 'matiasignaciof01@gmail.com'
         });
       } else {
@@ -39,7 +45,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // 🛡️ CANDADO 3: Auto-Cierre de Sesión por Inactividad (20 Minutos) - NIVEL GLOBAL
+  // 🛡️ CANDADO 3: Auto-Cierre de Sesión por Inactividad (20 Minutos) - NIVEL GLOBAL CONSERVADO
   useEffect(() => {
     let temporizadorInactividad;
 
@@ -71,7 +77,7 @@ export const AuthProvider = ({ children }) => {
   }, [usuarioActual]);
 
   return (
-    <AuthContext.Provider value={{ usuarioActual, cargandoSesion }}>
+    <AuthContext.Provider value={{ usuarioActual, cargandoSesion, cargandoAuth: cargandoSesion }}>
       {!cargandoSesion && children}
     </AuthContext.Provider>
   );

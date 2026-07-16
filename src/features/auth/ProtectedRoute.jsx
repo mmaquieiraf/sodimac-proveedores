@@ -6,15 +6,19 @@ export const ProtectedRoute = ({ children }) => {
   const { usuarioActual, cargandoSesion } = useAuth();
   const location = useLocation();
 
+  // 1. Retenemos el renderizado mientras Supabase valida el token.
+  // ADAPTACIÓN VISUAL 1:1 - Se retorna el fondo base exacto del App.jsx (#f4f4f4) 
+  // eliminando textos de carga que no existen en el monolito original.
   if (cargandoSesion) {
-    return <div style={{ padding: '50px', textAlign: 'center', color: '#004A99', fontWeight: 'bold' }}>Verificando credenciales de seguridad...</div>;
+    return <div style={{ backgroundColor: '#f4f4f4', minHeight: '100vh' }}></div>;
   }
 
-  // Si no hay usuario logueado, lo pateamos al Login y guardamos a dónde quería ir
+  // 2. Seguridad: Si definitivamente no hay usuario, lo pateamos al Login.
+  // Equivalente a no poder alcanzar la `vista === 'panel'` en el monolito.
   if (!usuarioActual) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Si está autorizado, renderizamos la pantalla que solicitó
+  // 3. Si está autorizado, renderizamos la bóveda administrativa.
   return children;
 };
