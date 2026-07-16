@@ -6,7 +6,7 @@ import { ProtectedRoute } from '../features/auth/ProtectedRoute';
 // Páginas de acceso
 import RegistroPage from '../pages/public/RegistroPage';
 import LoginPage from '../pages/auth/LoginPage';
-import AdminLayout from '../features/admin/layout/AdminLayout';
+import AdminLayout from "../features/admin/AdminLayout";
 
 // Features (Paneles)
 import DashboardPanel from '../features/dashboard/DashboardPanel';
