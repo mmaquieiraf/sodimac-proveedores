@@ -79,6 +79,9 @@ export default function LoginPage({ onIrARegistro }) {
       return;
     }
 
+    console.count("LOGIN");
+console.log("Intentando login");
+
     // Autenticación nativa con Supabase
     const { data, error } = await supabase.auth.signInWithPassword({
       email: emailLimpio,
