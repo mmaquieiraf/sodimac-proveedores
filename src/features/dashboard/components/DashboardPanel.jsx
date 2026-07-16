@@ -1,0 +1,260 @@
+import React, { useState } from 'react';
+
+export default function DashboardPanel({ 
+  proveedores = [], 
+  categoriasDinamicas = {},
+  zonasOpciones = [],
+  macroZonas = {} 
+}) {
+  const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
+
+  const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria'); 
+  const [filtroTortaCat, setFiltroTortaCat] = useState(''); 
+  const [filtroTortaSub, setFiltroTortaSub] = useState([]); 
+  
+  const [filtroTendenciaCat, setFiltroTendenciaCat] = useState(''); 
+  const [filtroTendenciaSub, setFiltroTendenciaSub] = useState(''); 
+  const [filtroTendenciaTiempo, setFiltroTendenciaTiempo] = useState('30'); 
+
+  const statsDashboard = () => {
+    const total = proveedores.length; 
+    let fechasOrdenadas = []; 
+    const fechasRaw = {}; 
+    const renovaciones = [];
+    const hace90Dias = new Date(); 
+    hace90Dias.setDate(hace90Dias.getDate() - 90);
+    
+    let fechaLimite = new Date();
+    if (filtroTendenciaTiempo !== 'all') {
+      const dias = parseInt(filtroTendenciaTiempo);
+      for (let i = dias - 1; i >= 0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        const ds = d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        fechasOrdenadas.push(ds); fechasRaw[ds] = 0; 
+      }
+      fechaLimite.setDate(fechaLimite.getDate() - dias);
+    }
+    
+    const proveedoresTendencia = proveedores.filter(p => 
+      (filtroTendenciaCat === '' || p.categoria === filtroTendenciaCat) && 
+      (filtroTendenciaSub === '' || p.subcategoria === filtroTendenciaSub) && 
+      (filtroTendenciaTiempo === 'all' || new Date(p.fecha_registro) >= fechaLimite)
+    );
+    
+    proveedoresTendencia.forEach(p => {
+      const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      if (filtroTendenciaTiempo !== 'all') { 
+        if (fechasRaw[fechaCorta] !== undefined) fechasRaw[fechaCorta]++; 
+      } else { 
+        fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1; 
+      }
+    });
+    
+    if (filtroTendenciaTiempo === 'all') {
+      fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => new Date(`${a.split('-')[2]}-${a.split('-')[1]}-${a.split('-')[0]}`) - new Date(`${b.split('-')[2]}-${b.split('-')[1]}-${b.split('-')[0]}`));
+    }
+    
+    proveedores.forEach(p => { if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p); });
+    
+    return { total, fechasRaw, fechasOrdenadas, renovaciones };
+  };
+  
+  const stats = statsDashboard();
+
+  const chartWidth = 800; const chartHeight = 250; const padX = 40; const padY = 30;
+  const maxReg = Math.max(...stats.fechasOrdenadas.map(f => stats.fechasRaw[f]), 1);
+  const stepX = stats.fechasOrdenadas.length > 1 ? (chartWidth - 2 * padX) / (stats.fechasOrdenadas.length - 1) : 0;
+  const puntosLinea = stats.fechasOrdenadas.map((f, i) => `${padX + i * stepX},${chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY))}`).join(' ');
+
+  const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
+  const proveedoresParaTorta = proveedoresAprobados.filter(p => (filtroTortaCat === '' || p.categoria === filtroTortaCat) && (filtroTortaSub.length === 0 || filtroTortaSub.includes(p.subcategoria)));
+  const tortaData = {};
+  proveedoresParaTorta.forEach(p => { const clave = tipoGraficoTorta === 'categoria' ? p.categoria : p.subcategoria; tortaData[clave] = (tortaData[clave] || 0) + 1; });
+  let cumulativePercent = 0;
+  
+  const pieSlices = Object.entries(tortaData).map(([key, val], i) => {
+    const percent = proveedoresParaTorta.length > 0 ? (val / proveedoresParaTorta.length) * 100 : 0;
+    const slice = `${coloresGrafico[i % coloresGrafico.length]} ${cumulativePercent}% ${cumulativePercent + percent}%`;
+    cumulativePercent += percent;
+    return { key, val, percent, color: coloresGrafico[i % coloresGrafico.length], slice };
+  });
+  
+  const tortaGradient = proveedoresParaTorta.length > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
+
+  const [filtroMapaCat, setFiltroMapaCat] = useState(''); 
+  const [filtroMapaSub, setFiltroMapaSub] = useState(''); 
+  const [filtroMapaZona, setFiltroMapaZona] = useState('');
+  
+  const statsMapa = () => {
+    const conteo = {}; 
+    zonasOpciones.filter(z => z !== "Todo el País").forEach(z => conteo[z] = 0);
+    const filtradosMapa = proveedoresAprobados.filter(p => {
+      let zonaMatch = true;
+      if (filtroMapaZona !== '') {
+        const zProv = p.zonas_cobertura ? p.zonas_cobertura.split(',').map(z => z.trim()) : [];
+        zonaMatch = zProv.includes('Todo el País') || zProv.includes(filtroMapaZona);
+      }
+      return (filtroMapaCat === '' || p.categoria === filtroMapaCat) && (filtroMapaSub === '' || p.subcategoria === filtroMapaSub) && zonaMatch;
+    });
+    
+    filtradosMapa.forEach(p => {
+      if (!p.zonas_cobertura) return;
+      const zP = p.zonas_cobertura.split(',').map(z => z.trim());
+      if (zP.includes('Todo el País')) {
+        Object.keys(conteo).forEach(z => conteo[z]++); 
+      } else {
+        zP.forEach(z => { if (conteo[z] !== undefined) conteo[z]++; });
+      }
+    });
+    return { conteo, maxMapa: Math.max(...Object.values(conteo), 1), totalMapeados: filtradosMapa.length };
+  };
+  
+  const mapStats = statsMapa();
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
+        <div style={{ backgroundColor: '#004A99', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores</h3>
+          <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{proveedores ? proveedores.length : 0}</p>
+        </div>
+        <div style={{ backgroundColor: '#EE2D24', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
+          <h3 style={{ margin: '0', fontSize: '14px', textTransform: 'uppercase' }}>Aprobados en Base</h3>
+          <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{proveedoresAprobados.length}</p>
+        </div>
+        <div style={{ backgroundColor: '#ffc107', color: '#333', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
+          <h3 style={{ margin: '0', fontSize: '14px', textTransform: 'uppercase' }}>Requieren Actualización (&gt;90 días)</h3>
+          <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{stats.renovaciones.length}</p>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '30px', marginBottom: '30px' }}>
+        <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <h3 style={{ margin: 0, color: '#333', fontSize: '16px' }}>Distribución Aprobados</h3>
+            <select style={{ padding: '5px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setTipoGraficoTorta(e.target.value)} value={tipoGraficoTorta}>
+              <option value="categoria">Ver por Categoría</option>
+              <option value="subcategoria">Ver por Subcategoría</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '20px', backgroundColor: '#f9f9f9', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}>
+            <select style={{ padding: '6px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', minWidth: '130px' }} onChange={e => {setFiltroTortaCat(e.target.value); setFiltroTortaSub([]);}} value={filtroTortaCat}>
+              <option value="">Todas las Categorías</option>
+              {Object.keys(categoriasDinamicas).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+            
+            <div style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px', maxHeight: '55px', overflowY: 'auto', backgroundColor: '#fff', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+              {filtroTortaCat === '' ? <span style={{ fontSize: '11px', color: '#999', padding: '2px' }}>Seleccione una categoría para filtrar subcategorías...</span> : 
+                categoriasDinamicas[filtroTortaCat]?.map(sub => (
+                  <label key={sub} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', backgroundColor: '#f0f0f0', padding: '2px 6px', border: '1px solid #ccc', borderRadius: '12px' }}>
+                    <input type="checkbox" checked={filtroTortaSub.includes(sub)} onChange={(e) => {
+                      if (e.target.checked) setFiltroTortaSub([...filtroTortaSub, sub]);
+                      else setFiltroTortaSub(filtroTortaSub.filter(s => s !== sub));
+                    }} style={{ margin: 0, cursor: 'pointer' }} /> {sub}
+                  </label>
+                ))
+              }
+            </div>
+          </div>
+
+          {proveedoresParaTorta.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados con estos filtros</p> : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: tortaGradient, marginBottom: '20px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}></div>
+              <div style={{ width: '100%', maxHeight: '150px', overflowY: 'auto' }}>
+                {pieSlices.map(s => (
+                  <div key={s.key} style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', fontSize: '12px' }}>
+                    <div style={{ width: '12px', height: '12px', backgroundColor: s.color, marginRight: '10px', borderRadius: '2px' }}></div>
+                    <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.key}</span>
+                    <span style={{ fontWeight: 'bold' }}>{s.val} ({Math.round(s.percent)}%)</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+            <h3 style={{ margin: '0 0 5px 0', color: '#333', fontSize: '16px' }}>Tendencia de Registros</h3>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <select style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', maxWidth: '140px' }} onChange={e => {setFiltroTendenciaCat(e.target.value); setFiltroTendenciaSub('');}} value={filtroTendenciaCat}>
+                <option value="">Categoría (Todas)</option>
+                {Object.keys(categoriasDinamicas).map(cat => <option key={cat} value={cat}>{cat.substring(0,20)}...</option>)}
+              </select>
+              <select disabled={!filtroTendenciaCat} style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', maxWidth: '140px' }} onChange={e => setFiltroTendenciaSub(e.target.value)} value={filtroTendenciaSub}>
+                <option value="">Subcat (Todas)</option>
+                {filtroTendenciaCat && categoriasDinamicas[filtroTendenciaCat]?.map(sub => <option key={sub} value={sub}>{sub.substring(0,20)}...</option>)}
+              </select>
+              <select style={{ padding: '5px', fontSize: '11px', borderRadius: '4px', border: '1px solid #ccc', fontWeight: 'bold' }} onChange={e => setFiltroTendenciaTiempo(e.target.value)} value={filtroTendenciaTiempo}>
+                <option value="7">Últimos 7 días</option><option value="15">Últimos 15 días</option><option value="30">Últimos 30 días</option><option value="all">Histórico completo</option>
+              </select>
+            </div>
+          </div>
+          {stats.fechasOrdenadas.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay registros para graficar</p> : (
+            <div style={{ position: 'relative', width: '100%', height: '210px' }}>
+              <svg width="100%" height="100%" viewBox={`0 0 800 250`} preserveAspectRatio="none">
+                <line x1={40} y1={250 - 30} x2={800} y2={250 - 30} stroke="#ccc" strokeWidth="2" />
+                <line x1={40} y1="0" x2={40} y2={250 - 30} stroke="#ccc" strokeWidth="2" />
+                {stats.fechasOrdenadas.length > 1 && <polyline points={puntosLinea} fill="none" stroke="#004A99" strokeWidth="3" />}
+                {stats.fechasOrdenadas.map((f, i) => {
+                  const cx = 40 + i * stepX; const cy = 250 - 30 - ((stats.fechasRaw[f] / maxReg) * (250 - 2 * 30));
+                  return (
+                    <g key={f}>
+                      <circle cx={cx} cy={cy} r="5" fill="#EE2D24" />
+                      {stats.fechasRaw[f] > 0 && <text x={cx} y={cy - 10} fontSize="12" fill="#333" textAnchor="middle">{stats.fechasRaw[f]}</text>}
+                      {i % Math.ceil(stats.fechasOrdenadas.length / 5) === 0 && <text x={cx} y={250 - 10} fontSize="11" fill="#666" textAnchor="middle">{f.substring(0, 5)}</text>}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', marginBottom: '30px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+          <div>
+            <h3 style={{ margin: '0 0 5px 0', color: '#333', fontSize: '16px' }}>Mapa de Cobertura Regional (Aprobados)</h3>
+            <p style={{ fontSize: '12px', color: '#666', margin: 0 }}>Visualización térmica de proveedores según filtros aplicados.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <select style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => {setFiltroMapaCat(e.target.value); setFiltroMapaSub('');}} value={filtroMapaCat}>
+              <option value="">Todas las Categorías</option>
+              {Object.keys(categoriasDinamicas).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+            <select disabled={!filtroMapaCat} style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setFiltroMapaSub(e.target.value)} value={filtroMapaSub}>
+              <option value="">Todas las Subcategorías</option>
+              {filtroMapaCat && categoriasDinamicas[filtroMapaCat]?.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+            </select>
+            <select style={{ padding: '8px', fontSize: '12px', borderRadius: '4px', border: '1px solid #ccc' }} onChange={e => setFiltroMapaZona(e.target.value)} value={filtroMapaZona}>
+              <option value="">Cualquier Zona</option>
+              {zonasOpciones.filter(z => z !== 'Todo el País').map(z => <option key={z} value={z}>{z}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px' }}>
+          {Object.entries(macroZonas).map(([macro, regiones]) => (
+            <div key={macro} style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '15px', backgroundColor: '#fafafa' }}>
+              <h4 style={{ margin: '0 0 15px 0', fontSize: '14px', color: '#004A99', borderBottom: '2px solid #EE2D24', paddingBottom: '5px' }}>Zona {macro}</h4>
+              {regiones.map(reg => {
+                const cantidad = mapStats.conteo[reg] || 0;
+                const intensidad = mapStats.maxMapa > 0 ? cantidad / mapStats.maxMapa : 0;
+                const bgColor = cantidad > 0 ? `rgba(238, 45, 36, ${0.15 + (intensidad * 0.85)})` : '#ffffff';
+                const txtColor = cantidad > 0 ? (intensidad > 0.5 ? '#ffffff' : '#333333') : '#999999';
+                return (
+                  <div key={reg} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '12px', padding: '8px 10px', backgroundColor: bgColor, color: txtColor, borderRadius: '4px', border: '1px solid #eee', transition: 'all 0.3s' }}>
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }} title={reg}>{reg}</span>
+                    <span style={{ fontWeight: 'bold' }}>{cantidad}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
