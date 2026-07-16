@@ -1,65 +1,77 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
+// Mantengo la ruta relativa asumiendo que AdminLayout está en src/features/admin/
+// Si tu supabase.js está en src/, la ruta es '../../supabase'. Ajusta si es necesario.
+import { supabase } from '../../supabase'; 
 
-// 🛡️ Contextos de Seguridad
-import { AuthProvider } from '../features/auth/AuthContext';
-import { ProtectedRoute } from '../features/auth/ProtectedRoute';
+export default function AdminLayout() {
+  const navigate = useNavigate();
 
-// 🌍 Rutas Públicas y de Acceso
-import RegistroPage from '../pages/public/RegistroPage';
-import LoginPage from '../pages/auth/LoginPage';
-
-// 💼 Layout Administrativo (Ruta Corregida por ti)
-import AdminLayout from '../features/admin/AdminLayout';
-
-// 🧩 Features / Módulos Internos
-import DashboardPanel from '../features/dashboard/DashboardPanel';
-import PendientesPanel from '../features/proveedores/PendientesPanel';
-import GestionPanel from '../features/proveedores/GestionPanel';
-import ExportarPanel from '../features/proveedores/ExportarPanel';
-import ProcesosPanel from '../features/procesos/ProcesosPanel';
-import ActualizacionFormPanel from '../features/admin/ActualizacionFormPanel';
-import AuditoriaPanel from '../features/admin/AuditoriaPanel';
-import GeneradorRFP from '../features/generadores/GeneradorRFP';
-import GeneradorRFQ from '../features/generadores/GeneradorRFQ';
-import GeneradorFT from '../features/generadores/GeneradorFT';
-
-export const AppRouter = () => {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          {/* ======================= RUTAS PÚBLICAS ======================= */}
-          <Route path="/" element={<RegistroPage />} />
-          <Route path="/registro" element={<RegistroPage />} />
-          <Route path="/login" element={<LoginPage />} />
+    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'Arial, sans-serif', backgroundColor: '#f4f4f4' }}>
+      
+      {/* ================= COLUMNA IZQUIERDA: SIDEBAR CORPORATIVA ================= */}
+      <div style={{ width: '250px', backgroundColor: '#004A99', color: 'white', display: 'flex', flexDirection: 'column', boxShadow: '2px 0 5px rgba(0,0,0,0.1)', zIndex: 10 }}>
+        <div style={{ padding: '20px', backgroundColor: '#003366', textAlign: 'center', borderBottom: '3px solid #EE2D24' }}>
+          <img src="/logo-sodimac-sin-margen.png" alt="Sodimac" style={{ maxWidth: '100%', filter: 'brightness(0) invert(1)' }} />
+          <h4 style={{ margin: '10px 0 0 0', fontSize: '13px', letterSpacing: '1px' }}>PORTAL PROVEEDORES</h4>
+        </div>
+        
+        <div style={{ padding: '15px 0', flex: 1, overflowY: 'auto' }}>
+          <p style={{ fontSize: '10px', color: '#99c2ff', padding: '0 20px', margin: '0 0 10px 0', fontWeight: 'bold', letterSpacing: '1px' }}>MENÚ PRINCIPAL</p>
           
-          {/* ======================= RUTAS PRIVADAS (BÓVEDA) ======================= */}
-          <Route path="/admin" element={
-            <ProtectedRoute>
-              <AdminLayout />
-            </ProtectedRoute>
-          }>
-            {/* Redirección por defecto al entrar a /admin */}
-            <Route index element={<Navigate to="/admin/dashboard" replace />} />
-            
-            {/* Módulos inyectados dentro de <Outlet /> en AdminLayout */}
-            <Route path="dashboard" element={<DashboardPanel />} />
-            <Route path="pendientes" element={<PendientesPanel />} />
-            <Route path="gestion" element={<GestionPanel />} />
-            <Route path="exportar" element={<ExportarPanel />} />
-            <Route path="procesos" element={<ProcesosPanel />} />
-            <Route path="form" element={<ActualizacionFormPanel />} />
-            <Route path="auditoria" element={<AuditoriaPanel />} />
-            <Route path="rfp" element={<GeneradorRFP />} />
-            <Route path="rfq" element={<GeneradorRFQ />} />
-            <Route path="ft" element={<GeneradorFT />} />
-          </Route>
+          {/* ARRAY DE BOTONES DE NAVEGACIÓN */}
+          {[
+            { path: '/admin/dashboard', label: '📊 Dashboard' },
+            { path: '/admin/pendientes', label: '⏳ Proveedores Pendientes' },
+            { path: '/admin/gestion', label: '✅ Gestión Base Aprobados' },
+            { path: '/admin/exportar', label: '📁 Exportar Bases' },
+            { path: '/admin/form', label: '⚙️ Configurar Formulario' },
+            { path: '/admin/procesos', label: '💼 Licitaciones y Procesos' },
+            { path: '/admin/roles', label: '🛡️ Admin / Roles' } // <-- AQUÍ ESTÁ EL BOTÓN AÑADIDO
+          ].map(item => (
+            <button 
+              key={item.path} 
+              onClick={() => navigate(item.path)} 
+              style={{ width: '100%', padding: '12px 20px', textAlign: 'left', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', fontSize: '13px', transition: '0.2s' }}
+            >
+              {item.label}
+            </button>
+          ))}
 
-          {/* Catch-all: Si tipean una ruta que no existe */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+          <p style={{ fontSize: '10px', color: '#99c2ff', padding: '0 20px', margin: '20px 0 10px 0', fontWeight: 'bold', letterSpacing: '1px' }}>IA & DOCUMENTOS</p>
+          {[
+            { path: '/admin/rfp', label: '📄 Generador RFP' },
+            { path: '/admin/rfq', label: '📦 Generador RFQ' },
+            { path: '/admin/ft', label: '🛠️ Generador Fichas Técnicas' },
+          ].map(item => (
+            <button 
+              key={item.path} 
+              onClick={() => navigate(item.path)} 
+              style={{ width: '100%', padding: '12px 20px', textAlign: 'left', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', fontSize: '13px', transition: '0.2s' }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {/* BOTÓN DE CERRAR SESIÓN */}
+        <button 
+          onClick={async () => { 
+            await supabase.auth.signOut(); 
+            navigate('/login'); 
+          }} 
+          style={{ padding: '15px', backgroundColor: '#EE2D24', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+        >
+          Cerrar Sesión
+        </button>
+      </div>
+
+      {/* ================= COLUMNA DERECHA: ÁREA DE CONTENIDO DINÁMICO ================= */}
+      <main style={{ flex: 1, padding: '30px', overflowY: 'auto' }}>
+        {/* Aquí es donde AppRouter inyecta el panel correspondiente (Dashboard, Roles, Procesos, etc.) */}
+        <Outlet />
+      </main>
+    </div>
   );
-};
+}
