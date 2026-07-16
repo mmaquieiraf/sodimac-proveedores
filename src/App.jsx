@@ -3,7 +3,7 @@ import { supabase } from './supabase';
 import { categoriasSodimacSeed } from './utils/validaciones';
 
 // 1. IMPORTACIÓN DEL MÓDULO PÚBLICO (Formulario de Registro)
-import FormularioPublico from './pages/FormularioPublico';
+import FormularioPublico from './pages/FormularioPublico'; 
 
 // 2. IMPORTACIÓN DE LA ARQUITECTURA MODULAR ADMIN (Features)
 import DashboardPanel from './features/dashboard/DashboardPanel';
@@ -21,7 +21,7 @@ import GeneradorFT from './features/generadores/GeneradorFT';
 // COMPONENTE RAÍZ: MÁQUINA DE ESTADOS Y COMPUERTAS
 // ============================================================================
 export default function App() {
-  // ESTADO CENTRAL DE NAVEGACIÓN
+  // ESTADO CENTRAL DE NAVEGACIÓN VISUAL
   const [vistaActual, setVistaActual] = useState('registro'); // 'registro' | 'pin_acceso' | 'login' | 'admin'
 
   // ESTADOS DE AUTENTICACIÓN
@@ -53,10 +53,11 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // HANDLERS DE SEGURIDAD (Compuertas)
+  // HANDLERS DE SEGURIDAD (Compuertas Unificadas)
   const manejarAccesoPin = (e) => {
     e.preventDefault();
-    const pinCorrecto = import.meta.env.VITE_PIN_ACCESO || '123456'; 
+    // Validamos contra la única fuente de verdad en .env
+    const pinCorrecto = import.meta.env.VITE_PIN_ACCESO || '202021'; 
     if (pinAcceso === pinCorrecto) {
       setVistaActual('login');
       setPinAcceso('');
@@ -67,9 +68,10 @@ export default function App() {
 
   const manejarLoginSupabase = async (e) => {
     e.preventDefault();
-    const pinInternoCorrecto = import.meta.env.VITE_PIN_INTERNO || '654321'; 
+    // Reutilizamos el MISMO PIN corporativo para el segundo factor
+    const pinCorrecto = import.meta.env.VITE_PIN_ACCESO || '202021'; 
 
-    if (loginPinInterno !== pinInternoCorrecto) {
+    if (loginPinInterno !== pinCorrecto) {
       alert('🔒 PIN Interno Incorrecto. Intento bloqueado.');
       return;
     }
@@ -90,7 +92,7 @@ export default function App() {
 
   // PANTALLA DE CARGA INICIAL
   if (verificandoSesion) {
-    return <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center' }}><h2 style={{ color: '#004A99' }}>⏳ Cargando entorno...</h2></div>;
+    return <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f4f4' }}><h2 style={{ color: '#004A99' }}>⏳ Cargando entorno...</h2></div>;
   }
 
   // RENDERIZADO DE CABECERA DINÁMICA CORPORATIVA
@@ -101,12 +103,12 @@ export default function App() {
         <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', letterSpacing: '0.5px' }}>Portal de Proveedores</h2>
       </div>
       {vistaActual === 'registro' && (
-        <button onClick={() => setVistaActual('pin_acceso')} style={{ padding: '8px 20px', backgroundColor: 'transparent', color: 'white', border: '1px solid white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+        <button onClick={() => setVistaActual('pin_acceso')} style={{ padding: '8px 20px', backgroundColor: 'transparent', color: 'white', border: '1px solid white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}>
           Acceso Interno
         </button>
       )}
       {(vistaActual === 'pin_acceso' || vistaActual === 'login') && (
-        <button onClick={() => setVistaActual('registro')} style={{ padding: '8px 20px', backgroundColor: 'transparent', color: 'white', border: '1px solid white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+        <button onClick={() => setVistaActual('registro')} style={{ padding: '8px 20px', backgroundColor: 'transparent', color: 'white', border: '1px solid white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}>
           Ir a Registro
         </button>
       )}
@@ -122,7 +124,7 @@ export default function App() {
       <main style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: vistaActual !== 'registro' ? 'center' : 'flex-start', padding: vistaActual === 'registro' ? '40px 20px' : '0' }}>
         
         {/* ========================================================= */}
-        {/* COMPUERTA 1: PORTAL PÚBLICO DE REGISTRO */}
+        {/* COMPUERTA 1: PORTAL PÚBLICO DE REGISTRO (Imagen 1) */}
         {/* ========================================================= */}
         {vistaActual === 'registro' && (
           <div style={{ width: '100%', maxWidth: '1000px', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
@@ -132,7 +134,7 @@ export default function App() {
         )}
 
         {/* ========================================================= */}
-        {/* COMPUERTA 2: SEGURIDAD DE ACCESO (PIN INICIAL) */}
+        {/* COMPUERTA 2: SEGURIDAD DE ACCESO (Imagen 2) */}
         {/* ========================================================= */}
         {vistaActual === 'pin_acceso' && (
           <div style={{ backgroundColor: 'white', padding: '40px', borderRadius: '8px', boxShadow: '0 8px 20px rgba(0,0,0,0.1)', width: '350px', textAlign: 'center' }}>
@@ -158,7 +160,7 @@ export default function App() {
         )}
 
         {/* ========================================================= */}
-        {/* COMPUERTA 3: INGRESO DE ADMINISTRADOR (LOGIN SUPABASE) */}
+        {/* COMPUERTA 3: INGRESO DE ADMINISTRADOR (Imagen 3) */}
         {/* ========================================================= */}
         {vistaActual === 'login' && (
           <div style={{ backgroundColor: 'white', padding: '40px', borderRadius: '8px', boxShadow: '0 8px 20px rgba(0,0,0,0.1)', width: '350px' }}>
@@ -340,7 +342,7 @@ function OrquestadorAdmin({ session }) {
 
         <div style={{ padding: '15px', backgroundColor: '#003366', fontSize: '11px', textAlign: 'center' }}>
           Conectado como:<br/><strong style={{ color: '#ffc107', wordBreak: 'break-all' }}>{session.user.email}</strong>
-          <button onClick={() => supabase.auth.signOut()} style={{ marginTop: '10px', width: '100%', padding: '8px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Cerrar Sesión</button>
+          <button onClick={() => { supabase.auth.signOut(); window.location.reload(); }} style={{ marginTop: '10px', width: '100%', padding: '8px', backgroundColor: '#EE2D24', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Cerrar Sesión</button>
         </div>
       </div>
 
