@@ -234,7 +234,9 @@ export default function App() {
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
 
     const rutLimpio = formData.rut.replace(/[<>]/g, '');
-    const { data: existentes } = await supabase.from('proveedores').select('categoria, subcategoria').eq('rut', rutLimpio);
+    // Llamada segura a la función RPC, eludiendo la restricción de lectura pública
+const { data: existentes, error: rpcError } = await supabase.rpc('verificar_duplicado_proveedor', { p_rut: rutLimpio });
+if (rpcError) console.error("Error al verificar duplicados:", rpcError);
 
     const websiteFinal = formData.poseeWebsite === 'si' && formData.websiteUrl.trim() !== '' 
       ? formData.websiteUrl.replace(/[<>]/g, '').trim().toLowerCase() : 'No posee';
