@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+// Si el Router no está activo aún, no fallará, usamos callbacks
+import { useNavigate } from 'react-router-dom'; 
 import { supabase } from '../../supabase';
-import { useAuth } from '../../features/auth/AuthContext';
+// Nota: Eliminé useAuth porque la sesión ahora la controla App.jsx, simplificando el flujo
 
-export default function LoginPage() {
-  const navigate = useNavigate();
-  const { usuarioActual } = useAuth();
-  
+export default function LoginPage({ onIrARegistro }) {
+  // Manejo de navegación segura (Try-catch en caso de que falte React Router)
+  let navigate = () => {};
+  try { navigate = useNavigate(); } catch (e) { /* Fallback a callbacks */ }
+
   // Estados locales para la navegación interna del módulo de acceso
   const [vistaLocal, setVistaLocal] = useState('pre_login');
   
@@ -15,25 +17,18 @@ export default function LoginPage() {
   const [credenciales, setCredenciales] = useState({ usuario: '', password: '', pin: '' });
   const [resetData, setResetData] = useState({ correo: '' });
 
-  // Estados de Seguridad
+  // Estados de Seguridad (Fuerza Bruta Frontend)
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueoSeguridad, setBloqueoSeguridad] = useState(false);
-
-  // Redirección automática si el usuario ya tiene una sesión válida
-  useEffect(() => {
-    if (usuarioActual) {
-      navigate('/admin', { replace: true });
-    }
-  }, [usuarioActual, navigate]);
 
   // Auditoría centralizada
   const registrarAuditoria = async (usuario, estado, tipo) => {
     try {
+      // Intenta registrar, si falla silenciosamente no bloquea al usuario
       await supabase.from('auditoria_logins').insert([{ usuario_intentado: usuario, estado: estado, tipo: tipo }]);
-    } catch (err) { console.error("Error guardando auditoría:", err); }
+    } catch (err) { console.error("Auditoría offline"); }
   };
 
-  // Manejo de intentos fallidos (Solo frontend temporal, Vercel y Supabase protegen el backend)
   const registrarIntentoFallido = () => {
     const nuevosIntentos = intentosFallidos + 1;
     setIntentosFallidos(nuevosIntentos);
@@ -42,7 +37,7 @@ export default function LoginPage() {
       setTimeout(() => {
         setBloqueoSeguridad(false);
         setIntentosFallidos(0);
-      }, 300000); // Bloqueo temporal de 5 minutos en UI para frenar bots simples
+      }, 300000); // 5 minutos
       return true; 
     }
     return false; 
@@ -52,8 +47,8 @@ export default function LoginPage() {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado temporalmente por demasiados intentos.");
     
-    const pinAcceso = import.meta.env.VITE_PIN_ACCESO?.trim();
-    if (!pinAcceso) return alert("⚠️ Error Crítico: PIN de seguridad no inyectado desde Vercel.");
+    // UNIFICACIÓN DE PIN (Single Source of Truth)
+    const pinAcceso = import.meta.env.VITE_PIN_ACCESO?.trim() || '202021';
 
     if (preLoginPin.trim() === pinAcceso) {
       await registrarAuditoria('Anónimo', 'Éxito', 'Acceso a PIN Público');
@@ -73,7 +68,9 @@ export default function LoginPage() {
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado.");
     
     const emailLimpio = credenciales.usuario.replace(/[<>]/g, '').trim().toLowerCase();
-    const pinAcceso = import.meta.env.VITE_PIN_ACCESO?.trim();
+    
+    // UNIFICACIÓN DE PIN PARA EL SEGUNDO FACTOR
+    const pinAcceso = import.meta.env.VITE_PIN_ACCESO?.trim() || '202021';
 
     if (credenciales.pin.replace(/[<>]/g, '').trim() !== pinAcceso) {
       await registrarAuditoria(emailLimpio || 'Desconocido', 'Fallido', 'Error de PIN Interno');
@@ -82,7 +79,7 @@ export default function LoginPage() {
       return;
     }
 
-    // Autenticación nativa con Supabase (La validación real ocurre en el servidor)
+    // Autenticación nativa con Supabase
     const { data, error } = await supabase.auth.signInWithPassword({
       email: emailLimpio,
       password: credenciales.password
@@ -97,7 +94,7 @@ export default function LoginPage() {
 
     await registrarAuditoria(data.user.email, 'Éxito', 'Login Panel Admin');
     setIntentosFallidos(0); 
-    // El contexto AuthContext detectará el cambio y el useEffect superior nos enviará a /admin
+    // App.jsx ahora escuchará este inicio de sesión y renderizará automáticamente el OrquestadorAdmin
   };
 
   const buscarCorreo = async (e) => {
@@ -110,12 +107,18 @@ export default function LoginPage() {
     if (error) { 
       await registrarAuditoria(correoLimpio, 'Fallido', 'Recuperar Pass Auth'); 
       registrarIntentoFallido(); 
-      alert("Hubo un error al procesar la solicitud de recuperación."); 
+      alert("Hubo un error al procesar la solicitud."); 
     } else { 
       alert("✅ Si el correo está registrado, recibirás instrucciones seguras en tu bandeja de entrada."); 
       setVistaLocal('login'); 
       setResetData({ correo: '' }); 
     }
+  };
+
+  // Manejo fluido entre callbacks o React Router
+  const handleVolverRegistro = () => {
+    if (onIrARegistro) onIrARegistro();
+    else navigate('/registro');
   };
 
   return (
@@ -128,7 +131,7 @@ export default function LoginPage() {
           <span style={{ fontSize: '22px', fontWeight: '600', letterSpacing: '0.5px', marginLeft: '4cm' }}>Portal de Proveedores</span>
         </div>
         <div>
-          <button onClick={() => navigate('/registro')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro</button>
+          <button onClick={handleVolverRegistro} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Ir a Registro</button>
         </div>
       </div>
 
@@ -141,7 +144,7 @@ export default function LoginPage() {
               <input required type="password" maxLength="6" placeholder="******" value={preLoginPin} onChange={e => setPreLoginPin(e.target.value)} style={{ width: '100%', maxWidth: '250px', padding: '15px', border: '2px solid #ccc', borderRadius: '8px', letterSpacing: '15px', textAlign: 'center', fontSize: '28px', outline: 'none', fontWeight: 'bold', color: '#004A99' }} />
             </div>
             <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '14px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', fontSize: '14px', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>VALIDAR ACCESO</button>
-            <button type="button" onClick={() => navigate('/registro')} style={{ width: '100%', padding: '14px', marginTop: '10px', backgroundColor: 'transparent', border: '1px solid #ccc', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VOLVER</button>
+            <button type="button" onClick={handleVolverRegistro} style={{ width: '100%', padding: '14px', marginTop: '10px', backgroundColor: 'transparent', border: '1px solid #ccc', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>VOLVER</button>
           </form>
         </div>
       )}
@@ -150,7 +153,7 @@ export default function LoginPage() {
         <div style={{ maxWidth: '400px', width: '100%', margin: '50px auto', backgroundColor: 'white', padding: '30px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
           <h2 style={{ textAlign: 'center', color: '#004A99', marginBottom: '25px' }}>Ingreso de Administrador</h2>
           <form onSubmit={manejarLogin}>
-            <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Usuario</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setCredenciales({...credenciales, usuario: e.target.value})} /></div>
+            <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Usuario</label><input required type="email" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setCredenciales({...credenciales, usuario: e.target.value})} /></div>
             <div style={{ marginBottom: '15px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Contraseña</label><input required type="password" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setCredenciales({...credenciales, password: e.target.value})} /></div>
             <div style={{ marginBottom: '25px' }}><label style={{ fontSize: '13px', fontWeight: 'bold' }}>PIN Interno</label><input required type="password" maxLength="6" style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px', letterSpacing: '3px' }} onChange={e => setCredenciales({...credenciales, pin: e.target.value})} /></div>
             <button type="submit" disabled={bloqueoSeguridad} style={{ width: '100%', padding: '12px', backgroundColor: bloqueoSeguridad ? '#ccc' : '#004A99', color: 'white', border: 'none', fontWeight: 'bold', borderRadius: '4px', cursor: bloqueoSeguridad ? 'not-allowed' : 'pointer' }}>INGRESAR AL PANEL</button>

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase';
-import { categoriasSodimac as catSodimacOriginal, formatearRUT, validarRUT } from '../../datosSodimac';
+import { categoriasSodimacSeed as catSodimacOriginal, formatearRUT, validarRUT } from '../../utils/validaciones';
 
-// --- CONFIGURACIÓN DE CONSTANTES Y CATEGORÍAS (Extraídas del monolito) ---
+// --- CONFIGURACIÓN DE CONSTANTES Y CATEGORÍAS ---
 const categoriasSodimac = JSON.parse(JSON.stringify(catSodimacOriginal));
 
 const nuevasSubcategorias = {
@@ -41,11 +41,14 @@ const cargarCategoriasDinamicas = () => {
 };
 
 // --- COMPONENTE PRINCIPAL DE REGISTRO ---
-export default function RegistroPage() {
+export default function RegistroPage({ onAccesoInterno }) {
   const navigate = useNavigate();
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
   const [categoriasDinamicas, setCategoriasDinamicas] = useState(cargarCategoriasDinamicas());
   
+  // Defensa Perimetral Pasiva (Honeypot anti-bots automatizados)
+  const [honeypot, setHoneypot] = useState('');
+
   const [formData, setFormData] = useState({
     razonSocial: '', nombreFantasia: '', rut: '', domicilio: '',
     categoria: [], subcategoria: [], emailPrincipal: '', emailSecundario: '',
@@ -53,7 +56,6 @@ export default function RegistroPage() {
     poseeWebsite: 'no', websiteUrl: ''
   });
 
-  // Guardamos las categorías en LocalStorage si cambian (para mantener sincronía)
   useEffect(() => {
     localStorage.setItem('sodimac_categorias_dinamicas', JSON.stringify(categoriasDinamicas));
   }, [categoriasDinamicas]);
@@ -71,7 +73,7 @@ export default function RegistroPage() {
     else {
       nuevasCat = nuevasCat.filter(c => c !== cat);
       const subsParaRemover = categoriasDinamicas[cat] || [];
-      nuevasSub = nuevasSub.filter(s => !subsParaRemover.includes(s));
+      newasSub = nuevasSub.filter(s => !subsParaRemover.includes(s));
     }
     setFormData({ ...formData, categoria: nuevasCat, subcategoria: nuevasSub });
   };
@@ -84,6 +86,10 @@ export default function RegistroPage() {
 
   const manejarEnvioRegistro = async (e) => {
     e.preventDefault();
+
+    // Filtro de seguridad Honeypot: si el bot llenó este campo invisible, se aborta el envío de forma silenciosa
+    if (honeypot) return;
+
     if (!validarRUT(formData.rut)) return alert("El RUT ingresado no es válido.");
     if (formData.categoria.length === 0) return alert("Debe seleccionar al menos una Categoría.");
     if (formData.subcategoria.length === 0) return alert("Debe seleccionar al menos una Subcategoría.");
@@ -93,9 +99,8 @@ export default function RegistroPage() {
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
 
     const rutLimpio = formData.rut.replace(/[<>]/g, '');
-    // Llamada segura a la función RPC, eludiendo la restricción de lectura pública
-const { data: existentes, error: rpcError } = await supabase.rpc('verificar_duplicado_proveedor', { p_rut: rutLimpio });
-if (rpcError) console.error("Error al verificar duplicados:", rpcError);
+    const { data: existentes, error: rpcError } = await supabase.rpc('verificar_duplicado_proveedor', { p_rut: rutLimpio });
+    if (rpcError) console.error("Error al verificar duplicados:", rpcError);
 
     const websiteFinal = formData.poseeWebsite === 'si' && formData.websiteUrl.trim() !== '' 
       ? formData.websiteUrl.replace(/[<>]/g, '').trim().toLowerCase() : 'No posee';
@@ -132,7 +137,6 @@ if (rpcError) console.error("Error al verificar duplicados:", rpcError);
       if (error) alert("⚠️ Error de sistema al registrar. Inténtelo más tarde."); 
       else { 
         alert(`✅ Registro enviado con éxito a revisión.`); 
-        // Recargamos la vista para limpiar el formulario
         window.location.reload(); 
       }
     }
@@ -148,8 +152,12 @@ if (rpcError) console.error("Error al verificar duplicados:", rpcError);
           <span style={{ fontSize: '22px', fontWeight: '600', letterSpacing: '0.5px', zIndex: 10, marginLeft: '4cm' }}>Portal de Proveedores</span>
         </div>
         <div style={{ zIndex: 10, display: 'flex', alignItems: 'center', gap: '15px' }}>
-          {/* Navegamos mediante React Router hacia la página de login seguro */}
-          <button onClick={() => navigate('/login')} style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}>Acceso Interno</button>
+          <button 
+            onClick={onAccesoInterno || (() => navigate('/login'))} 
+            style={{ background: 'none', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Acceso Interno
+          </button>
         </div>
       </div>
 
@@ -158,6 +166,17 @@ if (rpcError) console.error("Error al verificar duplicados:", rpcError);
         <h2 style={{ color: '#333', fontSize: '22px', borderBottom: '3px solid #EE2D24', paddingBottom: '10px', marginBottom: '20px' }}>Registro de Nuevos Proveedores</h2>
         
         <form onSubmit={manejarEnvioRegistro}>
+          {/* Honeypot Invisible Input (Ciberseguridad pasiva) */}
+          <input 
+            type="text" 
+            name="b_phone" 
+            value={honeypot} 
+            onChange={e => setHoneypot(e.target.value)} 
+            style={{ display: 'none' }} 
+            tabIndex="-1" 
+            autoComplete="off" 
+          />
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             <div style={{ gridColumn: '1 / -1' }}><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Razón Social *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, razonSocial: e.target.value})} /></div>
             <div><label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>Nombre de Fantasía *</label><input required style={{ width: '100%', padding: '10px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setFormData({...formData, nombreFantasia: e.target.value})} /></div>
