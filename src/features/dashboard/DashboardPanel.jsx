@@ -1,43 +1,38 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 
-// --- CONSTANTES LOCALES ---
+// --- CONSTANTES GLOBALES EXACTAS DEL MONOLITO ---
+const zonasOpciones = [
+  "Todo el País", "Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", 
+  "Coquimbo", "Valparaíso", "Metropolitana de Santiago", "O'Higgins", "Maule", 
+  "Ñuble", "Biobío", "La Araucanía", "Los Ríos", "Los Lagos", "Aysén", 
+  "Magallanes y de la Antártica Chilena"
+];
+
 const macroZonas = {
   "Norte": ["Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", "Coquimbo"],
   "Centro": ["Valparaíso", "Metropolitana de Santiago", "O'Higgins", "Maule", "Ñuble"],
   "Sur": ["Biobío", "La Araucanía", "Los Ríos", "Los Lagos"],
   "Austral": ["Aysén", "Magallanes y de la Antártica Chilena"]
 };
-const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
 
-export default function DashboardPanel({ proveedores = [], categoriasDinamicas = {}, zonasOpciones = [] }) {
-  // 1. ESTADOS LOCALES DE FILTROS
+export default function DashboardPanel({ proveedores = [], categoriasDinamicas = {} }) {
+  // 1. ESTADOS EXACTOS 
   const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria'); 
   const [filtroTortaCat, setFiltroTortaCat] = useState(''); 
   const [filtroTortaSub, setFiltroTortaSub] = useState([]); 
-  
   const [filtroTendenciaCat, setFiltroTendenciaCat] = useState(''); 
   const [filtroTendenciaSub, setFiltroTendenciaSub] = useState(''); 
   const [filtroTendenciaTiempo, setFiltroTendenciaTiempo] = useState('30'); 
-  
   const [filtroMapaCat, setFiltroMapaCat] = useState(''); 
   const [filtroMapaSub, setFiltroMapaSub] = useState(''); 
   const [filtroMapaZona, setFiltroMapaZona] = useState('');
 
-  // 2. MEMORIZACIÓN DE DATOS BASE (Rendimiento Extremo)
-  const proveedoresAprobados = useMemo(() => {
-    return proveedores.filter(p => p.estado === 'Aprobado');
-  }, [proveedores]);
+  // 2. LÓGICA DE CÁLCULO SIN MEMORIZACIÓN (IDÉNTICO A APP.JSX)
+  const proveedoresAprobados = proveedores.filter(p => p.estado === 'Aprobado');
 
-  // 3. CÁLCULO MEMORIZADO DE TENDENCIAS Y RENOVACIONES
-  const stats = useMemo(() => {
-    const total = proveedores.length; 
-    let fechasOrdenadas = []; 
-    const fechasRaw = {}; 
-    const renovaciones = [];
-    
-    const hace90Dias = new Date(); 
-    hace90Dias.setDate(hace90Dias.getDate() - 90);
-    
+  const statsDashboard = () => {
+    const total = proveedores.length; let fechasOrdenadas = []; const fechasRaw = {}; const renovaciones = [];
+    const hace90Dias = new Date(); hace90Dias.setDate(hace90Dias.getDate() - 90);
     let fechaLimite = new Date();
     if (filtroTendenciaTiempo !== 'all') {
       const dias = parseInt(filtroTendenciaTiempo);
@@ -48,74 +43,38 @@ export default function DashboardPanel({ proveedores = [], categoriasDinamicas =
       }
       fechaLimite.setDate(fechaLimite.getDate() - dias);
     }
-
-    const proveedoresTendencia = proveedores.filter(p => 
-      (filtroTendenciaCat === '' || p.categoria === filtroTendenciaCat) && 
-      (filtroTendenciaSub === '' || p.subcategoria === filtroTendenciaSub) && 
-      (filtroTendenciaTiempo === 'all' || new Date(p.fecha_registro) >= fechaLimite)
-    );
-
+    const proveedoresTendencia = proveedores.filter(p => (filtroTendenciaCat === '' || p.categoria === filtroTendenciaCat) && (filtroTendenciaSub === '' || p.subcategoria === filtroTendenciaSub) && (filtroTendenciaTiempo === 'all' || new Date(p.fecha_registro) >= fechaLimite));
     proveedoresTendencia.forEach(p => {
       const fechaCorta = new Date(p.fecha_registro).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      if (filtroTendenciaTiempo !== 'all') { 
-        if (fechasRaw[fechaCorta] !== undefined) fechasRaw[fechaCorta]++; 
-      } else { 
-        fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1; 
-      }
+      if (filtroTendenciaTiempo !== 'all') { if (fechasRaw[fechaCorta] !== undefined) fechasRaw[fechaCorta]++; } 
+      else { fechasRaw[fechaCorta] = (fechasRaw[fechaCorta] || 0) + 1; }
     });
-
-    if (filtroTendenciaTiempo === 'all') {
-      fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => 
-        new Date(`${a.split('-')[2]}-${a.split('-')[1]}-${a.split('-')[0]}`) - 
-        new Date(`${b.split('-')[2]}-${b.split('-')[1]}-${b.split('-')[0]}`)
-      );
-    }
-    
+    if (filtroTendenciaTiempo === 'all') fechasOrdenadas = Object.keys(fechasRaw).sort((a,b) => new Date(`${a.split('-')[2]}-${a.split('-')[1]}-${a.split('-')[0]}`) - new Date(`${b.split('-')[2]}-${b.split('-')[1]}-${b.split('-')[0]}`));
     proveedores.forEach(p => { if(new Date(p.fecha_registro) < hace90Dias) renovaciones.push(p); });
-    
     return { total, fechasRaw, fechasOrdenadas, renovaciones };
-  }, [proveedores, filtroTendenciaCat, filtroTendenciaSub, filtroTendenciaTiempo]);
+  };
+  const stats = statsDashboard();
 
-  // CÁLCULO DE GRÁFICO DE LÍNEAS (SVG)
-  const chartParams = useMemo(() => {
-    const chartWidth = 800; const chartHeight = 250; const padX = 40; const padY = 30;
-    const maxReg = Math.max(...stats.fechasOrdenadas.map(f => stats.fechasRaw[f]), 1);
-    const stepX = stats.fechasOrdenadas.length > 1 ? (chartWidth - 2 * padX) / (stats.fechasOrdenadas.length - 1) : 0;
-    const puntosLinea = stats.fechasOrdenadas.map((f, i) => `${padX + i * stepX},${chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY))}`).join(' ');
-    return { chartWidth, chartHeight, padX, padY, maxReg, stepX, puntosLinea };
-  }, [stats]);
+  const chartWidth = 800; const chartHeight = 250; const padX = 40; const padY = 30;
+  const maxReg = Math.max(...stats.fechasOrdenadas.map(f => stats.fechasRaw[f]), 1);
+  const stepX = stats.fechasOrdenadas.length > 1 ? (chartWidth - 2 * padX) / (stats.fechasOrdenadas.length - 1) : 0;
+  const puntosLinea = stats.fechasOrdenadas.map((f, i) => `${padX + i * stepX},${chartHeight - padY - ((stats.fechasRaw[f] / maxReg) * (chartHeight - 2 * padY))}`).join(' ');
 
-  // 4. CÁLCULO MEMORIZADO DE GRÁFICO DE TORTA
-  const pieChartData = useMemo(() => {
-    const proveedoresParaTorta = proveedoresAprobados.filter(p => 
-      (filtroTortaCat === '' || p.categoria === filtroTortaCat) && 
-      (filtroTortaSub.length === 0 || filtroTortaSub.includes(p.subcategoria))
-    );
-    
-    const tortaData = {};
-    proveedoresParaTorta.forEach(p => { 
-      const clave = tipoGraficoTorta === 'categoria' ? p.categoria : p.subcategoria; 
-      tortaData[clave] = (tortaData[clave] || 0) + 1; 
-    });
-    
-    let cumulativePercent = 0;
-    const pieSlices = Object.entries(tortaData).map(([key, val], i) => {
-      const percent = proveedoresParaTorta.length > 0 ? (val / proveedoresParaTorta.length) * 100 : 0;
-      const slice = `${coloresGrafico[i % coloresGrafico.length]} ${cumulativePercent}% ${cumulativePercent + percent}%`;
-      cumulativePercent += percent;
-      return { key, val, percent, color: coloresGrafico[i % coloresGrafico.length], slice };
-    });
-    
-    const tortaGradient = proveedoresParaTorta.length > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
-    
-    return { pieSlices, tortaGradient, isEmpty: proveedoresParaTorta.length === 0 };
-  }, [proveedoresAprobados, filtroTortaCat, filtroTortaSub, tipoGraficoTorta]);
+  const coloresGrafico = ['#004A99', '#EE2D24', '#ffc107', '#28a745', '#17a2b8', '#6f42c1', '#e83e8c', '#fd7e14', '#20c997'];
+  const proveedoresParaTorta = proveedoresAprobados.filter(p => (filtroTortaCat === '' || p.categoria === filtroTortaCat) && (filtroTortaSub.length === 0 || filtroTortaSub.includes(p.subcategoria)));
+  const tortaData = {};
+  proveedoresParaTorta.forEach(p => { const clave = tipoGraficoTorta === 'categoria' ? p.categoria : p.subcategoria; tortaData[clave] = (tortaData[clave] || 0) + 1; });
+  let cumulativePercent = 0;
+  const pieSlices = Object.entries(tortaData).map(([key, val], i) => {
+    const percent = proveedoresParaTorta.length > 0 ? (val / proveedoresParaTorta.length) * 100 : 0;
+    const slice = `${coloresGrafico[i % coloresGrafico.length]} ${cumulativePercent}% ${cumulativePercent + percent}%`;
+    cumulativePercent += percent;
+    return { key, val, percent, color: coloresGrafico[i % coloresGrafico.length], slice };
+  });
+  const tortaGradient = proveedoresParaTorta.length > 0 ? `conic-gradient(${pieSlices.map(s => s.slice).join(', ')})` : '#e0e0e0';
 
-  // 5. CÁLCULO MEMORIZADO DE MAPA TÉRMICO
-  const mapStats = useMemo(() => {
-    const conteo = {}; 
-    zonasOpciones.filter(z => z !== "Todo el País").forEach(z => conteo[z] = 0);
-    
+  const statsMapa = () => {
+    const conteo = {}; zonasOpciones.filter(z => z !== "Todo el País").forEach(z => conteo[z] = 0);
     const filtradosMapa = proveedoresAprobados.filter(p => {
       let zonaMatch = true;
       if (filtroMapaZona !== '') {
@@ -124,28 +83,22 @@ export default function DashboardPanel({ proveedores = [], categoriasDinamicas =
       }
       return (filtroMapaCat === '' || p.categoria === filtroMapaCat) && (filtroMapaSub === '' || p.subcategoria === filtroMapaSub) && zonaMatch;
     });
-    
     filtradosMapa.forEach(p => {
       if (!p.zonas_cobertura) return;
       const zP = p.zonas_cobertura.split(',').map(z => z.trim());
-      if (zP.includes('Todo el País')) {
-        Object.keys(conteo).forEach(z => conteo[z]++); 
-      } else {
-        zP.forEach(z => { if (conteo[z] !== undefined) conteo[z]++; });
-      }
+      if (zP.includes('Todo el País')) Object.keys(conteo).forEach(z => conteo[z]++); else zP.forEach(z => { if (conteo[z] !== undefined) conteo[z]++; });
     });
-    
     return { conteo, maxMapa: Math.max(...Object.values(conteo), 1), totalMapeados: filtradosMapa.length };
-  }, [proveedoresAprobados, filtroMapaCat, filtroMapaSub, filtroMapaZona, zonasOpciones]);
+  };
+  const mapStats = statsMapa();
 
-
+  // 3. RENDERIZADO JSX IDÉNTICO AL ORIGINAL
   return (
     <div>
-      {/* TARJETAS SUPERIORES */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '30px' }}>
         <div style={{ backgroundColor: '#004A99', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
           <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>Total Proveedores</h3>
-          <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{stats.total}</p>
+          <p style={{ margin: '10px 0 0 0', fontSize: '36px', fontWeight: 'bold' }}>{proveedores ? proveedores.length : 0}</p>
         </div>
         <div style={{ backgroundColor: '#EE2D24', color: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
           <h3 style={{ margin: '0', fontSize: '14px', textTransform: 'uppercase' }}>Aprobados en Base</h3>
@@ -157,10 +110,7 @@ export default function DashboardPanel({ proveedores = [], categoriasDinamicas =
         </div>
       </div>
 
-      {/* SECCIÓN GRÁFICOS: TORTA Y LÍNEAS */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '30px', marginBottom: '30px' }}>
-        
-        {/* GRÁFICO DE TORTA */}
         <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <h3 style={{ margin: 0, color: '#333', fontSize: '16px' }}>Distribución Aprobados</h3>
@@ -190,11 +140,11 @@ export default function DashboardPanel({ proveedores = [], categoriasDinamicas =
             </div>
           </div>
 
-          {pieChartData.isEmpty ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados con estos filtros</p> : (
+          {proveedoresParaTorta.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados con estos filtros</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: pieChartData.tortaGradient, marginBottom: '20px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}></div>
+              <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: tortaGradient, marginBottom: '20px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}></div>
               <div style={{ width: '100%', maxHeight: '150px', overflowY: 'auto' }}>
-                {pieChartData.pieSlices.map(s => (
+                {pieSlices.map(s => (
                   <div key={s.key} style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', fontSize: '12px' }}>
                     <div style={{ width: '12px', height: '12px', backgroundColor: s.color, marginRight: '10px', borderRadius: '2px' }}></div>
                     <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.key}</span>
@@ -206,7 +156,6 @@ export default function DashboardPanel({ proveedores = [], categoriasDinamicas =
           )}
         </div>
 
-        {/* GRÁFICO DE LÍNEAS (TENDENCIAS) */}
         <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
             <h3 style={{ margin: '0 0 5px 0', color: '#333', fontSize: '16px' }}>Tendencia de Registros</h3>
@@ -224,21 +173,19 @@ export default function DashboardPanel({ proveedores = [], categoriasDinamicas =
               </select>
             </div>
           </div>
-          
           {stats.fechasOrdenadas.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay registros para graficar</p> : (
             <div style={{ position: 'relative', width: '100%', height: '210px' }}>
-              <svg width="100%" height="100%" viewBox={`0 0 ${chartParams.chartWidth} ${chartParams.chartHeight}`} preserveAspectRatio="none">
-                <line x1={chartParams.padX} y1={chartParams.chartHeight - chartParams.padY} x2={chartParams.chartWidth} y2={chartParams.chartHeight - chartParams.padY} stroke="#ccc" strokeWidth="2" />
-                <line x1={chartParams.padX} y1="0" x2={chartParams.padX} y2={chartParams.chartHeight - chartParams.padY} stroke="#ccc" strokeWidth="2" />
-                {stats.fechasOrdenadas.length > 1 && <polyline points={chartParams.puntosLinea} fill="none" stroke="#004A99" strokeWidth="3" />}
+              <svg width="100%" height="100%" viewBox={`0 0 800 250`} preserveAspectRatio="none">
+                <line x1={40} y1={250 - 30} x2={800} y2={250 - 30} stroke="#ccc" strokeWidth="2" />
+                <line x1={40} y1="0" x2={40} y2={250 - 30} stroke="#ccc" strokeWidth="2" />
+                {stats.fechasOrdenadas.length > 1 && <polyline points={puntosLinea} fill="none" stroke="#004A99" strokeWidth="3" />}
                 {stats.fechasOrdenadas.map((f, i) => {
-                  const cx = chartParams.padX + i * chartParams.stepX; 
-                  const cy = chartParams.chartHeight - chartParams.padY - ((stats.fechasRaw[f] / chartParams.maxReg) * (chartParams.chartHeight - 2 * chartParams.padY));
+                  const cx = 40 + i * stepX; const cy = 250 - 30 - ((stats.fechasRaw[f] / maxReg) * (250 - 2 * 30));
                   return (
                     <g key={f}>
                       <circle cx={cx} cy={cy} r="5" fill="#EE2D24" />
                       {stats.fechasRaw[f] > 0 && <text x={cx} y={cy - 10} fontSize="12" fill="#333" textAnchor="middle">{stats.fechasRaw[f]}</text>}
-                      {i % Math.ceil(stats.fechasOrdenadas.length / 5) === 0 && <text x={cx} y={chartParams.chartHeight - 10} fontSize="11" fill="#666" textAnchor="middle">{f.substring(0, 5)}</text>}
+                      {i % Math.ceil(stats.fechasOrdenadas.length / 5) === 0 && <text x={cx} y={250 - 10} fontSize="11" fill="#666" textAnchor="middle">{f.substring(0, 5)}</text>}
                     </g>
                   );
                 })}
@@ -248,7 +195,6 @@ export default function DashboardPanel({ proveedores = [], categoriasDinamicas =
         </div>
       </div>
 
-      {/* MAPA DE COBERTURA */}
       <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', backgroundColor: '#fff', marginBottom: '30px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
           <div>
@@ -291,7 +237,6 @@ export default function DashboardPanel({ proveedores = [], categoriasDinamicas =
           ))}
         </div>
       </div>
-
     </div>
   );
 }
