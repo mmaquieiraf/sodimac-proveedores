@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../supabase';
+import { supabase } from "../../supabase";
 import { categoriasSodimacSeed as catSodimacOriginal, formatearRUT, validarRUT } from '../../utils/validaciones';
 
 // --- CONFIGURACIÓN DE CONSTANTES Y CATEGORÍAS ---

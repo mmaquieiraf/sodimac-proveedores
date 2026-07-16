@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { supabase } from '../../../supabase';
+import { supabase } from "../../supabase";
 
 export default function AdminLayout() {
   const navigate = useNavigate();

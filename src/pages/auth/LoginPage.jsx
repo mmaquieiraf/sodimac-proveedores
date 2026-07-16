@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 // Si el Router no está activo aún, no fallará, usamos callbacks
 import { useNavigate } from 'react-router-dom'; 
-import { supabase } from '../../supabase';
+import { supabase } from "../../supabase";
 // Nota: Eliminé useAuth porque la sesión ahora la controla App.jsx, simplificando el flujo
 
 export default function LoginPage({ onIrARegistro }) {
