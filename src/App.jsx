@@ -3,7 +3,8 @@ import { categoriasSodimacCompiladas, nuevasSubcategorias } from './utils/consta
 import { sanitizarYCapitalizar } from './utils/formato';
 
 // Hooks de Seguridad y Proceso
-import { useSecurityLock, useInactivityTimer } from './features/auth/hooks/useSecurity';
+import { useSecurityLock } from './features/auth/hooks/useSecurityLock';
+import { useInactivityTimer } from './features/auth/hooks/useInactivityTimer';
 import { useAuthProcess } from './features/auth/hooks/useAuthProcess';
 import { useProveedores } from './features/proveedores/hooks/useProveedores';
 import { useProcesos } from './features/procesos/hooks/useProcesos';
