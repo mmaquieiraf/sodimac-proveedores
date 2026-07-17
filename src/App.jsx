@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-// Hooks de Seguridad y Proceso
-// Hooks de Seguridad y Proceso
+// Hooks de Seguridad y Proceso1
 import { useSecurityLock } from './features/auth/hooks/useSecurityLock';
 import { useInactivityTimer } from './features/auth/hooks/useInactivityTimer';
 import { useAuthProcess } from './features/auth/hooks/useAuthProcess';
