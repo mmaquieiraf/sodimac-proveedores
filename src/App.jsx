@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 
-// Hooks de Seguridad y Proceso1
+// Hooks de Seguridad y Proceso (Alineados a tu estructura física real en Vercel)
 import { useSecurityLock } from './features/auth/hooks/useSecurityLock';
 import { useInactivityTimer } from './features/auth/hooks/useInactivityTimer';
 import { useAuthProcess } from './features/auth/hooks/useAuthProcess';
-import { useProveedores } from './features/auth/hooks/useProveedores'; 
-import { useProcesos } from './features/auth/hooks/useProcesos';       
-import { useAdmin } from './features/auth/hooks/useAdmin';             
-import { signOutService } from './services/supabase/authService';
+import { useProveedores } from './features/auth/hooks/useProveedores';
+import { useProcesos } from './features/auth/hooks/useProcesos';
+import { useAdmin } from './features/auth/hooks/useAdmin';
 import { useCategorias } from './features/admin/hooks/useCategorias';
 
 // Servicios
