@@ -1,6 +1,8 @@
 import React from 'react';
 import { estadosProcesoOpciones, coloresGrafico } from '../../utils/constantes';
 import { formatearMoneda, formatearFechaLocal } from '../../utils/formato';
+import DashboardAlertas from './DashboardAlertas';
+import ChartParticipacion from '../../components/charts/ChartParticipacion';
 
 export default function PanelProcesos({
   procesos, procesosFiltradosDashboard, usuarioActual,
@@ -15,7 +17,6 @@ export default function PanelProcesos({
   ahorroTotalProcesos, ahorroPorcentajeProcesos, editarProceso, eliminarProceso
 }) {
 
-  // --- LÓGICA GRÁFICA EXCLUSIVA DEL PANEL DE PROCESOS ---
   const totalCartas = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.adjudicaciones_detalle ? p.adjudicaciones_detalle.filter(d => d.carta_adjudicacion && d.carta_adjudicacion.trim() !== '').length : 0), 0);
   const totalContratos = procesosFiltradosDashboard.reduce((acc, p) => acc + (p.adjudicaciones_detalle ? p.adjudicaciones_detalle.filter(d => d.aplica_contrato === 'si' && d.numero_contrato && d.numero_contrato.trim() !== '').length : 0), 0);
   
@@ -44,17 +45,13 @@ export default function PanelProcesos({
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Registro de Procesos y Adjudicaciones</h3>
-        
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={descargarPlantillaProcesos} style={{ padding: '6px 12px', backgroundColor: '#e2e8f0', color: '#333', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>📥 Plantilla CSV</button>
-          
           <label style={{ padding: '6px 12px', backgroundColor: '#ffc107', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
             <input type="file" accept=".csv" onChange={manejarCargaMasivaProcesos} style={{ display: 'none' }} />
             ⬆️ Cargar Masiva
           </label>
-
           <button onClick={exportarProcesosExcel} style={{ padding: '6px 12px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>⬇️ Exportar Base</button>
-
           <button onClick={() => {
             setProcesoActual({ id: null, nombre: '', tipo: 'RFI', fecha_inicio: '', fecha_termino: '', proveedores_invitados: [], cantidad_ofertas: '', proveedor_adjudicado: [], adjudicaciones_detalle: [], baseline: '', monto_adjudicado: '', controller: usuarioActual?.usuario || '', subgerencia: '', estado_proceso: 'Estableciendo alcance, equipo y objetivos', clasificacion: '', solicitante: '', tipo_compra: 'Spot' });
             setModalProceso(true);
@@ -62,37 +59,7 @@ export default function PanelProcesos({
         </div>
       </div>
 
-      {(procesosConAlertaFinalizacion.length > 0 || alertasContratos.length > 0 || alertasRenovacion.length > 0) && (
-        <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {procesosConAlertaFinalizacion.map(proc => (
-            <div key={`alerta-fin-${proc.id}`} style={{ backgroundColor: '#fff3cd', color: '#856404', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #ffc107', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ marginRight: '10px', fontSize: '16px' }}>⚠️</span>
-                <span><strong>Recordatorio:</strong> Proceso "{proc.nombre}" ha finalizado su fecha programada. Actualice el estatus.</span>
-              </div>
-              <button onClick={() => marcarAcuerdoFinalizado(proc.id)} style={{ padding: '5px 12px', backgroundColor: '#856404', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>✓ Omitir</button>
-            </div>
-          ))}
-          {alertasContratos.map(alerta => (
-            <div key={`alerta-contrato-${alerta.id}-${alerta.proveedor_alerta}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #17a2b8', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ marginRight: '10px', fontSize: '16px' }}>⏳</span>
-                <span><strong>Alerta Contrato:</strong> El contrato asociado al proceso "{alerta.nombre}" ({alerta.proveedor_alerta}) vence en <strong>{alerta.diasRestantes} días</strong> ({alerta.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
-              </div>
-              <button onClick={() => marcarAcuerdoFinalizado(alerta.id)} style={{ padding: '5px 12px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>✓ Acuerdo Finalizado</button>
-            </div>
-          ))}
-          {alertasRenovacion.map(alertaR => (
-            <div key={`alerta-renovacion-${alertaR.id}-${alertaR.proveedor_alerta}`} style={{ backgroundColor: '#e2e3e5', color: '#383d41', padding: '12px 15px', borderRadius: '4px', borderLeft: '5px solid #28a745', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={{ marginRight: '10px', fontSize: '16px' }}>🔄</span>
-                <span><strong>Alerta Renovación:</strong> La autorrenovación del contrato asociado al proceso "{alertaR.nombre}" ({alertaR.proveedor_alerta}) vence en <strong>{alertaR.diasRestantes} días</strong> ({alertaR.fecha_vencimiento_real.toLocaleDateString('es-CL')}). Evalúe renovación o licitación.</span>
-              </div>
-              <button onClick={() => marcarAcuerdoFinalizado(alertaR.id)} style={{ padding: '5px 12px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>✓ Acuerdo Finalizado</button>
-            </div>
-          ))}
-        </div>
-      )}
+      <DashboardAlertas procesosConAlertaFinalizacion={procesosConAlertaFinalizacion} alertasContratos={alertasContratos} alertasRenovacion={alertasRenovacion} marcarAcuerdoFinalizado={marcarAcuerdoFinalizado} />
 
       <div style={{ backgroundColor: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '20px', display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <h4 style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#555' }}>Filtros Globales:</h4>
@@ -171,25 +138,7 @@ export default function PanelProcesos({
         <div style={{ border: '1px solid #eee', padding: '15px', borderRadius: '8px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
           <h4 style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#555', textTransform: 'uppercase' }}>Participación Proveedores (%)</h4>
           {procesosOrdenados.length === 0 ? <p style={{ fontSize: '11px', color: '#999', textAlign: 'center', marginTop: '30px' }}>Sin datos suficientes</p> : (
-            <div style={{ position: 'relative', width: '100%', height: `${chartHeightProc}px` }}>
-              <svg width="100%" height="100%" viewBox={`0 0 ${chartWidthProc} ${chartHeightProc}`} preserveAspectRatio="none">
-                <line x1="20" y1={chartHeightProc - 20} x2={chartWidthProc} y2={chartHeightProc - 20} stroke="#ccc" strokeWidth="1" />
-                <line x1="20" y1="0" x2="20" y2={chartHeightProc - 20} stroke="#ccc" strokeWidth="1" />
-                {procesosOrdenados.length > 1 && <polyline points={puntosTendencia} fill="none" stroke="#28a745" strokeWidth="2" />}
-                {procesosOrdenados.map((p, i) => {
-                  const invitados = p.proveedores_invitados ? p.proveedores_invitados.split(',').length : 0; 
-                  const ofertas = parseInt(p.cantidad_ofertas) || 0;
-                  const porcentaje = invitados > 0 ? (ofertas / invitados) * 100 : 0;
-                  const cx = 20 + i * stepXProc; const cy = chartHeightProc - 20 - ((Math.min(porcentaje, 100) / maxPart) * (chartHeightProc - 40));
-                  return (
-                    <g key={p.id}>
-                      <circle cx={cx} cy={cy} r="4" fill="#004A99" />
-                      <text x={cx} y={cy - 10} fontSize="10" fill="#333" textAnchor="middle">{porcentaje.toFixed(0)}%</text>
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
+            <ChartParticipacion chartWidthProc={chartWidthProc} chartHeightProc={chartHeightProc} procesosOrdenados={procesosOrdenados} puntosTendencia={puntosTendencia} stepXProc={stepXProc} maxPart={maxPart} />
           )}
         </div>
 

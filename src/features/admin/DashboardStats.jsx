@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { zonasOpciones, macroZonas, coloresGrafico } from '../../utils/constantes';
+import TortaDistribucion from '../../components/charts/TortaDistribucion';
+import MapaCobertura from '../../components/charts/MapaCobertura';
 
 export default function DashboardStats({ proveedores, proveedoresAprobados, categoriasDinamicas }) {
-  // Estados locales exclusivos del Dashboard
   const [tipoGraficoTorta, setTipoGraficoTorta] = useState('categoria'); 
   const [filtroTortaCat, setFiltroTortaCat] = useState(''); 
   const [filtroTortaSub, setFiltroTortaSub] = useState([]); 
@@ -13,7 +14,6 @@ export default function DashboardStats({ proveedores, proveedoresAprobados, cate
   const [filtroMapaSub, setFiltroMapaSub] = useState(''); 
   const [filtroMapaZona, setFiltroMapaZona] = useState('');
 
-  // Lógica matemática exacta extraída de App.jsx
   const statsDashboard = () => {
     const total = proveedores.length; let fechasOrdenadas = []; const fechasRaw = {}; const renovaciones = [];
     const hace90Dias = new Date(); hace90Dias.setDate(hace90Dias.getDate() - 90);
@@ -129,18 +129,7 @@ export default function DashboardStats({ proveedores, proveedoresAprobados, cate
           </div>
 
           {proveedoresParaTorta.length === 0 ? <p style={{ textAlign: 'center', color: '#999', marginTop: '50px' }}>No hay aprobados con estos filtros</p> : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ width: '200px', height: '200px', borderRadius: '50%', background: tortaGradient, marginBottom: '20px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}></div>
-              <div style={{ width: '100%', maxHeight: '150px', overflowY: 'auto' }}>
-                {pieSlices.map(s => (
-                  <div key={s.key} style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', fontSize: '12px' }}>
-                    <div style={{ width: '12px', height: '12px', backgroundColor: s.color, marginRight: '10px', borderRadius: '2px' }}></div>
-                    <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.key}</span>
-                    <span style={{ fontWeight: 'bold' }}>{s.val} ({Math.round(s.percent)}%)</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <TortaDistribucion pieSlices={pieSlices} tortaGradient={tortaGradient} />
           )}
         </div>
 
@@ -205,25 +194,8 @@ export default function DashboardStats({ proveedores, proveedoresAprobados, cate
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px' }}>
-          {Object.entries(macroZonas).map(([macro, regiones]) => (
-            <div key={macro} style={{ border: '1px solid #e0e0e0', borderRadius: '8px', padding: '15px', backgroundColor: '#fafafa' }}>
-              <h4 style={{ margin: '0 0 15px 0', fontSize: '14px', color: '#004A99', borderBottom: '2px solid #EE2D24', paddingBottom: '5px' }}>Zona {macro}</h4>
-              {regiones.map(reg => {
-                const cantidad = mapStats.conteo[reg] || 0;
-                const intensidad = mapStats.maxMapa > 0 ? cantidad / mapStats.maxMapa : 0;
-                const bgColor = cantidad > 0 ? `rgba(238, 45, 36, ${0.15 + (intensidad * 0.85)})` : '#ffffff';
-                const txtColor = cantidad > 0 ? (intensidad > 0.5 ? '#ffffff' : '#333333') : '#999999';
-                return (
-                  <div key={reg} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '12px', padding: '8px 10px', backgroundColor: bgColor, color: txtColor, borderRadius: '4px', border: '1px solid #eee', transition: 'all 0.3s' }}>
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }} title={reg}>{reg}</span>
-                    <span style={{ fontWeight: 'bold' }}>{cantidad}</span>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+        <MapaCobertura macroZonas={macroZonas} mapStats={mapStats} />
+
       </div>
     </div>
   );
