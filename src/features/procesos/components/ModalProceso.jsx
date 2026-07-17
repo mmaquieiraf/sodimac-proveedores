@@ -1,5 +1,5 @@
 import React from 'react';
-import { sanitizarYCapitalizar } from '../../../utils/datosSodimac';
+import { formatearMoneda } from '../../../utils/datosSodimac'; // Asegurar que esta utilidad exista en el archivo de utilidades
 
 const subgerenciasOpciones = ["Sistemas", "Prevención", "Recursos humanos", "Operaciones", "Logistica", "Administración", "Comercial"];
 const clasificacionOpciones = ["Capex", "Opex"];
@@ -7,60 +7,20 @@ const tipoCompraOpciones = ["Spot", "Anualizado"];
 const vigenciaOpciones = ["12 meses", "24 meses", "36 meses", "48 meses", "60 meses"];
 const mesesRenovacionOpciones = ["3", "6", "12", "18", "24"];
 
-const formatearMoneda = (val) => {
-  if (val === '' || val === null || val === undefined) return '';
-  const num = val.toString().replace(/\D/g, '');
-  if (!num) return '';
-  return '$' + parseInt(num, 10).toLocaleString('es-CL');
-};
-
 export default function ModalProceso({
+  modalProceso,
+  setModalProceso,
   procesoActual,
   setProcesoActual,
-  setModalProceso,
   guardarProceso,
-  proveedoresAprobados
+  proveedoresAprobados,
+  removerProveedorInvitado,
+  agregarProveedorInvitado,
+  removerProveedorAdjudicado,
+  agregarProveedorAdjudicado,
+  handleDetalleAdjudicacionChange
 }) {
-
-  const removerProveedorInvitado = (nombreProv) => {
-    const nuevosInvitados = procesoActual.proveedores_invitados.filter(p => p !== nombreProv);
-    const nuevosAdjudicados = procesoActual.proveedor_adjudicado.filter(p => p !== nombreProv);
-    const nuevosDetalles = (procesoActual.adjudicaciones_detalle || []).filter(d => d.proveedor !== nombreProv);
-    setProcesoActual({ ...procesoActual, proveedores_invitados: nuevosInvitados, proveedor_adjudicado: nuevosAdjudicados, adjudicaciones_detalle: nuevosDetalles });
-  };
-
-  const agregarProveedorInvitado = (nombreProv) => {
-    if (!nombreProv) return;
-    setProcesoActual({ ...procesoActual, proveedores_invitados: [...procesoActual.proveedores_invitados, nombreProv] });
-  };
-
-  const removerProveedorAdjudicado = (nombreProv) => {
-    const nuevosAdjudicados = procesoActual.proveedor_adjudicado.filter(p => p !== nombreProv);
-    const nuevosDetalles = (procesoActual.adjudicaciones_detalle || []).filter(d => d.proveedor !== nombreProv);
-    setProcesoActual({ ...procesoActual, proveedor_adjudicado: nuevosAdjudicados, adjudicaciones_detalle: nuevosDetalles });
-  };
-
-  const agregarProveedorAdjudicado = (nombreProv) => {
-    if (!nombreProv) return;
-    if (!procesoActual.proveedor_adjudicado.includes(nombreProv)) {
-      setProcesoActual({ 
-        ...procesoActual, 
-        proveedor_adjudicado: [...procesoActual.proveedor_adjudicado, nombreProv],
-        adjudicaciones_detalle: [...(procesoActual.adjudicaciones_detalle || []), {
-          proveedor: nombreProv, carta_adjudicacion: '', termino_carta: '', aplica_contrato: 'no', 
-          numero_contrato: '', termino_contrato: '', vigencia_contrato: '', renovacion_automatica: 'No', meses_renovacion: ''
-        }]
-      });
-    }
-  };
-
-  const handleDetalleAdjudicacionChange = (proveedor, campo, valor) => {
-    const nuevosDetalles = (procesoActual.adjudicaciones_detalle || []).map(det => {
-      if (det.proveedor === proveedor) return { ...det, [campo]: valor };
-      return det;
-    });
-    setProcesoActual({ ...procesoActual, adjudicaciones_detalle: nuevosDetalles });
-  };
+  if (!modalProceso) return null;
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' }}>
@@ -69,6 +29,7 @@ export default function ModalProceso({
         <h2 style={{ color: '#004A99', marginTop: 0, borderBottom: '2px solid #eee', paddingBottom: '10px' }}>{procesoActual.id ? 'Editar Proceso' : 'Nuevo Proceso'}</h2>
         
         <form onSubmit={guardarProceso} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px' }}>
+          
           <div style={{ gridColumn: '1 / span 2' }}>
             <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Nombre del Proceso *</label>
             <input required value={procesoActual.nombre} style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, nombre: e.target.value})} />
@@ -92,7 +53,7 @@ export default function ModalProceso({
 
           <div>
             <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#555' }}>Solicitante *</label>
-            <input required value={procesoActual.solicitante} placeholder="Nombre Solicitante" style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, solicitante: sanitizarYCapitalizar(e.target.value)})} />
+            <input required value={procesoActual.solicitante} placeholder="Nombre Solicitante" style={{ width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ccc', borderRadius: '4px' }} onChange={e => setProcesoActual({...procesoActual, solicitante: e.target.value})} />
           </div>
 
           <div>
