@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { categoriasSodimacCompiladas, nuevasSubcategorias } from './utils/constantes';
-import { sanitizarYCapitalizar } from './utils/formato';
 
 // Hooks de Seguridad y Proceso
 import { useSecurityLock } from './features/auth/hooks/useSecurityLock';
@@ -9,6 +7,9 @@ import { useAuthProcess } from './features/auth/hooks/useAuthProcess';
 import { useProveedores } from './features/proveedores/hooks/useProveedores';
 import { useProcesos } from './features/procesos/hooks/useProcesos';
 import { useAdmin } from './features/admin/hooks/useAdmin';
+import { useCategorias } from './features/admin/hooks/useCategorias';
+
+// Servicios
 import { signOutService } from './services/supabase/authService';
 import { exportarProcesosExcel, descargarPlantillaProcesos, exportarProveedoresCSV, exportarProveedoresExcel } from './services/export/excelExportService';
 
@@ -31,25 +32,18 @@ import DashboardStats from './features/admin/DashboardStats';
 import GestionUsuarios from './features/admin/GestionUsuarios';
 import ModalEdicionAdmin from './features/admin/ModalEdicionAdmin';
 import PanelExportar from './features/exportacion/PanelExportar';
+import PanelAuditoria from './features/admin/PanelAuditoria';
+
+// Generadores
 import GeneradorRFP from './generators/GeneradorRFP';
 import GeneradorRFQ from './generators/GeneradorRFQ';
 import GeneradorFT from './generators/GeneradorFT';
-
-const cargarCategoriasDinamicas = () => {
-  const guardadas = localStorage.getItem('sodimac_categorias_dinamicas');
-  if (guardadas) return JSON.parse(guardadas);
-  return categoriasSodimacCompiladas;
-};
 
 export default function App() {
   const [vista, setVista] = useState('registro'); 
   const [tabAdmin, setTabAdmin] = useState('dashboard');
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState(null);
-
-  const [categoriasDinamicas, setCategoriasDinamicas] = useState(cargarCategoriasDinamicas());
-  const [nuevaCatInput, setNuevaCatInput] = useState('');
-  const [nuevasSubInputs, setNuevasSubInputs] = useState({});
 
   const { bloqueoSeguridad, intentosFallidos, registrarIntentoFallido, resetearIntentos } = useSecurityLock();
   
@@ -58,6 +52,11 @@ export default function App() {
     setUsuarioActual(null);
     setVista('login');
   });
+
+  const {
+    categoriasDinamicas, nuevaCatInput, setNuevaCatInput, nuevasSubInputs, setNuevasSubInputs,
+    handleAgregarCategoria, handleEliminarCategoria, handleAgregarSubcategoria, handleEliminarSubcategoria
+  } = useCategorias();
 
   const {
     administradoresDb, nuevoAdmin, setNuevoAdmin, adminEditando, setAdminEditando,
@@ -98,13 +97,11 @@ export default function App() {
     setVista, setUsuarioActual, cargarProveedores, cargarProcesos, cargarAdministradores
   });
 
-  useEffect(() => { localStorage.setItem('sodimac_categorias_dinamicas', JSON.stringify(categoriasDinamicas)); }, [categoriasDinamicas]);
-  useEffect(() => { if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl') cargarLogsAuditoria(); }, [tabAdmin, usuarioActual]);
-
-  const handleAgregarCategoria = (e) => { e.preventDefault(); const cat = sanitizarYCapitalizar(nuevaCatInput); if(cat && !categoriasDinamicas[cat]) { setCategoriasDinamicas({...categoriasDinamicas, [cat]: []}); setNuevaCatInput(''); } };
-  const handleEliminarCategoria = (cat) => { if(window.confirm(`¿Eliminar "${cat}"?`)) { const copia = {...categoriasDinamicas}; delete copia[cat]; setCategoriasDinamicas(copia); } };
-  const handleAgregarSubcategoria = (e, cat) => { e.preventDefault(); const sub = sanitizarYCapitalizar(nuevasSubInputs[cat]); if(sub && !categoriasDinamicas[cat].includes(sub)) { setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: [...categoriasDinamicas[cat], sub] }); setNuevasSubInputs({...nuevasSubInputs, [cat]: ''}); } };
-  const handleEliminarSubcategoria = (cat, sub) => { if(window.confirm(`¿Eliminar "${sub}"?`)) setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: categoriasDinamicas[cat].filter(s => s !== sub) }); };
+  useEffect(() => { 
+    if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl') {
+      cargarLogsAuditoria(); 
+    }
+  }, [tabAdmin, usuarioActual]);
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
@@ -138,37 +135,7 @@ export default function App() {
           {tabAdmin === 'generador_ft' && <GeneradorFT />}
 
           {tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #EE2D24', paddingBottom: '10px' }}>
-                <h3 style={{ margin: '0', color: '#333', fontSize: '18px' }}>Registro de Auditoría de Accesos</h3>
-                <button onClick={cargarLogsAuditoria} style={{ padding: '6px 15px', backgroundColor: '#004A99', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Actualizar Registros</button>
-              </div>
-              <div style={{ overflowX: 'auto', border: '1px solid #ccc', borderRadius: '8px', maxHeight: '500px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                    <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Fecha y Hora</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Tipo de Evento</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Usuario / Input</th>
-                      <th style={{ padding: '12px', borderBottom: '2px solid #ccc' }}>Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {logsAuditoria.length === 0 ? <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center', color: '#777' }}>No hay registros de auditoría aún.</td></tr> : 
-                    logsAuditoria.map(log => (
-                      <tr key={log.id} style={{ borderBottom: '1px solid #eee', backgroundColor: log.estado === 'Fallido' ? '#fff5f5' : 'white' }}>
-                        <td style={{ padding: '12px' }}>{new Date(log.created_at).toLocaleString('es-CL')}</td>
-                        <td style={{ padding: '12px', fontWeight: 'bold', color: '#004A99' }}>{log.tipo}</td>
-                        <td style={{ padding: '12px', fontFamily: 'monospace' }}>{log.usuario_intentado}</td>
-                        <td style={{ padding: '12px' }}>
-                          <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', backgroundColor: log.estado === 'Éxito' ? '#d4edda' : '#f8d7da', color: log.estado === 'Éxito' ? '#155724' : '#721c24' }}>{log.estado}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <PanelAuditoria cargarLogsAuditoria={cargarLogsAuditoria} logsAuditoria={logsAuditoria} />
           )}
         </div>
       )}
