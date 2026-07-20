@@ -86,8 +86,7 @@ export default function GeneradorFT() {
   };
 
   const procesarConIA = async () => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) return alert("❌ Error: Vercel no está leyendo la API Key.");
+  
     if (archivosContexto.length === 0) return alert("⚠️ Adjunta al menos un archivo técnico en PDF para analizar.");
     
     setCargandoIA(true);
@@ -128,7 +127,7 @@ export default function GeneradorFT() {
         systemInstruction: { parts: [{ text: instruccionesSistema }] }
       };
 
-      const textoSocio = await procesarConGeminiService(payload, apiKey);
+      const textoSocio = await procesarConGeminiService(payload);
       const nuevoJson = JSON.parse(textoSocio.trim().replace(/```json/g, '').replace(/```/g, ''));
       setFichaData(nuevoJson);
 
