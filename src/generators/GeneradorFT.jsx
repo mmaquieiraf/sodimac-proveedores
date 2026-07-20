@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { procesarConGeminiService } from '../services/ia/geminiService';
-import { supabase } from '../../supabase'; // 👈 IMPORTACIÓN CLAVE QUE FALTABA
+import { supabase } from '../supabase';
 
 export default function GeneradorFT() {
   const [cargandoIA, setCargandoIA] = useState(false);
