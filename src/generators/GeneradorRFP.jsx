@@ -93,8 +93,7 @@ export default function GeneradorRFP() {
   };
 
   const procesarConIA = async () => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) return alert("❌ Error: Vercel no está leyendo la API Key.");
+
     setCargandoIA(true);
 
     try {
@@ -163,7 +162,7 @@ export default function GeneradorRFP() {
         systemInstruction: { parts: [{ text: instruccionesSistema }] }
       };
 
-      const textoGenerado = await procesarConGeminiService(payload, apiKey);
+      const textoGenerado = await procesarConGeminiService(payload);
       setAlcanceGenerado(textoGenerado);
 
     } catch (error) {
