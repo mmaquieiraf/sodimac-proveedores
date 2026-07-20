@@ -3,8 +3,9 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
 import { procesarConGeminiService } from '../services/ia/geminiService';
+import { supabase } from '../supabase'; 
 
-const URL_PLANTILLA_RFQ = "[https://zpxptembhqlmpkbctvml.supabase.co/storage/v1/object/public/plantillas/plantilla-rfq.docx](https://zpxptembhqlmpkbctvml.supabase.co/storage/v1/object/public/plantillas/plantilla-rfq.docx)";
+const URL_PLANTILLA_RFQ = "https://zpxptembhqlmpkbctvml.supabase.co/storage/v1/object/public/plantillas/plantilla-rfq.docx";
 const administradores = [
   { nombre: 'Matías Maquieira', email: 'mmaquieiraf@sodimac.cl' },
   { nombre: 'Ignacio Pizarro', email: 'ipizarro@sodimac.cl' },
@@ -55,20 +56,11 @@ export default function GeneradorRFQ() {
     return `${meses[parseInt(month)-1]} ${year}`;
   };
 
-  const transformarArchivoBase64 = (archivo) => {
-    return new Promise((resolve, reject) => {
-      const lector = new FileReader();
-      lector.readAsDataURL(archivo);
-      lector.onload = () => resolve(lector.result.split(',')[1]);
-      lector.onerror = (error) => reject(error);
-    });
-  };
-
   const exportarPDF = async () => {
     if (!window.html2pdf) {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = '[https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js](https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js)';
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
         script.onload = resolve;
         script.onerror = reject;
         document.head.appendChild(script);
@@ -86,14 +78,17 @@ export default function GeneradorRFQ() {
   };
 
   const procesarConIA = async () => {
-    
-    
     setCargandoIA(true);
     try {
       const archivosValidos = archivosContexto.filter(f => f.type === 'application/pdf' || f.type.startsWith('image/') || f.type.startsWith('text/'));
+      
+      // BODEGA DE TRÁNSITO: Subida temporal a Supabase para evitar el límite de 4MB de Vercel
       const partesDocumentos = await Promise.all(archivosValidos.map(async (archivo) => {
-        const base64Data = await transformarArchivoBase64(archivo);
-        return { inlineData: { mimeType: archivo.type, data: base64Data } };
+        const nombreUnico = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        const { error } = await supabase.storage.from('archivos_ia').upload(nombreUnico, archivo);
+        if (error) throw new Error("Fallo al subir el archivo a la bodega temporal de tránsito.");
+        
+        return { storagePath: nombreUnico, mimeType: archivo.type };
       }));
 
       const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO' para la compra de bienes o productos (RFQ). REGLA ABSOLUTA DE CUMPLIMIENTO: Debes utilizar y COPIAR EXACTAMENTE la estructura de los 4 párrafos que te doy. Solo debes reemplazar y adaptar la información que se encuentra dentro de los corchetes [ ] utilizando el contexto técnico del usuario. No agregues viñetas ni títulos nuevos. Separa cada párrafo con un doble salto de línea. Usa **asteriscos dobles** para resaltar información clave si lo consideras necesario.";
