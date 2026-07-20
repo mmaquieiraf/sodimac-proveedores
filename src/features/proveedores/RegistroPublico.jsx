@@ -45,14 +45,40 @@ export default function RegistroPublico({
           </div>
         </div>
 
+        {/* SECCIÓN CORREGIDA: Subcategorías agrupadas dinámicamente por categoría seleccionada */}
         <div>
           <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Subcategoría</label>
-          <div style={{ maxHeight: '150px', overflowY: 'auto', padding: '5px', border: '1px solid #ccc', borderRadius: '4px', marginTop: '5px' }}>
-            {formData.categoria.flatMap(cat => categoriasDinamicas[cat] || []).map(sub => (
-              <label key={sub} style={{ fontSize: '11px', display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-                <input type="checkbox" checked={formData.subcategoria.includes(sub)} onChange={e => manejarCambioSubcategoria(sub, e.target.checked)} style={{ marginRight: '5px' }} disabled={bloqueoSeguridad} /> {sub}
-              </label>
-            ))}
+          <div style={{ maxHeight: '200px', overflowY: 'auto', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', marginTop: '5px', backgroundColor: '#fcfcfc' }}>
+            {formData.categoria.length === 0 ? (
+              <p style={{ fontSize: '11px', color: '#888', fontStyle: 'italic', margin: '5px 0' }}>Seleccione al menos una categoría para ver sus subcategorías.</p>
+            ) : (
+              formData.categoria.map(cat => {
+                const subcategoriasDeCat = categoriasDinamicas[cat] || [];
+                if (subcategoriasDeCat.length === 0) return null;
+
+                return (
+                  <div key={cat} style={{ marginBottom: '12px', borderLeft: '3px solid #004A99', paddingLeft: '8px' }}>
+                    <div style={{ fontSize: '11.5px', fontWeight: 'bold', color: '#004A99', marginBottom: '4px', textTransform: 'uppercase' }}>
+                      {cat}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {subcategoriasDeCat.map(sub => (
+                        <label key={sub} style={{ fontSize: '11px', display: 'flex', alignItems: 'center' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={formData.subcategoria.includes(sub)} 
+                            onChange={e => manejarCambioSubcategoria(sub, e.target.checked)} 
+                            style={{ marginRight: '5px' }} 
+                            disabled={bloqueoSeguridad} 
+                          /> 
+                          {sub}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
