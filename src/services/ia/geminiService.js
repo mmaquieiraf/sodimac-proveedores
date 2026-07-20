@@ -2,32 +2,29 @@ import { supabase } from '../../supabase';
 
 export const procesarConGeminiService = async (payload) => {
   try {
-    console.log("1. Enviando payload a Edge Function:", payload);
-    
-    const { data, error } = await supabase.functions.invoke('gemini-proxy', {
-      body: { payload }
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    if (!token) throw new Error("No hay sesión activa para autorizar la IA.");
+
+    const respuesta = await fetch('/api/geminiProxy', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ payload })
     });
 
-    console.log("2. Respuesta de Edge Function:", { data, error });
+    const data = await respuesta.json();
 
-    if (error) {
-      console.error("3. Error de invocación Supabase:", error);
-      throw new Error(`Error de conexión con Supabase: ${error.message}`);
+    if (!respuesta.ok) {
+      throw new Error(data.error || 'Error de conexión con el servidor seguro.');
     }
 
-    if (data && data.error) {
-      console.error("4. Error interno devuelto por la IA/Edge:", data.error);
-      throw new Error(`Error de IA: ${data.error}`);
-    }
-
-    if (data && data.text) {
-      return data.text;
-    }
-
-    throw new Error("El servidor no devolvió el texto esperado.");
+    return data.text;
   } catch (err) {
-    console.error("Fallo crítico en servicio IA:", err);
-    // Ahora mostraremos el error TÉCNICO REAL en la alerta de tu pantalla
-    throw new Error(`DETALLE TÉCNICO: ${err.message}`);
+    console.error("Fallo en servicio IA:", err);
+    throw new Error(`Fallo de IA: ${err.message}`);
   }
 };
