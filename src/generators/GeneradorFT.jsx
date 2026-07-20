@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { procesarConGeminiService } from '../services/ia/geminiService';
+import { supabase } from '../../supabase'; // 👈 IMPORTACIÓN CLAVE QUE FALTABA
 
 export default function GeneradorFT() {
   const [cargandoIA, setCargandoIA] = useState(false);
@@ -46,15 +47,6 @@ export default function GeneradorFT() {
     }
   };
 
-  const transformarArchivoBase64 = (archivo) => {
-    return new Promise((resolve, reject) => {
-      const lector = new FileReader();
-      lector.readAsDataURL(archivo);
-      lector.onload = () => resolve(lector.result.split(',')[1]);
-      lector.onerror = (error) => reject(error);
-    });
-  };
-
   const exportarPDF = async () => {
     if (!window.html2pdf) {
       await new Promise((resolve, reject) => {
@@ -86,20 +78,18 @@ export default function GeneradorFT() {
   };
 
   const procesarConIA = async () => {
-  
     if (archivosContexto.length === 0) return alert("⚠️ Adjunta al menos un archivo técnico en PDF para analizar.");
     
     setCargandoIA(true);
     try {
-      // NUEVO: Subida a Bodega de Tránsito
-      const partesDocumentos = await Promise.all(archivosContexto.map(async (archivo) => {
+      const archivosValidos = archivosContexto.filter(f => f.type === 'application/pdf' || f.type.startsWith('image/') || f.type.startsWith('text/'));
+      
+      // BODEGA DE TRÁNSITO: Subida temporal y volátil para esquivar el límite de 4MB de Vercel
+      const partesDocumentos = await Promise.all(archivosValidos.map(async (archivo) => {
         const nombreUnico = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        
-        // Subimos el archivo pesado directamente a Supabase (Soporta 50MB)
         const { error } = await supabase.storage.from('archivos_ia').upload(nombreUnico, archivo);
-        if (error) throw new Error("Fallo al subir el archivo a la base de datos de tránsito.");
+        if (error) throw new Error("Fallo al subir el archivo a la bodega temporal de tránsito.");
         
-        // Solo enviamos el nombre del archivo a Vercel (Pesa 1 KB, evadiendo el bloqueo de 4MB)
         return { storagePath: nombreUnico, mimeType: archivo.type };
       }));
 
