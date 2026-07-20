@@ -1,24 +1,33 @@
-export const procesarConGeminiService = async (payload, apiKey) => {
-  const modelosDisponibles = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
-  for (const modelo of modelosDisponibles) {
-    try {
-      const respuestaApi = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const datosRecibidos = await respuestaApi.json();
-      
-      if (respuestaApi.status === 429) {
-        console.warn(`⚠️ Modelo ${modelo} saturado. Pasando al siguiente...`);
-        continue; 
-      }
-      if (!respuestaApi.ok) throw new Error(datosRecibidos.error?.message);
-      
-      return datosRecibidos.candidates[0].content.parts[0].text;
-    } catch (errInterno) {
-      console.error(`Fallo con el modelo ${modelo}:`, errInterno);
+// Ajusta la ruta '../supabase' o '../../supabase' según la ubicación real de tu cliente exportado
+import { supabase } from '../../supabase'; 
+
+export const procesarConGeminiService = async (payload, apiKey_obsoleta = null) => {
+  try {
+    // El cliente de Supabase inyecta automáticamente el JWT de la sesión del admin en los headers
+    const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+      body: { payload }
+    });
+
+    if (error) {
+      console.error("Error al invocar Edge Function IA:", error);
+      throw new Error("Falla de red o de autorización con el servidor seguro.");
     }
+
+    if (data && data.error) {
+      // Replicar el error exacto si ocurrió la alta demanda
+      throw new Error(data.error);
+    }
+
+    if (data && data.text) {
+      return data.text;
+    }
+
+    throw new Error("Respuesta inválida del servidor.");
+  } catch (err) {
+    // Mantenemos la salida exacta de error para no romper las alertas en la UI
+    if (err.message && err.message.includes("alta demanda")) {
+      throw err;
+    }
+    throw new Error("Todos los servidores gratuitos están experimentando una alta demanda en este momento. Por favor, reintenta en unos instantes.");
   }
-  throw new Error("Todos los servidores gratuitos están experimentando una alta demanda en este momento. Por favor, reintenta en unos instantes.");
 };
