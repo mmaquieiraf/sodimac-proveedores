@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { signInService, resetPasswordService } from '../../../services/supabase/authService';
+import { signInService, resetPasswordService, validarPinService } from '../../../services/supabase/authService';
 import { registrarAuditoriaService } from '../../../services/supabase/auditoriaYAdminService';
 
 export const useAuthProcess = ({ bloqueoSeguridad, intentosFallidos, registrarIntentoFallido, resetearIntentos, setVista, setUsuarioActual, cargarProveedores, cargarProcesos, cargarAdministradores }) => {
@@ -11,10 +11,12 @@ export const useAuthProcess = ({ bloqueoSeguridad, intentosFallidos, registrarIn
   const manejarPreLogin = async (e) => {
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado por 24 horas.");
-    const pinAcceso = import.meta.env.VITE_PIN_ACCESO?.trim();
-    if (!pinAcceso) return alert("⚠️ Error Crítico: PIN de seguridad no inyectado desde Vercel.");
+    
+    // VALIDACIÓN ZERO TRUST: Se consulta al servidor, no al archivo .env local
+    const { data: pinEsValido, error } = await validarPinService(preLoginPin.trim());
+    if (error) return alert("⚠️ Error de conexión al validar seguridad.");
 
-    if (preLoginPin.trim() === pinAcceso) {
+    if (pinEsValido) {
       await registrarAuditoriaService('Anónimo', 'Éxito', 'Acceso a PIN Público');
       setVista('login'); setPreLoginPin(''); resetearIntentos(); 
     } else {
@@ -29,10 +31,12 @@ export const useAuthProcess = ({ bloqueoSeguridad, intentosFallidos, registrarIn
     e.preventDefault();
     if (bloqueoSeguridad) return alert("❌ Sistema bloqueado.");
     const emailLimpio = credenciales.usuario.replace(/[<>]/g, '').trim().toLowerCase();
-    const pinAcceso = import.meta.env.VITE_PIN_ACCESO?.trim();
-    if (!pinAcceso) return alert("⚠️ Error Crítico: PIN de seguridad no inyectado desde Vercel.");
+    
+    // VALIDACIÓN ZERO TRUST: Servidor valida el PIN del formulario de login
+    const { data: pinEsValido, error: pinError } = await validarPinService(credenciales.pin.replace(/[<>]/g, '').trim());
+    if (pinError) return alert("⚠️ Error de conexión al validar seguridad.");
 
-    if (credenciales.pin.replace(/[<>]/g, '').trim() !== pinAcceso) {
+    if (!pinEsValido) {
       await registrarAuditoriaService(emailLimpio || 'Desconocido', 'Fallido', 'Error de PIN Interno');
       const fueBloqueado = registrarIntentoFallido();
       if (!fueBloqueado) alert(`🔍 PIN Interno incorrecto. Intentos restantes: ${3 - (intentosFallidos + 1)}`);
