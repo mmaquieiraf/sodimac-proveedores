@@ -3,8 +3,9 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
 import { procesarConGeminiService } from '../services/ia/geminiService';
+import { supabase } from '../supabase';
 
-const URL_PLANTILLA = "[https://zpxptembhqlmpkbctvml.supabase.co/storage/v1/object/public/plantillas/plantilla-rfp-sodimac.docx](https://zpxptembhqlmpkbctvml.supabase.co/storage/v1/object/public/plantillas/plantilla-rfp-sodimac.docx)";
+const URL_PLANTILLA = "https://zpxptembhqlmpkbctvml.supabase.co/storage/v1/object/public/plantillas/plantilla-rfp-sodimac.docx";
 const administradores = [
   { nombre: 'Matías Maquieira', email: 'mmaquieiraf@sodimac.cl' },
   { nombre: 'Ignacio Pizarro', email: 'ipizarro@sodimac.cl' },
@@ -62,20 +63,11 @@ export default function GeneradorRFP() {
     return `${meses[parseInt(month)-1]} ${year}`;
   };
 
-  const transformarArchivoBase64 = (archivo) => {
-    return new Promise((resolve, reject) => {
-      const lector = new FileReader();
-      lector.readAsDataURL(archivo);
-      lector.onload = () => resolve(lector.result.split(',')[1]);
-      lector.onerror = (error) => reject(error);
-    });
-  };
-
   const exportarPDF = async () => {
     if (!window.html2pdf) {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = '[https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js](https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js)';
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
         script.onload = resolve;
         script.onerror = reject;
         document.head.appendChild(script);
@@ -93,14 +85,18 @@ export default function GeneradorRFP() {
   };
 
   const procesarConIA = async () => {
-
     setCargandoIA(true);
 
     try {
       const archivosValidos = archivosContexto.filter(f => f.type === 'application/pdf' || f.type.startsWith('image/') || f.type.startsWith('text/'));
+      
+      // BODEGA DE TRÁNSITO: Subida temporal a Supabase para evitar restricción de 4MB de Vercel
       const partesDocumentos = await Promise.all(archivosValidos.map(async (archivo) => {
-        const base64Data = await transformarArchivoBase64(archivo);
-        return { inlineData: { mimeType: archivo.type, data: base64Data } };
+        const nombreUnico = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        const { error } = await supabase.storage.from('archivos_ia').upload(nombreUnico, archivo);
+        if (error) throw new Error("Fallo al subir el archivo a la bodega temporal de tránsito.");
+        
+        return { storagePath: nombreUnico, mimeType: archivo.type };
       }));
 
       const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO'. REGLA ABSOLUTA DE CUMPLIMIENTO: Los primeros 3 párrafos introductorios y el punto 3.7 son TEXTOS LEGALES INMUTABLES. Debes copiarlos exactamente palabra por palabra de la estructura que te doy. Tu libertad creativa y técnica aplica ÚNICAMENTE a los puntos 3.2, 3.3, 3.4, 3.5 y 3.6 según el contexto del usuario.\n\nFORMATO OBLIGATORIO: Todos los listados generados en los puntos 3.2, 3.3, 3.4, 3.5 y 3.6 DEBEN usar siempre el formato alfabético (a), b), c), etc.) y poner en negrita hasta los dos puntos. Separa TODO párrafo o viñeta con un doble salto de línea.";
@@ -374,7 +370,7 @@ export default function GeneradorRFP() {
               <li><strong>Proponente, Oferente o Participante:</strong> Persona Jurídica que se encuentra participando del proceso.</li>
               <li><strong>Especificaciones:</strong> Significa los requisitos mínimos requeridos por cada producto o servicio solicitado.</li>
               <li><strong>Moneda de Oferta:</strong> CLP (pesos chilenos)</li>
-              <li><strong>Plataforma o Aplicativo Sistémico:</strong> [http://www.coupa.com](http://www.coupa.com)</li>
+              <li><strong>Plataforma o Aplicativo Sistémico:</strong> http://www.coupa.com</li>
             </ul>
 
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>OBJETIVOS</h3>
@@ -386,7 +382,7 @@ export default function GeneradorRFP() {
             </div>
 
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>CONSULTAS Y ACLARACIONES</h3>
-            <p style={{ textAlign: 'justify' }}>Conforme a lo establecido en estas bases, el Proponente deberá contemplar las siguientes conditions generales: Todas las consultas, tanto las de carácter técnico como las de índole administrativas, que los Proponentes deseen formular en relación con la materia de este Proceso de Solicitud de Propuestas, deberán ser realizadas a través de la Plataforma.</p>
+            <p style={{ textAlign: 'justify' }}>Conforme a lo establecido en estas bases, el Proponente deberá contemplar las siguientes condiciones generales: Todas las consultas, tanto las de carácter técnico como las de índole administrativas, que los Proponentes deseen formular en relación con la materia de este Proceso de Solicitud de Propuestas, deberán ser realizadas a través de la Plataforma.</p>
 
             <h3 style={{ fontSize: '12pt', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>PACTO DE INTEGRIDAD</h3>
             <p style={{ textAlign: 'justify' }}>Los Participantes declaran que, por el sólo hecho de participar en el presente proceso, acepta expresamente el presente pacto de integridad, obligándose a cumplir con todas y cada una de las estipulaciones contenidas en la misma. El oferente se obliga a no intentar ni efectuar acuerdos o realizar negociaciones, actos o conductas que tengan por objeto influir o afectar de cualquier forma la libre competencia.</p>
