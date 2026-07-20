@@ -16,7 +16,17 @@ export const procesarConGeminiService = async (payload) => {
       body: JSON.stringify({ payload })
     });
 
-    const data = await respuesta.json();
+    // VALIDACIÓN ROBUSTA: Capturamos fallos del servidor antes de parsear JSON
+    const textResponse = await respuesta.text();
+    let data;
+    try {
+      data = JSON.parse(textResponse);
+    } catch (e) {
+      if (respuesta.status === 413 || textResponse.includes('Request Entity Too Large')) {
+        throw new Error('El archivo adjunto es demasiado pesado. El límite máximo de servidor es 4MB. Por favor, comprime tu PDF o Imagen e intenta de nuevo.');
+      }
+      throw new Error(`Fallo de servidor desconocido: ${textResponse.substring(0, 40)}...`);
+    }
 
     if (!respuesta.ok) {
       throw new Error(data.error || 'Error de conexión con el servidor seguro.');
@@ -25,6 +35,6 @@ export const procesarConGeminiService = async (payload) => {
     return data.text;
   } catch (err) {
     console.error("Fallo en servicio IA:", err);
-    throw new Error(`Fallo de IA: ${err.message}`);
+    throw new Error(`${err.message}`);
   }
 };
