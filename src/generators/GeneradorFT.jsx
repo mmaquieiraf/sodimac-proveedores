@@ -91,9 +91,16 @@ export default function GeneradorFT() {
     
     setCargandoIA(true);
     try {
+      // NUEVO: Subida a Bodega de Tránsito
       const partesDocumentos = await Promise.all(archivosContexto.map(async (archivo) => {
-        const base64Data = await transformarArchivoBase64(archivo);
-        return { inlineData: { mimeType: archivo.type, data: base64Data } };
+        const nombreUnico = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        
+        // Subimos el archivo pesado directamente a Supabase (Soporta 50MB)
+        const { error } = await supabase.storage.from('archivos_ia').upload(nombreUnico, archivo);
+        if (error) throw new Error("Fallo al subir el archivo a la base de datos de tránsito.");
+        
+        // Solo enviamos el nombre del archivo a Vercel (Pesa 1 KB, evadiendo el bloqueo de 4MB)
+        return { storagePath: nombreUnico, mimeType: archivo.type };
       }));
 
       const instruccionesSistema = "Eres un analista de productos técnicos para Sodimac. Tu labor es extraer información de fichas técnicas de proveedores y transformarla a un formato JSON estructurado perfecto. NO uses bloques de código (```json), responde ÚNICAMENTE con el objeto JSON plano.";
