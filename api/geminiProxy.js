@@ -1,5 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 
+// NUEVO: Aumentar el límite de tamaño para permitir PDFs y fotos (Límite máximo de Vercel Hobby)
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '4mb', 
+    },
+  },
+};
+
+export default async function handler(req, res) {
+  // Solo aceptamos peticiones POST
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método no permitido' });
+  }
+
+import { createClient } from '@supabase/supabase-js';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método no permitido' });
