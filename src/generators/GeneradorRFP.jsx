@@ -99,27 +99,31 @@ export default function GeneradorRFP() {
         return { storagePath: nombreUnico, mimeType: archivo.type };
       }));
 
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO'. REGLA ABSOLUTA DE CUMPLIMIENTO: Los primeros 3 párrafos introductorios y el punto 3.7 son TEXTOS LEGALES INMUTABLES. Debes copiarlos exactamente palabra por palabra de la estructura que te doy. Tu libertad creativa y técnica aplica ÚNICAMENTE a los puntos 3.2, 3.3, 3.4, 3.5 y 3.6 según el contexto del usuario.\n\nFORMATO OBLIGATORIO: Todos los listados generados en los puntos 3.2, 3.3, 3.4, 3.5 y 3.6 DEBEN usar siempre el formato alfabético (a), b), c), etc.) y poner en negrita hasta los dos puntos. Separa TODO párrafo o viñeta con un doble salto de línea.";
+      // MODIFICACIÓN DE PROMPT: Razonamiento profundo y cruce de datos
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO'. REGLA ABSOLUTA DE CUMPLIMIENTO: Los primeros 3 párrafos introductorios y el punto 3.7 son TEXTOS LEGALES INMUTABLES. Debes copiarlos exactamente palabra por palabra de la estructura que te doy. Tu libertad creativa y técnica aplica ÚNICAMENTE a los puntos 3.2, 3.3, 3.4, 3.5 y 3.6 según el contexto del usuario.\n\nNUEVA REGLA DE RAZONAMIENTO PROFUNDO: Es obligatorio que leas, analices y extraigas la información de los ARCHIVOS ADJUNTOS a esta petición. Tu síntesis para rellenar los corchetes debe ser técnicamente compleja, profesional e integrar directamente los SLA, métricas, normativas, y alcances operativos detallados que encuentres en los documentos adjuntos, cruzándolos con el texto ingresado por el usuario.\n\nFORMATO OBLIGATORIO: Todos los listados generados en los puntos 3.2, 3.3, 3.4, 3.5 y 3.6 DEBEN usar siempre el formato alfabético (a), b), c), etc.) y poner en negrita hasta los dos puntos. Separa TODO párrafo o viñeta con un doble salto de línea.";
+      
       const promptEstructurado = `
       Redacta el ALCANCE DEL PROCESO adaptando el contexto técnico. DEBES COPIAR EXACTAMENTE EL TEXTO FUERA DE LOS CORCHETES Y SOLO GENERAR EL CONTENIDO DENTRO DE LOS CORCHETES [ ].
+
+      ATENCIÓN CRÍTICA: Se han proporcionado archivos adjuntos (Anexos técnicos, bases, etc.). DEBES leerlos exhaustivamente y utilizar esa información para redactar un alcance de servicio complejo y detallado.
 
       --- ESTRUCTURA DE CUMPLIMIENTO OBLIGATORIO ---
 
       ALCANCE DEL PROCESO
       
-      El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[INSERTA AQUÍ EL SERVICIO DEL CONTEXTO]**, a ejecutarse en **[INSERTA AQUÍ LA UBICACIÓN DEL CONTEXTO]**, conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
+      El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[INSERTA AQUÍ EL SERVICIO DEL CONTEXTO integrando el texto del usuario y cruzándolo con la descripción técnica de los archivos adjuntos]**, a ejecutarse en **[INSERTA AQUÍ LA UBICACIÓN DEL CONTEXTO o lugares mencionados en los anexos]**, conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
       
       La prestación requerida comprenderá la totalidad de las actividades, recursos, suministros, medios humanos, equipos, herramientas, materiales, transportes, coordinaciones, permisos, documentación y demás elementos necesarios para la correcta, completa y oportuna ejecución del servicio, aun cuando éstos no se encuentren expresamente señalados en los documentos del proceso, pero resulten razonablemente necesarios para el cumplimiento de su objeto.
       
       La sola presentación de una oferta implicará que el oferente declara conocer y aceptar íntegramente las condiciones del proceso, habiendo considerado en su propuesta todos los recursos, riesgos, costos directos e indirectos, obligaciones y exigencias necesarias para la ejecución del servicio.
 
       **3.2 Alcance de los Servicios**
-      [Adapta y redacta técnicamente las labores usando el formato a), b), c)... basándote en el contexto]
+      [Adapta y redacta técnicamente las labores usando el formato a), b), c)... basándote OBLIGATORIAMENTE en el análisis exhaustivo de los archivos adjuntos y el contexto, detallando métricas, SLA y alcances operativos]
 
       **3.3 Alcances Complementarios**
       Sin perjuicio de las actividades específicas descritas en los antecedentes técnicos, el adjudicatario deberá considerar dentro del alcance del servicio todas aquellas labores que resulten necesarias para:
 
-      [Genera aquí el listado de puntos técnicos complementarios basándote en el contexto. Usa OBLIGATORIAMENTE el formato a), b), c)...]
+      [Genera aquí el listado de puntos técnicos complementarios basándote en el contexto y en las exigencias operativas de los archivos adjuntos. Usa OBLIGATORIAMENTE el formato a), b), c)...]
 
       La Contratante no reconocerá costos adicionales derivados de actividades que, aun cuando no hayan sido expresamente mencionadas en las Bases, sean inherentes, complementarias o necesarias para la correcta ejecución del servicio.
 
@@ -128,19 +132,19 @@ export default function GeneradorRFP() {
       
       El adjudicatario será responsable de proporcionar la totalidad de los recursos requeridos para la ejecución del servicio, incluyendo, entre otros:
 
-      [Genera aquí el listado de puntos con los recursos requeridos basándote en el contexto. Usa OBLIGATORIAMENTE el formato a), b), c)...]
+      [Genera aquí el listado de puntos con los recursos requeridos basándote en el contexto y extrayendo las especificaciones de los anexos adjuntos. Usa OBLIGATORIAMENTE el formato a), b), c)...]
 
       Toda coordinación operacional deberá realizarse con la contraparte designada por la Contratante, respetando las restricciones de acceso, horarios, condiciones de operación y medidas de seguridad definidas para cada instalación.
 
       **3.5 Obligaciones del Adjudicatario**
       Serán obligaciones esenciales del proveedor adjudicado, entre otras:
 
-      [Genera aquí el listado técnico de obligaciones basándote en el contexto. Usa OBLIGATORIAMENTE el formato a), b), c)...]
+      [Genera aquí el listado técnico de obligaciones basándote en el contexto y en los SLA o normativas de los documentos adjuntos. Usa OBLIGATORIAMENTE el formato a), b), c)...]
 
       **3.6 Entregables**
       El adjudicatario deberá proporcionar todos los antecedentes de respaldo requeridos para acreditar la correcta ejecución de los servicios, incluyendo, cuando corresponda:
 
-      [Genera aquí el listado de puntos con los entregables basándote en el contexto. Usa OBLIGATORIAMENTE el formato a), b), c)...]
+      [Genera aquí el listado de puntos con los entregables basándote en el contexto y en los reportes/documentación exigida en los archivos adjuntos. Usa OBLIGATORIAMENTE el formato a), b), c)...]
 
       **3.7 Interpretación del Alcance**
       El alcance definido en las presentes Bases deberá interpretarse de manera amplia y suficiente para cumplir íntegramente el objeto de la contratación.
@@ -149,7 +153,7 @@ export default function GeneradorRFP() {
 
       La eventual omisión de alguna actividad en la oferta del adjudicatario no lo eximirá de su obligación de ejecutarla cuando ésta resulte indispensable para el cumplimiento del objeto contractual, sin que ello genere derecho a cobros, compensaciones o reajustes adicionales para la Contratante.
       
-      --- CONTEXTO TÉCNICO A ANALIZAR ---
+      --- CONTEXTO TÉCNICO A ANALIZAR (Texto base y Archivos) ---
       ${contextoIA}
       `;
 

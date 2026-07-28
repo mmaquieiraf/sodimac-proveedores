@@ -91,21 +91,26 @@ export default function GeneradorRFQ() {
         return { storagePath: nombreUnico, mimeType: archivo.type };
       }));
 
-      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO' para la compra de bienes o productos (RFQ). REGLA ABSOLUTA DE CUMPLIMIENTO: Debes utilizar y COPIAR EXACTAMENTE la estructura de los 4 párrafos que te doy. Solo debes reemplazar y adaptar la información que se encuentra dentro de los corchetes [ ] utilizando el contexto técnico del usuario. No agregues viñetas ni títulos nuevos. Separa cada párrafo con un doble salto de línea. Usa **asteriscos dobles** para resaltar información clave si lo consideras necesario.";
+      // MODIFICACIÓN DE PROMPT 1: Instrucciones del sistema con regla de razonamiento profundo
+      const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO' para la compra de bienes o productos (RFQ). REGLA ABSOLUTA DE CUMPLIMIENTO: Debes utilizar y COPIAR EXACTAMENTE la estructura de los 4 párrafos que te doy. Solo debes reemplazar y adaptar la información que se encuentra dentro de los corchetes [ ].\n\nNUEVA REGLA DE RAZONAMIENTO PROFUNDO: Es obligatorio que leas, analices y extraigas la información de los ARCHIVOS ADJUNTOS a esta petición. Tu síntesis para rellenar los corchetes debe ser técnicamente compleja, profesional e integrar directamente las especificaciones, normativas, capacidades o detalles técnicos detallados que encuentres en dichos documentos adjuntos, cruzándolos con el texto ingresado por el usuario. No agregues viñetas ni títulos nuevos. Separa cada párrafo con un doble salto de línea. Usa **asteriscos dobles** para resaltar información clave si lo consideras necesario.";
+      
+      // MODIFICACIÓN DE PROMPT 2: Estructura con alerta crítica y corchetes exigentes
       const promptEstructurado = `
       Redacta el ALCANCE DEL PROCESO adaptando el contexto técnico. DEBES COPIAR EXACTAMENTE EL TEXTO FUERA DE LOS CORCHETES Y SOLO GENERAR EL CONTENIDO DENTRO DE LOS CORCHETES [ ].
 
+      ATENCIÓN CRÍTICA: Se han proporcionado archivos adjuntos (Fichas técnicas, anexos, etc.). DEBES leerlos exhaustivamente y utilizar esa información para redactar un alcance técnico complejo y detallado.
+
       --- ESTRUCTURA DE CUMPLIMIENTO OBLIGATORIO ---
 
-      El presente proceso de licitación tiene por objeto la recepción, evaluación y comparación de propuestas técnicas y económicas para el suministro de **[INSERTA AQUÍ LOS BIENES A ADQUIRIR. Ej: dos (2) aspiradoras industriales destinadas al dimensionado de polvo de madera]**, equipos que deberán contar con **[INSERTA AQUÍ CAPACIDADES O ESPECIFICACIONES. Ej: alta capacidad de almacenamiento y potencia de succión, con una capacidad aproximada de 80 litros]**. Se considerará especialmente **[INSERTA AQUÍ CARACTERÍSTICAS ESPECIALES. Ej: aquella alternativa que incorpore filtro desechable...]**. Para efectos meramente referenciales, podrá considerarse como modelo de comparación **[INSERTA AQUÍ MODELO DE REFERENCIA SI EL CONTEXTO LO INDICA, SINO OMITE ESTA FRASE]**.
+      El presente proceso de licitación tiene por objeto la recepción, evaluación y comparación de propuestas técnicas y económicas para el suministro de **[INSERTA AQUÍ LOS BIENES A ADQUIRIR integrando el texto del usuario y cruzándolo con la descripción técnica de los archivos adjuntos]**, equipos que deberán contar con **[INSERTA AQUÍ CAPACIDADES O ESPECIFICACIONES TÉCNICAS COMPLEJAS extraídas directamente de los documentos adjuntos: detalla potencias, dimensiones, normativas, materiales o métricas exactas que encuentres en los PDF/archivos]**. Se considerará especialmente **[INSERTA AQUÍ CARACTERÍSTICAS ESPECIALES, requisitos de calidad o condiciones técnicas particulares mencionadas en los adjuntos o en el texto]**. Para efectos meramente referenciales, podrá considerarse como modelo de comparación **[INSERTA AQUÍ EL MODELO DE REFERENCIA si se menciona explícitamente en el contexto o en los archivos, de lo contrario omite esta frase]**.
       
-      El suministro deberá contemplar el despacho a las siguientes dependencias: **[INSERTA AQUÍ LAS TIENDAS O LUGARES DE DESPACHO MENCIONADOS EN EL CONTEXTO]**. Asimismo, el proveedor deberá considerar todos los costos asociados al despacho, embalaje, etiquetado y demás prestaciones necesarias para la correcta entrega de los bienes, incluyendo, cuando corresponda, la instalación y/o puesta en marcha en el lugar de destino que determine la Contratante. La Contratante evaluará y seleccionará la oferta que estime más conveniente conforme a los requerimientos técnicos, operacionales y económicos establecidos en las presentes bases.
+      El suministro deberá contemplar el despacho a las siguientes dependencias: **[INSERTA AQUÍ LAS TIENDAS O LUGARES DE DESPACHO MENCIONADOS EN EL CONTEXTO O ADJUNTOS]**. Asimismo, el proveedor deberá considerar todos los costos asociados al despacho, embalaje, etiquetado y demás prestaciones necesarias para la correcta entrega de los bienes, incluyendo, cuando corresponda, la instalación y/o puesta en marcha en el lugar de destino que determine la Contratante. La Contratante evaluará y seleccionará la oferta que estime más conveniente conforme a los requerimientos técnicos, operacionales y económicos establecidos en las presentes bases.
       
       Para efectos de valorización, el Oferente deberá completar el Anexo III – Tarifario, indicando los precios unitarios de los productos. En caso de que los servicios de despacho y/o instalación no se encuentren incluidos dentro del precio ofertado de los productos, deberán informarse de manera separada en el mismo Anexo III, conforme a las casillas habilitadas para ello.
       
       En caso de que mandante requiera comprar más unidades con despacho o sin este en caso de ser un insumo o material, proveedor deberá respetar los precios por al menos 30 días corridos.
 
-      --- CONTEXTO TÉCNICO A ANALIZAR ---
+      --- CONTEXTO TÉCNICO A ANALIZAR (Texto base y Archivos) ---
       ${contextoIA}
       `;
 
