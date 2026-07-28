@@ -34,6 +34,18 @@ export default function RegistroPublico({
           <input required value={formData.domicilio} onChange={e => setFormData({...formData, domicilio: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} disabled={bloqueoSeguridad} />
         </div>
         
+        {/* NUEVA UBICACIÓN: Bloque Website justo debajo de Domicilio Comercial */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 'bold' }}>¿Posee Website?</label>
+          <select value={formData.poseeWebsite} onChange={e => setFormData({...formData, poseeWebsite: e.target.value})} disabled={bloqueoSeguridad}>
+            <option value="no">No</option>
+            <option value="si">Sí</option>
+          </select>
+          {formData.poseeWebsite === 'si' && (
+            <input placeholder="URL" value={formData.websiteUrl} onChange={e => setFormData({...formData, websiteUrl: e.target.value})} style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px' }} disabled={bloqueoSeguridad} />
+          )}
+        </div>
+
         <div>
           <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Categoría</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px', marginTop: '5px' }}>
@@ -118,17 +130,6 @@ export default function RegistroPublico({
         <div>
             <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Teléfono</label>
             <input required value={formData.telefono} onChange={e => setFormData({...formData, telefono: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} disabled={bloqueoSeguridad} />
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 'bold' }}>¿Posee Website?</label>
-          <select value={formData.poseeWebsite} onChange={e => setFormData({...formData, poseeWebsite: e.target.value})} disabled={bloqueoSeguridad}>
-            <option value="no">No</option>
-            <option value="si">Sí</option>
-          </select>
-          {formData.poseeWebsite === 'si' && (
-            <input placeholder="URL" value={formData.websiteUrl} onChange={e => setFormData({...formData, websiteUrl: e.target.value})} style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px' }} disabled={bloqueoSeguridad} />
-          )}
         </div>
 
         <div style={{ fontSize: '12px' }}>
