@@ -79,6 +79,8 @@ export default function GeneradorRFQ() {
 
   const procesarConIA = async () => {
     setCargandoIA(true);
+    let archivosSubidos = []; // Inicializamos el recolector de basura
+
     try {
       const archivosValidos = archivosContexto.filter(f => f.type === 'application/pdf' || f.type.startsWith('image/') || f.type.startsWith('text/'));
       
@@ -88,6 +90,7 @@ export default function GeneradorRFQ() {
         const { error } = await supabase.storage.from('archivos_ia').upload(nombreUnico, archivo);
         if (error) throw new Error("Fallo al subir el archivo a la bodega temporal de tránsito.");
         
+        archivosSubidos.push(nombreUnico); // Registramos el archivo para borrarlo después
         return { storagePath: nombreUnico, mimeType: archivo.type };
       }));
 
@@ -125,6 +128,15 @@ export default function GeneradorRFQ() {
     } catch (error) {
       alert(`⚠️ Fallo de IA: ${error.message}`);
     } finally {
+      // LIMPIEZA GARANTIZADA DE LA BODEGA DE TRÁNSITO
+      if (archivosSubidos.length > 0) {
+        const { error: errorBorrado } = await supabase.storage.from('archivos_ia').remove(archivosSubidos);
+        if (errorBorrado) {
+          console.error("Error al limpiar la bodega de tránsito:", errorBorrado);
+        } else {
+          console.log("Bodega de tránsito vaciada con éxito.");
+        }
+      }
       setCargandoIA(false);
     }
   };

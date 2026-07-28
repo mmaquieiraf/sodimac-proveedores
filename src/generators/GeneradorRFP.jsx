@@ -86,20 +86,21 @@ export default function GeneradorRFP() {
 
   const procesarConIA = async () => {
     setCargandoIA(true);
+    let archivosSubidos = []; // Inicializamos el recolector de basura
 
     try {
       const archivosValidos = archivosContexto.filter(f => f.type === 'application/pdf' || f.type.startsWith('image/') || f.type.startsWith('text/'));
       
-      // BODEGA DE TRÁNSITO: Subida temporal a Supabase para evitar restricción de 4MB de Vercel
+      // BODEGA DE TRÁNSITO: Subida temporal a Supabase
       const partesDocumentos = await Promise.all(archivosValidos.map(async (archivo) => {
         const nombreUnico = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
         const { error } = await supabase.storage.from('archivos_ia').upload(nombreUnico, archivo);
         if (error) throw new Error("Fallo al subir el archivo a la bodega temporal de tránsito.");
         
+        archivosSubidos.push(nombreUnico); // Registramos el archivo para borrarlo después
         return { storagePath: nombreUnico, mimeType: archivo.type };
       }));
 
-      // MODIFICACIÓN DE PROMPT: Razonamiento profundo y cruce de datos
       const instruccionesSistema = "Eres un ingeniero experto en adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO'. REGLA ABSOLUTA DE CUMPLIMIENTO: Los primeros 3 párrafos introductorios y el punto 3.7 son TEXTOS LEGALES INMUTABLES. Debes copiarlos exactamente palabra por palabra de la estructura que te doy. Tu libertad creativa y técnica aplica ÚNICAMENTE a los puntos 3.2, 3.3, 3.4, 3.5 y 3.6 según el contexto del usuario.\n\nNUEVA REGLA DE RAZONAMIENTO PROFUNDO: Es obligatorio que leas, analices y extraigas la información de los ARCHIVOS ADJUNTOS a esta petición. Tu síntesis para rellenar los corchetes debe ser técnicamente compleja, profesional e integrar directamente los SLA, métricas, normativas, y alcances operativos detallados que encuentres en los documentos adjuntos, cruzándolos con el texto ingresado por el usuario.\n\nFORMATO OBLIGATORIO: Todos los listados generados en los puntos 3.2, 3.3, 3.4, 3.5 y 3.6 DEBEN usar siempre el formato alfabético (a), b), c), etc.) y poner en negrita hasta los dos puntos. Separa TODO párrafo o viñeta con un doble salto de línea.";
       
       const promptEstructurado = `
@@ -109,6 +110,7 @@ export default function GeneradorRFP() {
 
       --- ESTRUCTURA DE CUMPLIMIENTO OBLIGATORIO ---
 
+      ALCANCE DEL PROCESO
       
       El presente Proceso de Licitación tiene por objeto la contratación de los servicios de **[INSERTA AQUÍ EL SERVICIO DEL CONTEXTO integrando el texto del usuario y cruzándolo con la descripción técnica de los archivos adjuntos]**, a ejecutarse en **[INSERTA AQUÍ LA UBICACIÓN DEL CONTEXTO o lugares mencionados en los anexos]**, conforme a los requerimientos establecidos en las presentes Bases Administrativas, Bases Técnicas, Anexos, Especificaciones Técnicas y demás antecedentes que forman parte integrante del proceso.
       
@@ -167,6 +169,15 @@ export default function GeneradorRFP() {
     } catch (error) {
       alert(`⚠️ Fallo de IA: ${error.message}`);
     } finally {
+      // LIMPIEZA GARANTIZADA DE LA BODEGA DE TRÁNSITO
+      if (archivosSubidos.length > 0) {
+        const { error: errorBorrado } = await supabase.storage.from('archivos_ia').remove(archivosSubidos);
+        if (errorBorrado) {
+          console.error("Error al limpiar la bodega de tránsito:", errorBorrado);
+        } else {
+          console.log("Bodega de tránsito vaciada con éxito.");
+        }
+      }
       setCargandoIA(false);
     }
   };
