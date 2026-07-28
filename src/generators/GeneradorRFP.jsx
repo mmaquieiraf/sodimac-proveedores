@@ -63,6 +63,18 @@ export default function GeneradorRFP() {
     return `${meses[parseInt(month)-1]} ${year}`;
   };
 
+  // Cargador dinámico de la librería de lectura de Excel (SheetJS)
+  const cargarLibreriaXLSX = async () => {
+    if (window.XLSX) return window.XLSX;
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      script.onload = () => resolve(window.XLSX);
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  };
+
   const exportarPDF = async () => {
     if (!window.html2pdf) {
       await new Promise((resolve, reject) => {
@@ -87,35 +99,47 @@ export default function GeneradorRFP() {
   const procesarConIA = async () => {
     setCargandoIA(true);
     let archivosSubidos = []; 
+    let partesDocumentos = [];
+    let textoExtraidoDeExcelYTexto = "";
 
     try {
-      // Filtro que permite documentos complejos (Excel, Word, PDF)
-      const archivosValidos = archivosContexto.filter(f => 
-        f.type.includes('pdf') || 
-        f.type.includes('image') || 
-        f.type.includes('text') || 
-        f.type.includes('word') || 
-        f.type.includes('excel') || 
-        f.type.includes('spreadsheet') || 
-        f.type.includes('officedocument')
-      );
-      
-      const partesDocumentos = await Promise.all(archivosValidos.map(async (archivo) => {
-        const nombreUnico = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const { error } = await supabase.storage.from('archivos_ia').upload(nombreUnico, archivo);
-        if (error) throw new Error("Fallo al subir el archivo a la bodega temporal de tránsito.");
-        
-        archivosSubidos.push(nombreUnico); 
-        return { storagePath: nombreUnico, mimeType: archivo.type };
-      }));
+      // 1. PROCESAMIENTO ULTRA-RÁPIDO EN NAVEGADOR
+      for (const archivo of archivosContexto) {
+        const esExcel = archivo.name.endsWith('.xlsx') || archivo.name.endsWith('.xls') || archivo.name.endsWith('.csv') || archivo.type.includes('excel') || archivo.type.includes('spreadsheet');
+        const esTexto = archivo.type === 'text/plain' || archivo.name.endsWith('.txt');
 
-      // PROMPT CORPORATIVO: Extracción directa, pero con el punto 3.7 protegido.
-      const instruccionesSistema = "Actúas en el doble rol de Abogado Corporativo Senior e Ingeniero Experto en Adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO'. REGLA ABSOLUTA DE CUMPLIMIENTO: Los primeros 3 párrafos introductorios y el punto 3.7 son TEXTOS LEGALES INMUTABLES. Debes copiarlos exactamente palabra por palabra. Para rellenar los corchetes de los puntos 3.2 al 3.6, DEBES tomar como contexto fundamental y obligatorio los ARCHIVOS ADJUNTOS proporcionados (ya sean celdas y tablas de Excel, documentos Word o PDF).\n\nNUEVA REGLA DE RAZONAMIENTO JURÍDICO Y TÉCNICO: Es imperativo que analices la data profunda de los archivos adjuntos. Tu redacción debe tener un estándar contractual altamente profesional, imperativo y vinculante (ej. 'El Prestador se obliga irrestrictamente a...', 'Constituye una exigencia esencial...'). Extrae e integra directamente los SLA, normativas, especificaciones técnicas precisas y alcances operativos desde estos documentos para construir las secciones 3.2, 3.3, 3.4, 3.5 y 3.6.\n\nFORMATO OBLIGATORIO: Todos los listados generados en los puntos 3.2 al 3.6 DEBEN usar siempre el formato alfabético (a), b), c), etc.) y poner en negrita hasta los dos puntos. Separa TODO párrafo o viñeta con un doble salto de línea.";
+        if (esTexto) {
+          const txt = await archivo.text();
+          textoExtraidoDeExcelYTexto += `\n--- CONTENIDO ARCHIVO TEXTO: ${archivo.name} ---\n${txt}\n`;
+        } else if (esExcel) {
+          // Extrae el Excel a texto CSV directo en milisegundos
+          const XLSX = await cargarLibreriaXLSX();
+          const buffer = await archivo.arrayBuffer();
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          
+          workbook.SheetNames.forEach(sheetName => {
+            const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]);
+            if (csv.trim()) {
+              textoExtraidoDeExcelYTexto += `\n--- TABLA EXTRAÍDA DE EXCEL (HOJA: ${sheetName} / ARCHIVO: ${archivo.name}) ---\n${csv}\n`;
+            }
+          });
+        } else if (archivo.type === 'application/pdf' || archivo.type.startsWith('image/')) {
+          // Solo PDFs e Imágenes van a tránsito temporal
+          const nombreUnico = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+          const { error } = await supabase.storage.from('archivos_ia').upload(nombreUnico, archivo);
+          if (error) throw new Error("Fallo al subir el archivo a la bodega temporal de tránsito.");
+          
+          archivosSubidos.push(nombreUnico); 
+          partesDocumentos.push({ storagePath: nombreUnico, mimeType: archivo.type });
+        }
+      }
+
+      const instruccionesSistema = "Actúas en el doble rol de Abogado Corporativo Senior e Ingeniero Experto en Adquisiciones para Sodimac. Tu tarea es redactar el 'ALCANCE DEL PROCESO'. REGLA ABSOLUTA DE CUMPLIMIENTO: Los primeros 3 párrafos introductorios y el punto 3.7 son TEXTOS LEGALES INMUTABLES. Debes copiarlos exactamente palabra por palabra. Para rellenar los corchetes de los puntos 3.2 al 3.6, DEBES tomar como contexto fundamental y obligatorio los ARCHIVOS ADJUNTOS proporcionados y las TABLAS DE EXCEL extraídas.\n\nNUEVA REGLA DE RAZONAMIENTO JURÍDICO Y TÉCNICO: Es imperativo que analices la data profunda de los archivos adjuntos. Tu redacción debe tener un estándar contractual altamente profesional, imperativo y vinculante (ej. 'El Prestador se obliga irrestrictamente a...', 'Constituye una exigencia esencial...'). Extrae e integra directamente los SLA, normativas, especificaciones técnicas precisas y alcances operativos desde estos documentos para construir las secciones 3.2, 3.3, 3.4, 3.5 y 3.6.\n\nFORMATO OBLIGATORIO: Todos los listados generados en los puntos 3.2 al 3.6 DEBEN usar siempre el formato alfabético (a), b), c), etc.) y poner en negrita hasta los dos puntos. Separa TODO párrafo o viñeta con un doble salto de línea.";
       
       const promptEstructurado = `
       Redacta el ALCANCE DEL PROCESO adaptando el contexto técnico. DEBES COPIAR EXACTAMENTE EL TEXTO FUERA DE LOS CORCHETES Y SOLO GENERAR EL CONTENIDO DENTRO DE LOS CORCHETES [ ].
 
-      ATENCIÓN CRÍTICA: Se han proporcionado archivos adjuntos (Excel, Word, PDF, etc.). DEBES extraer toda la información técnica, requisitos y métricas de estos archivos para construir de forma vinculante los puntos 3.2 al 3.6.
+      ATENCIÓN CRÍTICA: Se han extraído tablas técnicas y datos de los archivos adjuntos (Excel, PDF, Word, etc.). DEBES extraer toda la información técnica, SLA, ítems y métricas de esta data para construir de forma vinculante los puntos 3.2 al 3.6.
 
       --- ESTRUCTURA DE CUMPLIMIENTO OBLIGATORIO ---
 
@@ -128,12 +152,12 @@ export default function GeneradorRFP() {
       La sola presentación de una oferta implicará que el oferente declara conocer y aceptar íntegramente las condiciones del proceso, habiendo considerado en su propuesta todos los recursos, riesgos, costos directos e indirectos, obligaciones y exigencias necesarias para la ejecución del servicio.
 
       **3.2 Alcance de los Servicios**
-      [Redacta las labores principales con lenguaje legal e imperativo usando el formato a), b), c)... basándote OBLIGATORIAMENTE en el análisis exhaustivo de los archivos Excel, Word o PDF adjuntos. Detalla los SLA, entregables y métricas extraídas de las tablas o textos]
+      [Redacta las labores principales con lenguaje legal e imperativo usando el formato a), b), c)... basándote OBLIGATORIAMENTE en el análisis exhaustivo de los datos y tablas de los archivos adjuntos. Detalla los SLA, entregables y métricas extraídas]
 
       **3.3 Alcances Complementarios**
       Sin perjuicio de las actividades específicas descritas en los antecedentes técnicos, el adjudicatario deberá considerar dentro del alcance del servicio todas aquellas labores que resulten necesarias para:
 
-      [Genera aquí el listado de responsabilidades accesorias y preventivas basándote en los archivos adjuntos (Excel, Word, PDF). Usa lenguaje vinculante y OBLIGATORIAMENTE el formato a), b), c)...]
+      [Genera aquí el listado de responsabilidades accesorias y preventivas basándote en los archivos y datos adjuntos. Usa lenguaje vinculante y OBLIGATORIAMENTE el formato a), b), c)...]
 
       La Contratante no reconocerá costos adicionales derivados de actividades que, aun cuando no hayan sido expresamente mencionadas en las Bases, sean inherentes, complementarias o necesarias para la correcta ejecución del servicio.
 
@@ -142,19 +166,19 @@ export default function GeneradorRFP() {
       
       El adjudicatario será responsable de proporcionar la totalidad de los recursos requeridos para la ejecución del servicio, incluyendo, entre otros:
 
-      [Genera aquí el listado de recursos, equipamientos, EPP y certificaciones requeridas basándote en los archivos Excel, Word o PDF adjuntos. Usa lenguaje imperativo y OBLIGATORIAMENTE el formato a), b), c)...]
+      [Genera aquí el listado de recursos, equipamientos, EPP y certificaciones requeridas basándote en los datos adjuntos. Usa lenguaje imperativo y OBLIGATORIAMENTE el formato a), b), c)...]
 
       Toda coordinación operacional deberá realizarse con la contraparte designada por la Contratante, respetando las restricciones de acceso, horarios, condiciones de operación y medidas de seguridad definidas para cada instalación.
 
       **3.5 Obligaciones del Adjudicatario**
       Serán obligaciones esenciales del proveedor adjudicado, entre otras:
 
-      [Genera aquí el listado contractual de obligaciones, normativas de seguridad y estándares de calidad extraídos de los archivos adjuntos (Excel, Word, PDF). Usa OBLIGATORIAMENTE el formato a), b), c)...]
+      [Genera aquí el listado contractual de obligaciones, normativas de seguridad y estándares de calidad extraídos de los datos adjuntos. Usa OBLIGATORIAMENTE el formato a), b), c)...]
 
       **3.6 Entregables**
       El adjudicatario deberá proporcionar todos los antecedentes de respaldo requeridos para acreditar la correcta ejecución de los servicios, incluyendo, cuando corresponda:
 
-      [Genera aquí el listado de reportes, actas, certificados y documentación exigida en los archivos adjuntos (Excel, Word, PDF). Usa OBLIGATORIAMENTE el formato a), b), c)...]
+      [Genera aquí el listado de reportes, actas, certificados y documentación exigida en los datos adjuntos. Usa OBLIGATORIAMENTE el formato a), b), c)...]
 
       **3.7 Interpretación del Alcance**
       El alcance definido en las presentes Bases deberá interpretarse de manera amplia y suficiente para cumplir íntegramente el objeto de la contratación.
@@ -163,8 +187,11 @@ export default function GeneradorRFP() {
 
       La eventual omisión de alguna actividad en la oferta del adjudicatario no lo eximirá de su obligación de ejecutarla cuando ésta resulte indispensable para el cumplimiento del objeto contractual, sin que ello genere derecho a cobros, compensaciones o reajustes adicionales para la Contratante.
       
-      --- CONTEXTO TÉCNICO A ANALIZAR (Texto base y Archivos) ---
-      ${contextoIA}
+      --- CONTEXTO TÉCNICO A ANALIZAR ---
+      Texto del usuario: ${contextoIA}
+
+      Data y Tablas extraídas de archivos Excel/Texto:
+      ${textoExtraidoDeExcelYTexto}
       `;
 
       const payload = {
@@ -178,6 +205,7 @@ export default function GeneradorRFP() {
     } catch (error) {
       alert(`⚠️ Fallo de IA: ${error.message}`);
     } finally {
+      // Limpieza automática garantizada
       if (archivosSubidos.length > 0) {
         const { error: errorBorrado } = await supabase.storage.from('archivos_ia').remove(archivosSubidos);
         if (errorBorrado) {
