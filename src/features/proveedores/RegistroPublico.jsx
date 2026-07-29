@@ -34,22 +34,24 @@ export default function RegistroPublico({
           <input required value={formData.domicilio} onChange={e => setFormData({...formData, domicilio: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} disabled={bloqueoSeguridad} />
         </div>
         
-        {/* BLOQUE WEBSITE ACTUALIZADO */}
+        {/* BLOQUE WEBSITE CONDICIONAL */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <label style={{ fontSize: '12px', fontWeight: 'bold' }}>¿Posee Website?</label>
           <select value={formData.poseeWebsite} onChange={e => setFormData({...formData, poseeWebsite: e.target.value})} disabled={bloqueoSeguridad}>
             <option value="si">Sí</option>
             <option value="no">No</option>
           </select>
-          <input 
-            required 
-            type="url"
-            placeholder="Ej: https://www.mipagina.cl" 
-            value={formData.websiteUrl} 
-            onChange={e => setFormData({...formData, websiteUrl: e.target.value})} 
-            style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px' }} 
-            disabled={bloqueoSeguridad} 
-          />
+          {formData.poseeWebsite === 'si' && (
+            <input 
+              required 
+              type="url"
+              placeholder="Ej: https://www.mipagina.cl" 
+              value={formData.websiteUrl} 
+              onChange={e => setFormData({...formData, websiteUrl: e.target.value})} 
+              style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px' }} 
+              disabled={bloqueoSeguridad} 
+            />
+          )}
         </div>
 
         <div>

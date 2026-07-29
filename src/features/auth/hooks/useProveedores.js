@@ -101,8 +101,10 @@ export const useProveedores = (usuarioActual, categoriasDinamicas) => {
     if (formData.subcategoria.length === 0) return alert("Debe seleccionar al menos una Subcategoría.");
     if (formData.zonasCobertura.length === 0) return alert("Debe seleccionar al menos una Zona de Cobertura.");
     
-    // Validar que realmente enviaron una URL
-    if (formData.websiteUrl.trim() === '') return alert("El enlace del sitio web es obligatorio.");
+    // Validación de Website (Solo exige el link si marca "Sí")
+    if (formData.poseeWebsite === 'si' && formData.websiteUrl.trim() === '') {
+      return alert("El enlace del sitio web es obligatorio al indicar que posee uno.");
+    }
 
     let zonasFinales = formData.zonasCobertura;
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
@@ -111,8 +113,10 @@ export const useProveedores = (usuarioActual, categoriasDinamicas) => {
     const { data: existentes, error: rpcError } = await verificarDuplicadoProveedorService(rutLimpio);
     if (rpcError) console.error("Error al verificar duplicados:", rpcError);
 
-    // Toma la URL obligatoriamente
-    const websiteFinal = formData.websiteUrl.replace(/[<>]/g, '').trim().toLowerCase();
+    // Formateo del Website: Si marca Sí, guarda el link. Si marca No, guarda "No posee".
+    const websiteFinal = formData.poseeWebsite === 'si' 
+      ? formData.websiteUrl.replace(/[<>]/g, '').trim().toLowerCase() 
+      : 'No posee';
 
     const registrosAInsertar = [];
     const duplicadosEncontrados = [];
