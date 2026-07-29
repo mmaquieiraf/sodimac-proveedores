@@ -10,7 +10,8 @@ export const useProveedores = (usuarioActual, categoriasDinamicas) => {
     razonSocial: '', nombreFantasia: '', rut: '', domicilio: '',
     categoria: [], subcategoria: [], emailPrincipal: '', emailSecundario: '',
     contacto: '', cargo: '', telefono: '', zonasCobertura: [], terminos: false,
-    poseeWebsite: 'no', websiteUrl: ''
+    poseeWebsite: 'si', // INICIA POR DEFECTO EN SÍ
+    websiteUrl: ''
   });
 
   const [filtroRut, setFiltroRut] = useState(''); 
@@ -99,6 +100,9 @@ export const useProveedores = (usuarioActual, categoriasDinamicas) => {
     if (formData.categoria.length === 0) return alert("Debe seleccionar al menos una Categoría.");
     if (formData.subcategoria.length === 0) return alert("Debe seleccionar al menos una Subcategoría.");
     if (formData.zonasCobertura.length === 0) return alert("Debe seleccionar al menos una Zona de Cobertura.");
+    
+    // Validar que realmente enviaron una URL
+    if (formData.websiteUrl.trim() === '') return alert("El enlace del sitio web es obligatorio.");
 
     let zonasFinales = formData.zonasCobertura;
     if (zonasFinales.includes("Todo el País")) zonasFinales = ["Todo el País"];
@@ -107,7 +111,8 @@ export const useProveedores = (usuarioActual, categoriasDinamicas) => {
     const { data: existentes, error: rpcError } = await verificarDuplicadoProveedorService(rutLimpio);
     if (rpcError) console.error("Error al verificar duplicados:", rpcError);
 
-    const websiteFinal = formData.poseeWebsite === 'si' && formData.websiteUrl.trim() !== '' ? formData.websiteUrl.replace(/[<>]/g, '').trim().toLowerCase() : 'No posee';
+    // Toma la URL obligatoriamente
+    const websiteFinal = formData.websiteUrl.replace(/[<>]/g, '').trim().toLowerCase();
 
     const registrosAInsertar = [];
     const duplicadosEncontrados = [];
@@ -120,7 +125,7 @@ export const useProveedores = (usuarioActual, categoriasDinamicas) => {
         registrosAInsertar.push({
           razon_social: sanitizarYCapitalizar(formData.razonSocial), nombre_fantasia: sanitizarYCapitalizar(formData.nombreFantasia),
           rut: rutLimpio, domicilio_comercial: sanitizarYCapitalizar(formData.domicilio),
-          categoria: catAsociada, subcategoria: sub,      
+          categoria: catAsociada, subcategoria: sub,       
           email_principal: formData.emailPrincipal.replace(/[<>]/g, '').toLowerCase().trim(), 
           email_secundario: formData.emailSecundario ? formData.emailSecundario.replace(/[<>]/g, '').toLowerCase().trim() : '',
           nombre_contacto: sanitizarYCapitalizar(formData.contacto), cargo: sanitizarYCapitalizar(formData.cargo),

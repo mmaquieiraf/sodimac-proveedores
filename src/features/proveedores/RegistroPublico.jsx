@@ -34,16 +34,22 @@ export default function RegistroPublico({
           <input required value={formData.domicilio} onChange={e => setFormData({...formData, domicilio: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} disabled={bloqueoSeguridad} />
         </div>
         
-        {/* NUEVA UBICACIÓN: Bloque Website justo debajo de Domicilio Comercial */}
+        {/* BLOQUE WEBSITE ACTUALIZADO */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <label style={{ fontSize: '12px', fontWeight: 'bold' }}>¿Posee Website?</label>
           <select value={formData.poseeWebsite} onChange={e => setFormData({...formData, poseeWebsite: e.target.value})} disabled={bloqueoSeguridad}>
-            <option value="no">No</option>
             <option value="si">Sí</option>
+            <option value="no">No</option>
           </select>
-          {formData.poseeWebsite === 'si' && (
-            <input placeholder="URL" value={formData.websiteUrl} onChange={e => setFormData({...formData, websiteUrl: e.target.value})} style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px' }} disabled={bloqueoSeguridad} />
-          )}
+          <input 
+            required 
+            type="url"
+            placeholder="Ej: https://www.mipagina.cl" 
+            value={formData.websiteUrl} 
+            onChange={e => setFormData({...formData, websiteUrl: e.target.value})} 
+            style={{ flex: 1, padding: '5px', border: '1px solid #ccc', borderRadius: '4px' }} 
+            disabled={bloqueoSeguridad} 
+          />
         </div>
 
         <div>
@@ -57,7 +63,6 @@ export default function RegistroPublico({
           </div>
         </div>
 
-        {/* SECCIÓN CORREGIDA: Subcategorías agrupadas dinámicamente por categoría seleccionada */}
         <div>
           <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Subcategoría</label>
           <div style={{ maxHeight: '200px', overflowY: 'auto', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', marginTop: '5px', backgroundColor: '#fcfcfc' }}>
