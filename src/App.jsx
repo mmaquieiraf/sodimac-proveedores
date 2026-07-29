@@ -10,9 +10,10 @@ import { useProveedores } from './features/auth/hooks/useProveedores';
 import { useProcesos } from './features/auth/hooks/useProcesos';
 import { useAdmin } from './features/auth/hooks/useAdmin';
 
-// Servicios
+// Servicios y Supabase
 import { signOutService } from './services/supabase/authService';
 import { exportarProcesosExcel, descargarPlantillaProcesos, exportarProveedoresCSV, exportarProveedoresExcel } from './services/export/excelExportService';
+import { supabase } from './supabase'; // IMPORTACIÓN AÑADIDA PARA SINCRONIZAR
 
 // Componentes
 import Navbar from './components/layout/Navbar';
@@ -37,19 +38,14 @@ import GeneradorRFP from './generators/GeneradorRFP';
 import GeneradorRFQ from './generators/GeneradorRFQ';
 import GeneradorFT from './generators/GeneradorFT';
 
-const cargarCategoriasDinamicas = () => {
-  const guardadas = localStorage.getItem('sodimac_categorias_dinamicas');
-  if (guardadas) return JSON.parse(guardadas);
-  return categoriasSodimacCompiladas;
-};
-
 export default function App() {
   const [vista, setVista] = useState('registro'); 
   const [tabAdmin, setTabAdmin] = useState('dashboard');
   const [mostrarTerminos, setMostrarTerminos] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState(null);
 
-  const [categoriasDinamicas, setCategoriasDinamicas] = useState(cargarCategoriasDinamicas());
+  // 1. Inicializa con compilado duro, pero se actualizará desde la nube enseguida
+  const [categoriasDinamicas, setCategoriasDinamicas] = useState(categoriasSodimacCompiladas);
   const [nuevaCatInput, setNuevaCatInput] = useState('');
   const [nuevasSubInputs, setNuevasSubInputs] = useState({});
 
@@ -101,13 +97,76 @@ export default function App() {
     setVista, setUsuarioActual, cargarProveedores, cargarProcesos, cargarAdministradores
   });
 
-  useEffect(() => { localStorage.setItem('sodimac_categorias_dinamicas', JSON.stringify(categoriasDinamicas)); }, [categoriasDinamicas]);
-  useEffect(() => { if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl') cargarLogsAuditoria(); }, [tabAdmin, usuarioActual]);
+  // ===============================================================
+  // LÓGICA DE SINCRONIZACIÓN EN LA NUBE (REEMPLAZA A LOCALSTORAGE)
+  // ===============================================================
 
-  const handleAgregarCategoria = (e) => { e.preventDefault(); const cat = sanitizarYCapitalizar(nuevaCatInput); if(cat && !categoriasDinamicas[cat]) { setCategoriasDinamicas({...categoriasDinamicas, [cat]: []}); setNuevaCatInput(''); } };
-  const handleEliminarCategoria = (cat) => { if(window.confirm(`¿Eliminar "${cat}"?`)) { const copia = {...categoriasDinamicas}; delete copia[cat]; setCategoriasDinamicas(copia); } };
-  const handleAgregarSubcategoria = (e, cat) => { e.preventDefault(); const sub = sanitizarYCapitalizar(nuevasSubInputs[cat]); if(sub && !categoriasDinamicas[cat].includes(sub)) { setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: [...categoriasDinamicas[cat], sub] }); setNuevasSubInputs({...nuevasSubInputs, [cat]: ''}); } };
-  const handleEliminarSubcategoria = (cat, sub) => { if(window.confirm(`¿Eliminar "${sub}"?`)) setCategoriasDinamicas({ ...categoriasDinamicas, [cat]: categoriasDinamicas[cat].filter(s => s !== sub) }); };
+  // A. Carga inicial desde Supabase al entrar a la página
+  useEffect(() => {
+    const fetchCategoriasNube = async () => {
+      const { data, error } = await supabase
+        .from('configuracion_sistema')
+        .select('categorias')
+        .eq('id', 1)
+        .single();
+      
+      if (!error && data && Object.keys(data.categorias).length > 0) {
+        setCategoriasDinamicas(data.categorias);
+      }
+    };
+    fetchCategoriasNube();
+  }, []);
+
+  // B. Función para actualizar el estado y subir a la nube
+  const sincronizarConNube = async (nuevasCategorias) => {
+    setCategoriasDinamicas(nuevasCategorias); // Actualiza UI de inmediato
+    
+    // Impacta la nube para el resto de usuarios
+    const { error } = await supabase
+      .from('configuracion_sistema')
+      .update({ categorias: nuevasCategorias })
+      .eq('id', 1);
+      
+    if (error) {
+      console.error("Fallo al guardar en la nube:", error);
+      alert("⚠️ Hubo un problema sincronizando las categorías con el servidor general.");
+    }
+  };
+
+  // C. Manejadores actualizados
+  const handleAgregarCategoria = (e) => { 
+    e.preventDefault(); 
+    const cat = sanitizarYCapitalizar(nuevaCatInput); 
+    if(cat && !categoriasDinamicas[cat]) { 
+      sincronizarConNube({...categoriasDinamicas, [cat]: []}); 
+      setNuevaCatInput(''); 
+    } 
+  };
+  
+  const handleEliminarCategoria = (cat) => { 
+    if(window.confirm(`¿Eliminar "${cat}"?`)) { 
+      const copia = {...categoriasDinamicas}; 
+      delete copia[cat]; 
+      sincronizarConNube(copia); 
+    } 
+  };
+  
+  const handleAgregarSubcategoria = (e, cat) => { 
+    e.preventDefault(); 
+    const sub = sanitizarYCapitalizar(nuevasSubInputs[cat]); 
+    if(sub && !categoriasDinamicas[cat].includes(sub)) { 
+      sincronizarConNube({ ...categoriasDinamicas, [cat]: [...categoriasDinamicas[cat], sub] }); 
+      setNuevasSubInputs({...nuevasSubInputs, [cat]: ''}); 
+    } 
+  };
+  
+  const handleEliminarSubcategoria = (cat, sub) => { 
+    if(window.confirm(`¿Eliminar "${sub}"?`)) {
+      sincronizarConNube({ ...categoriasDinamicas, [cat]: categoriasDinamicas[cat].filter(s => s !== sub) });
+    }
+  };
+
+  useEffect(() => { if (tabAdmin === 'auditoria' && usuarioActual?.usuario === 'mmaquieiraf@sodimac.cl') cargarLogsAuditoria(); }, [tabAdmin, usuarioActual]);
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh', padding: '20px' }}>
