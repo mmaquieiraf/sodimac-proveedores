@@ -6,6 +6,7 @@ export default function GeneradorFT() {
   const [cargandoIA, setCargandoIA] = useState(false);
   const [archivosContexto, setArchivosContexto] = useState([]);
   const [imagenProducto, setImagenProducto] = useState(null);
+  const [modoEdicion, setModoEdicion] = useState(false); // NUEVO ESTADO: Editor en Vivo
 
   const [fichaData, setFichaData] = useState({
     titulo: "ASPIRADORA INDUSTRIAL DE POLVO Y AGUA",
@@ -48,6 +49,9 @@ export default function GeneradorFT() {
   };
 
   const exportarPDF = async () => {
+    // Si estaba editando, lo apagamos para que los bordes desaparezcan en el PDF
+    if(modoEdicion) setModoEdicion(false);
+
     if (!window.html2pdf) {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
@@ -81,15 +85,16 @@ export default function GeneradorFT() {
     if (archivosContexto.length === 0) return alert("⚠️ Adjunta al menos un archivo técnico en PDF para analizar.");
     
     setCargandoIA(true);
+    let archivosSubidos = [];
+
     try {
       const archivosValidos = archivosContexto.filter(f => f.type === 'application/pdf' || f.type.startsWith('image/') || f.type.startsWith('text/'));
       
-      // BODEGA DE TRÁNSITO: Subida temporal y volátil para esquivar el límite de 4MB de Vercel
       const partesDocumentos = await Promise.all(archivosValidos.map(async (archivo) => {
         const nombreUnico = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
         const { error } = await supabase.storage.from('archivos_ia').upload(nombreUnico, archivo);
         if (error) throw new Error("Fallo al subir el archivo a la bodega temporal de tránsito.");
-        
+        archivosSubidos.push(nombreUnico);
         return { storagePath: nombreUnico, mimeType: archivo.type };
       }));
 
@@ -131,8 +136,21 @@ export default function GeneradorFT() {
     } catch (error) {
       alert(`⚠️ Fallo de IA: ${error.message}`);
     } finally {
+      if (archivosSubidos.length > 0) {
+        await supabase.storage.from('archivos_ia').remove(archivosSubidos);
+      }
       setCargandoIA(false);
     }
+  };
+
+  // ESTILO DINÁMICO PARA EL MODO EDICIÓN
+  const editStyle = {
+    outline: modoEdicion ? '1.5px dashed #005AA9' : 'none',
+    backgroundColor: modoEdicion ? 'rgba(0, 90, 169, 0.05)' : 'transparent',
+    padding: modoEdicion ? '2px 4px' : '0',
+    borderRadius: '4px',
+    transition: 'all 0.2s ease-in-out',
+    cursor: modoEdicion ? 'text' : 'default'
   };
 
   return (
@@ -176,6 +194,11 @@ export default function GeneradorFT() {
       {/* PANEL DERECHO: VISUALIZADOR Y EXPORTACIÓN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px', minWidth: 0, alignItems: 'center' }}>
         <div style={{ width: '210mm', display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: 'white', padding: '10px 20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+          {/* NUEVO BOTÓN: ENCENDER/APAGAR MODO EDICIÓN */}
+          <button onClick={() => setModoEdicion(!modoEdicion)} style={{ padding: '8px 15px', backgroundColor: modoEdicion ? '#28a745' : '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}>
+            {modoEdicion ? '💾 Guardar Edición' : '✏️ Editar Ficha Manualmente'}
+          </button>
+
           <button onClick={exportarPDF} style={{ padding: '8px 15px', backgroundColor: '#E31E24', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>🖨️ Descargar Ficha en PDF Oficial</button>
         </div>
 
@@ -212,8 +235,9 @@ export default function GeneradorFT() {
                         )}
                       </div>
                       <div>
-                        <h4 style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#222', fontWeight: '900', letterSpacing: '0.5px' }}>{carac.titulo}</h4>
-                        <p style={{ margin: 0, fontSize: '11.5px', color: '#666', lineHeight: '1.4' }}>{carac.texto}</p>
+                        {/* EDITABLE */}
+                        <h4 contentEditable={modoEdicion} suppressContentEditableWarning={true} style={{ ...editStyle, margin: '0 0 4px 0', fontSize: '12px', color: '#222', fontWeight: '900', letterSpacing: '0.5px' }}>{carac.titulo}</h4>
+                        <p contentEditable={modoEdicion} suppressContentEditableWarning={true} style={{ ...editStyle, margin: 0, fontSize: '11.5px', color: '#666', lineHeight: '1.4' }}>{carac.texto}</p>
                       </div>
                     </div>
                   ))}
@@ -221,9 +245,10 @@ export default function GeneradorFT() {
               </div>
 
               <div style={{ flex: '1', display: 'flex', flexDirection: 'column' }}>
-                <h1 style={{ fontSize: '30px', margin: '0 0 5px 0', color: '#222', lineHeight: '1', textTransform: 'uppercase', fontFamily: 'Impact, Arial Narrow, sans-serif', letterSpacing: '0.5px' }}>{fichaData.titulo}</h1>
-                <h2 style={{ fontSize: '18px', margin: '0 0 15px 0', color: '#005AA9', fontWeight: '800', letterSpacing: '0.5px' }}>{fichaData.subtitulo}</h2>
-                <p style={{ fontSize: '13px', color: '#555', lineHeight: '1.5', marginBottom: '25px' }}>{fichaData.descripcion}</p>
+                {/* EDITABLES */}
+                <h1 contentEditable={modoEdicion} suppressContentEditableWarning={true} style={{ ...editStyle, fontSize: '30px', margin: '0 0 5px 0', color: '#222', lineHeight: '1', textTransform: 'uppercase', fontFamily: 'Impact, Arial Narrow, sans-serif', letterSpacing: '0.5px' }}>{fichaData.titulo}</h1>
+                <h2 contentEditable={modoEdicion} suppressContentEditableWarning={true} style={{ ...editStyle, fontSize: '18px', margin: '0 0 15px 0', color: '#005AA9', fontWeight: '800', letterSpacing: '0.5px' }}>{fichaData.subtitulo}</h2>
+                <p contentEditable={modoEdicion} suppressContentEditableWarning={true} style={{ ...editStyle, fontSize: '13px', color: '#555', lineHeight: '1.5', marginBottom: '25px' }}>{fichaData.descripcion}</p>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                   <div style={{ width: '28px', height: '28px', backgroundColor: '#005AA9', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white' }}>
@@ -237,8 +262,9 @@ export default function GeneradorFT() {
                     <tr style={{ borderTop: '2px solid #005AA9' }}></tr>
                     {fichaData.datosTecnicos.map((dato, i) => (
                       <tr key={i} style={{ borderBottom: '1px solid #EBEBEB' }}>
-                        <td style={{ padding: '10px 5px', fontSize: '12px', fontWeight: 'bold', color: '#333', width: '50%', verticalAlign: 'top', lineHeight: '1.4', wordWrap: 'break-word' }}>{dato.parametro}</td>
-                        <td style={{ padding: '10px 5px', fontSize: '12px', color: '#555', width: '50%', verticalAlign: 'top', lineHeight: '1.4', wordWrap: 'break-word' }}>{dato.valor}</td>
+                        {/* EDITABLES */}
+                        <td contentEditable={modoEdicion} suppressContentEditableWarning={true} style={{ ...editStyle, padding: '10px 5px', fontSize: '12px', fontWeight: 'bold', color: '#333', width: '50%', verticalAlign: 'top', lineHeight: '1.4', wordWrap: 'break-word' }}>{dato.parametro}</td>
+                        <td contentEditable={modoEdicion} suppressContentEditableWarning={true} style={{ ...editStyle, padding: '10px 5px', fontSize: '12px', color: '#555', width: '50%', verticalAlign: 'top', lineHeight: '1.4', wordWrap: 'break-word' }}>{dato.valor}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -260,7 +286,8 @@ export default function GeneradorFT() {
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
                           )}
                         </div>
-                        <span style={{ fontSize: '8.5px', fontWeight: 'bold', color: '#005AA9', textTransform: 'uppercase', lineHeight: '1.2' }}>{uso}</span>
+                        {/* EDITABLE */}
+                        <span contentEditable={modoEdicion} suppressContentEditableWarning={true} style={{ ...editStyle, fontSize: '8.5px', fontWeight: 'bold', color: '#005AA9', textTransform: 'uppercase', lineHeight: '1.2' }}>{uso}</span>
                       </div>
                     ))}
                   </div>
@@ -273,7 +300,8 @@ export default function GeneradorFT() {
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                 <div>
                   <div style={{ fontSize: '10px', fontWeight: 'bold', letterSpacing: '0.5px' }}>CATEGORÍA:</div>
-                  <div style={{ fontSize: '12px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>{fichaData.categoriaPie}</div>
+                  {/* EDITABLE */}
+                  <div contentEditable={modoEdicion} suppressContentEditableWarning={true} style={{ ...editStyle, fontSize: '12px', letterSpacing: '0.5px', textTransform: 'uppercase', backgroundColor: modoEdicion ? 'rgba(255,255,255,0.2)' : 'transparent', color: 'white' }}>{fichaData.categoriaPie}</div>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
