@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { cargarProcesosService, guardarProcesoService, eliminarProcesoService, actualizarEstadoProcesoService, insertarProcesosMasivoService } from '../../../services/supabase/procesosService';
 import { sanitizarYCapitalizar, formatearMoneda, obtenerMesAno } from '../../../utils/formato';
 import { estadosExcluidosGlobal } from '../../../utils/constantes';
-import * as XLSX from 'xlsx'; // LIBRERÍA DE EXCEL AÑADIDA CORRECTAMENTE
+import * as XLSX from 'xlsx';
 
 export const useProcesos = (usuarioActual, proveedoresFiltrados, seleccionados, setTabAdmin) => {
   const [procesos, setProcesos] = useState([]);
@@ -106,23 +106,28 @@ export const useProcesos = (usuarioActual, proveedoresFiltrados, seleccionados, 
     setProcesoActual({ ...procesoActual, adjudicaciones_detalle: nuevosDetalles });
   };
 
-  // --- LECTORA DE EXCEL INTEGRADA (CON ANTI-DUPLICADOS) ---
+  // --- LECTORA DE EXCEL INTEGRADA (CON LIMPIEZA DE TILDES Y ANTI-DUPLICADOS) ---
   const manejarCargaMasivaProcesos = (e) => {
     const file = e.target.files[0]; 
     if (!file) return;
 
     const reader = new FileReader();
     
+    // Función para manejar las fechas de Excel
     const parseFechaSegura = (valorExcel, defaultValue) => {
       if (!valorExcel || valorExcel.toString().trim() === '' || valorExcel.toString().toUpperCase() === 'N/A') return defaultValue;
-      
       if (!isNaN(valorExcel) && typeof valorExcel === 'number') {
         const date = new Date(Math.round((valorExcel - 25569) * 86400 * 1000));
         return date.toISOString().split('T')[0];
       }
-      
       const regex = /^\d{4}-\d{2}-\d{2}$/;
       return regex.test(valorExcel.toString().trim()) ? valorExcel.toString().trim() : defaultValue;
+    };
+
+    // NUEVA FUNCIÓN: Elimina tildes y caracteres raros
+    const estandarizarTexto = (texto) => {
+      if (!texto) return '';
+      return texto.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, "").trim();
     };
 
     reader.onload = async (event) => {
@@ -146,10 +151,11 @@ export const useProcesos = (usuarioActual, proveedoresFiltrados, seleccionados, 
           const row = excelJson[i];
           if (!row || row.length === 0 || !row[0]) continue; 
 
-          const nombreLimpio = sanitizarYCapitalizar(row[0]?.toString() || '');
+          // Estandarizamos el nombre quitando tildes y capitalizando
+          const nombreLimpio = sanitizarYCapitalizar(estandarizarTexto(row[0]));
           
-          // REGLA ANTI-DUPLICADOS
-          const existeEnBD = procesos.some(p => p.nombre.toLowerCase() === nombreLimpio.toLowerCase());
+          // REGLA ANTI-DUPLICADOS INTELIGENTE (Compara versiones sin tildes)
+          const existeEnBD = procesos.some(p => estandarizarTexto(p.nombre).toLowerCase() === nombreLimpio.toLowerCase());
           const existeEnArchivo = nombresEnArchivoActual.has(nombreLimpio.toLowerCase());
 
           if (existeEnBD || existeEnArchivo) {
@@ -167,13 +173,13 @@ export const useProcesos = (usuarioActual, proveedoresFiltrados, seleccionados, 
 
           procesosNuevos.push({
             nombre: nombreLimpio, 
-            clasificacion: row[1]?.toString() || 'Opex',
-            subgerencia: row[2]?.toString() || 'Administración', 
-            solicitante: sanitizarYCapitalizar(row[3]?.toString() || ''),
-            tipo: row[4]?.toString() || 'RFP', 
-            tipo_compra: row[5]?.toString() || 'Spot',
-            controller: row[6]?.toString() || usuarioActual?.usuario, 
-            estado_proceso: row[7]?.toString() || 'Estableciendo alcance, equipo y objetivos',
+            clasificacion: estandarizarTexto(row[1]) || 'Opex',
+            subgerencia: estandarizarTexto(row[2]) || 'Administracion', 
+            solicitante: sanitizarYCapitalizar(estandarizarTexto(row[3])),
+            tipo: estandarizarTexto(row[4]) || 'RFP', 
+            tipo_compra: estandarizarTexto(row[5]) || 'Spot',
+            controller: row[6]?.toString().trim() || usuarioActual?.usuario, 
+            estado_proceso: row[7]?.toString().trim() || 'Estableciendo alcance, equipo y objetivos', // Protegido para no romper los filtros
             fecha_inicio: fechaInicioLimpia, 
             fecha_termino: fechaTerminoLimpia,
             baseline: isNaN(baselineLimpio) ? 0 : baselineLimpio, 
@@ -184,7 +190,6 @@ export const useProcesos = (usuarioActual, proveedoresFiltrados, seleccionados, 
           });
         }
         
-        // RESPUESTA DE ESTADO AL USUARIO
         if (procesosNuevos.length > 0) { 
           const { error } = await insertarProcesosMasivoService(procesosNuevos); 
           if (!error) { 
