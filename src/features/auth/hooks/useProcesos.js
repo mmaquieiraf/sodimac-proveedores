@@ -106,7 +106,7 @@ export const useProcesos = (usuarioActual, proveedoresFiltrados, seleccionados, 
     setProcesoActual({ ...procesoActual, adjudicaciones_detalle: nuevosDetalles });
   };
 
-  // --- LECTORA DE EXCEL INTEGRADA ---
+  // --- LECTORA DE EXCEL INTEGRADA (CON ANTI-DUPLICADOS) ---
   const manejarCargaMasivaProcesos = (e) => {
     const file = e.target.files[0]; 
     if (!file) return;
@@ -137,11 +137,27 @@ export const useProcesos = (usuarioActual, proveedoresFiltrados, seleccionados, 
         if (excelJson.length <= 1) return alert("El archivo está vacío o solo contiene la cabecera.");
         
         const procesosNuevos = [];
+        const duplicadosOmitidos = []; 
+        const nombresEnArchivoActual = new Set(); 
+
         const defaultDate = `${new Date().getFullYear()}-01-01`;
 
         for (let i = 1; i < excelJson.length; i++) {
           const row = excelJson[i];
           if (!row || row.length === 0 || !row[0]) continue; 
+
+          const nombreLimpio = sanitizarYCapitalizar(row[0]?.toString() || '');
+          
+          // REGLA ANTI-DUPLICADOS
+          const existeEnBD = procesos.some(p => p.nombre.toLowerCase() === nombreLimpio.toLowerCase());
+          const existeEnArchivo = nombresEnArchivoActual.has(nombreLimpio.toLowerCase());
+
+          if (existeEnBD || existeEnArchivo) {
+            duplicadosOmitidos.push(nombreLimpio);
+            continue; 
+          }
+
+          nombresEnArchivoActual.add(nombreLimpio.toLowerCase());
 
           const baselineLimpio = row[10] && row[10].toString().toUpperCase() !== 'N/A' ? parseInt(row[10].toString().replace(/\D/g, '')) : 0;
           const montoAdjLimpio = row[11] && row[11].toString().toUpperCase() !== 'N/A' ? parseInt(row[11].toString().replace(/\D/g, '')) : 0;
@@ -150,7 +166,7 @@ export const useProcesos = (usuarioActual, proveedoresFiltrados, seleccionados, 
           const fechaTerminoLimpia = parseFechaSegura(row[9], fechaInicioLimpia);
 
           procesosNuevos.push({
-            nombre: sanitizarYCapitalizar(row[0]?.toString() || ''), 
+            nombre: nombreLimpio, 
             clasificacion: row[1]?.toString() || 'Opex',
             subgerencia: row[2]?.toString() || 'Administración', 
             solicitante: sanitizarYCapitalizar(row[3]?.toString() || ''),
@@ -168,11 +184,22 @@ export const useProcesos = (usuarioActual, proveedoresFiltrados, seleccionados, 
           });
         }
         
+        // RESPUESTA DE ESTADO AL USUARIO
         if (procesosNuevos.length > 0) { 
           const { error } = await insertarProcesosMasivoService(procesosNuevos); 
-          if (!error) { alert(`✅ ${procesosNuevos.length} procesos agregados masivamente desde Excel.`); cargarProcesos(); }
+          if (!error) { 
+            let mensaje = `✅ ${procesosNuevos.length} procesos nuevos agregados desde Excel.`;
+            if (duplicadosOmitidos.length > 0) {
+              mensaje += `\n\n⚠️ Se omitieron ${duplicadosOmitidos.length} procesos que ya existían.`;
+            }
+            alert(mensaje); 
+            cargarProcesos(); 
+          }
           else { alert("⚠️ Ocurrió un error en la base de datos al importar."); console.error(error); }
+        } else if (duplicadosOmitidos.length > 0) {
+          alert(`⚠️ No se cargó ningún proceso nuevo. Los ${duplicadosOmitidos.length} procesos en el archivo ya estaban registrados en el sistema.`);
         }
+
       } catch (error) {
         console.error("Error procesando Excel:", error);
         alert("⚠️ Hubo un error al leer el archivo Excel. Asegúrese de que el formato sea correcto.");
