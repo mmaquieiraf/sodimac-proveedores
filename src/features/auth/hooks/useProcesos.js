@@ -105,32 +105,51 @@ export const useProcesos = (usuarioActual, proveedoresFiltrados, seleccionados, 
     setProcesoActual({ ...procesoActual, adjudicaciones_detalle: nuevosDetalles });
   };
 
+  // ACTUALIZACIÓN DE VALIDACIÓN Y CARGA MASIVA (Permite blancos, strings N/A y datos nulos)
   const manejarCargaMasivaProcesos = (e) => {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
+    
+    // Función auxiliar para extraer fechas seguras
+    const parseFecha = (fechaTxt, defaultValue) => {
+      if (!fechaTxt || fechaTxt.trim() === '' || fechaTxt.toUpperCase() === 'N/A') return defaultValue;
+      const regex = /^\d{4}-\d{2}-\d{2}$/; // Verifica patrón YYYY-MM-DD
+      return regex.test(fechaTxt.trim()) ? fechaTxt.trim() : defaultValue;
+    };
+
     reader.onload = async (event) => {
       const lines = event.target.result.split(/\r?\n/).filter(line => line.trim() !== "");
       if (lines.length <= 1) return alert("El archivo está vacío o solo contiene la cabecera.");
+      
       const procesosNuevos = [];
+      const defaultDate = `${new Date().getFullYear()}-01-01`; // Fecha segura por defecto si viene en blanco
+
       for (let i = 1; i < lines.length; i++) {
         const currentLine = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
         if (currentLine.length < 2) continue; 
-        const baselineLimpio = currentLine[10] ? parseInt(currentLine[10].replace(/\D/g, '')) : null;
-        const montoAdjLimpio = currentLine[11] ? parseInt(currentLine[11].replace(/\D/g, '')) : null;
+        
+        // Parsea montos y si viene blanco o "N/A" asigna 0 temporalmente
+        const baselineLimpio = currentLine[10] && currentLine[10].toUpperCase() !== 'N/A' ? parseInt(currentLine[10].replace(/\D/g, '')) : 0;
+        const montoAdjLimpio = currentLine[11] && currentLine[11].toUpperCase() !== 'N/A' ? parseInt(currentLine[11].replace(/\D/g, '')) : 0;
+        
+        const fechaInicioLimpia = parseFecha(currentLine[8], defaultDate);
+        const fechaTerminoLimpia = parseFecha(currentLine[9], fechaInicioLimpia);
+
         procesosNuevos.push({
           nombre: sanitizarYCapitalizar(currentLine[0]), clasificacion: currentLine[1] || 'Opex',
           subgerencia: currentLine[2] || 'Administración', solicitante: sanitizarYCapitalizar(currentLine[3]),
           tipo: currentLine[4] || 'RFP', tipo_compra: currentLine[5] || 'Spot',
           controller: currentLine[6] || usuarioActual?.usuario, estado_proceso: currentLine[7] || 'Estableciendo alcance, equipo y objetivos',
-          fecha_inicio: currentLine[8] || new Date().toISOString().split('T')[0], fecha_termino: currentLine[9] || new Date().toISOString().split('T')[0],
-          baseline: isNaN(baselineLimpio) ? null : baselineLimpio, monto_adjudicado: isNaN(montoAdjLimpio) ? null : montoAdjLimpio,
+          fecha_inicio: fechaInicioLimpia, fecha_termino: fechaTerminoLimpia,
+          baseline: isNaN(baselineLimpio) ? 0 : baselineLimpio, monto_adjudicado: isNaN(montoAdjLimpio) ? 0 : montoAdjLimpio,
           proveedores_invitados: '', proveedor_adjudicado: null, adjudicaciones_detalle: []
         });
       }
+      
       if (procesosNuevos.length > 0) { 
         const { error } = await insertarProcesosMasivoService(procesosNuevos); 
         if (!error) { alert(`✅ ${procesosNuevos.length} procesos agregados masivamente.`); cargarProcesos(); }
-        else { alert("⚠️ Error al importar procesos. Verifique formato de fechas (YYYY-MM-DD) y números."); }
+        else { alert("⚠️ Ocurrió un error en el servidor al intentar importar los procesos."); }
       }
     };
     reader.readAsText(file, 'UTF-8'); e.target.value = null; 
