@@ -1,3 +1,6 @@
+// IMPORTANTE: Asegúrate de tener SheetJS (xlsx) instalado en tu proyecto: npm install xlsx
+import * as XLSX from 'xlsx';
+
 export const exportarProcesosExcel = (procesosAExportar) => {
   if (procesosAExportar.length === 0) return alert("⚠️ No hay procesos para exportar con los filtros actuales.");
   let excelHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8" /><style>table { border-collapse: collapse; font-family: Arial, sans-serif; } th { background-color: #004A99; color: white; font-weight: bold; border: 1px solid #cccccc; padding: 10px; text-align: left; } td { border: 1px solid #cccccc; padding: 8px; font-size: 13px; } .title { font-size: 18px; font-weight: bold; color: #004A99; padding-bottom: 15px; }</style></head><body><div class="title">Base Oficial de Procesos - Sodimac S.A.</div><table><thead><tr><th>Nombre del Proceso</th><th>Clasificación</th><th>Subgerencia</th><th>Solicitante</th><th>Tipo de Proceso</th><th>Tipo de Compra</th><th>Controller</th><th>Estado del proceso</th><th>Fecha de inicio</th><th>Fecha de Término</th><th>Proveedores Invitados</th><th>Cantidad de Ofertas</th><th>Proveedor Adjudicado</th><th>Baseline ($)</th><th>Monto Adjudicado ($)</th><th>Ahorro ($)</th></tr></thead><tbody>`;
@@ -11,10 +14,20 @@ export const exportarProcesosExcel = (procesosAExportar) => {
   const link = document.createElement("a"); link.href = url; link.setAttribute("download", "registro_procesos_sodimac.xls"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
 };
 
+// NUEVA FUNCIÓN: Genera un .xlsx real con la plantilla base
 export const descargarPlantillaProcesos = () => {
-  let csvContent = "data:text/csv;charset=utf-8,\uFEFFNombre del Proceso,Clasificación,Subgerencia,Solicitante,Tipo de Proceso (RFI/Q/P),Tipo de Compra,Controller,Estado del proceso,Fecha de inicio (YYYY-MM-DD),Fecha de Término (YYYY-MM-DD),Baseline (Presupuesto Base $),Monto Final Adjudicado ($)\n";
-  csvContent += "Licitación Aseo,Opex,Operaciones,Juan Perez,RFP,Anualizado,mmaquieiraf@sodimac.cl,En Aprobación y Adjudicación,2025-01-01,2025-02-15,10000000,9500000\n";
-  const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", "Plantilla_Carga_Procesos.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  const data = [
+    ["Nombre del Proceso", "Clasificación", "Subgerencia", "Solicitante", "Tipo de Proceso (RFI/Q/P)", "Tipo de Compra", "Controller", "Estado del proceso", "Fecha de inicio (YYYY-MM-DD)", "Fecha de Término (YYYY-MM-DD)", "Baseline (Presupuesto Base $)", "Monto Final Adjudicado ($)"],
+    ["MM - Proceso de Ejemplo", "Opex", "Operaciones", "Juan Perez", "RFP", "Anualizado", "mmaquieiraf@sodimac.cl", "Adjudicado", "2026-08-01", "2026-08-20", "1500000", "1200000"]
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  // Ajustamos el ancho de las columnas para que se vea profesional
+  ws['!cols'] = [{wch: 35}, {wch: 15}, {wch: 20}, {wch: 20}, {wch: 25}, {wch: 15}, {wch: 25}, {wch: 30}, {wch: 28}, {wch: 28}, {wch: 30}, {wch: 30}];
+  
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Plantilla Procesos");
+  XLSX.writeFile(wb, "Plantilla_Carga_Procesos.xlsx");
 };
 
 export const descargarPlantillaCSV = () => {
